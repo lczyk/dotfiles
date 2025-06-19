@@ -27,27 +27,27 @@ background = "0x1c1c1c"
 foreground = "0xddeedd"
 
 [font]
-size = 20.0
+size = 18.0
 
 [font.offset]
 x = 0
 y = 0
 
-[font.normal]
-family = "DejaVuSansM Nerd Font Mono"
-style = "Regular"
-
-[font.bold]
-family = "DejaVuSansM Nerd Font Mono"
-style = "Bold"
-
-[font.italic]
-family = "DejaVuSansM Nerd Font Mono"
-style = "Oblique"
-
-[font.bold_italic]
-family = "DejaVuSansM Nerd Font Mono"
-style = "Bold Oblique"
+# [font.normal]
+# family = "DejaVuSansM Nerd Font Mono"
+# style = "Regular"
+# 
+# [font.bold]
+# family = "DejaVuSansM Nerd Font Mono"
+# style = "Bold"
+# 
+# [font.italic]
+# family = "DejaVuSansM Nerd Font Mono"
+# style = "Oblique"
+# 
+# [font.bold_italic]
+# family = "DejaVuSansM Nerd Font Mono"
+# style = "Bold Oblique"
 
 [[keyboard.bindings]]
 action = "CreateNewWindow"
