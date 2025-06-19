@@ -18,7 +18,9 @@ end
 
 # Add stuff to path
 # export PATH="$HOME/.poetry/bin:$PATH"
-export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
+if test -d "/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
+    export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
+end
 # export PATH="/usr/local/optx/ruby/bin:$PATH"
 # export PATH="/usr/local/lib/ruby/gems/2.7.0/bin:$PATH"
 # export PATH="/usr/local/Cellar/openjdk/15.0.2/bin:$PATH"
