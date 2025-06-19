@@ -1,0 +1,9 @@
+#!/bin/sh
+# based on .cargo/env
+case ":${PATH}:" in
+*:"$HOME/.docker/bin":*) ;;
+*)
+    export PATH="$HOME/.docker
+/bin:$PATH"
+    ;;
+esac
