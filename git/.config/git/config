@@ -1,0 +1,70 @@
+[user]
+name = marcin
+email = marcin.konow@lczyk.xyz
+
+[init]
+defaultBranch = main
+
+[difftool]
+prompt = false
+
+[difftool "diffpdf"]
+# cmd = diff-pdf --view \"$LOCAL\" \"$REMOTE\"
+cmd = echo \"$LOCAL\" && diff-pdf --skip-identical -v \"$LOCAL\" \"$REMOTE\" | tail -n1
+
+[difftool "diffpdf-view"]
+cmd = diff-pdf --view \"$LOCAL\" \"$REMOTE\"
+
+# gpg signing
+[commit]
+gpgsign = true
+
+[gpg]
+program = gpg
+
+# large file storage
+[filter "lfs"]
+clean = git-lfs clean -- %f
+smudge = git-lfs smudge -- %f
+process = git-lfs filter-process
+required = true
+
+# https://blog.gitbutler.com/how-git-core-devs-configure-git/
+
+[column]
+ui = auto
+
+[branch]
+sort = -committerdate
+
+[tag]
+sort = version:refname
+
+[diff]
+algorithm = histogram
+colorMoved = plain
+mnemonicPrefix = true
+renames = true
+
+[push]
+default = simple
+autoSetupRemote = true
+followTags = true
+
+[fetch]
+prune = true
+pruneTags = true
+all = true
+
+[help]
+autocorrect = prompt
+
+[rerere]
+enabled = true
+autoupdate = true
+
+[rebase]
+updateRefs = true
+
+[merge]
+conflictstyle = zdiff3
