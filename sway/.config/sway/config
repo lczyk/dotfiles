@@ -26,13 +26,17 @@ set $term alacritty
 set $menu dmenu_path | wmenu | xargs swaymsg exec --
 
 
+
 include /etc/sway/config-vars.d/*
 
 ### Output configuration
 #
 # Default wallpaper (more resolutions are available in /usr/share/backgrounds/sway/)
-output * bg /usr/share/backgrounds/sway/Sway_Wallpaper_Blue_1920x1080.png fill
 #
+
+# output * bg /usr/share/backgrounds/sway/Sway_Wallpaper_Blue_1920x1080.png fill
+output * bg /usr/share/backgrounds/Einsamer_Raum_by_Orbite_Lambda.jpg fill
+
 # Example configuration:
 #
 #   output HDMI-A-1 resolution 1920x1080 position 1920,0
@@ -268,3 +272,5 @@ bar {
 exec ~/.config/sway/scripts/opacity.sh
 
 include /etc/sway/config.d/*
+
+
