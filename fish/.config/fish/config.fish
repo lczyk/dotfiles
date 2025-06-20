@@ -40,8 +40,14 @@ end
 
 # check if eza is installed
 if type -q eza
-    alias ls='eza --group-directories-first --long --git --almost-all --show-symlinks --color=always --time-style=long-iso'
+    set -x _EZA 'eza --group-directories-first --long --git --almost-all --show-symlinks --color=always --time-style=long-iso' 
+    alias ls=$_EZA
+    alias ls1="$_EZA -T -L1"
+    alias ls2="$_EZA -T -L2"
+    alias ls3="$_EZA -T -L3"
 end
+
+alias gc3="grep -C3 --"
 
 # set up fzf if installed
 if type -q fzf
@@ -51,5 +57,11 @@ if type -q fzf
     export FZF_DEFAULT_OPTS='--multi --exact --cycle --height 40% --layout reverse --border top'
 end
 
+if type -q nvim
+    # for editing a file with sudo, but with the current user's setup
+    alias sunvim='sudo -E nvim -n'
+    alias vim='nvim'
+    alias vi='nvim'
+end
 # export JAVA_HOME=$(/usr/libexec/java_home)
 # export GRAALVM_HOME=/Library/Java/JavaVirtualMachines/graalvm-23.jdk/Contents/Home/
