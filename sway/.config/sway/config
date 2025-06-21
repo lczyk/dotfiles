@@ -23,7 +23,8 @@ set $term alacritty
 # Your preferred application launcher
 # Note: pass the final command to swaymsg so that the resulting window can be opened
 # on the original workspace that the command was run on.
-set $menu dmenu_path | wmenu | xargs swaymsg exec --
+# set $menu dmenu_path | wmenu | xargs swaymsg exec --
+set $menu dmenu_path | rofi -dmenu | xargs swaymsg exec --
 
 
 
@@ -35,7 +36,8 @@ include /etc/sway/config-vars.d/*
 #
 
 # output * bg /usr/share/backgrounds/sway/Sway_Wallpaper_Blue_1920x1080.png fill
-output * bg /usr/share/backgrounds/Einsamer_Raum_by_Orbite_Lambda.jpg fill
+# output * bg /usr/share/backgrounds/Einsamer_Raum_by_Orbite_Lambda.jpg fill
+output * bg ~/.local/share/backgrounds/dracula.png fill
 
 # Example configuration:
 #
