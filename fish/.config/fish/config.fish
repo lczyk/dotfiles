@@ -65,3 +65,5 @@ if type -q nvim
 end
 # export JAVA_HOME=$(/usr/libexec/java_home)
 # export GRAALVM_HOME=/Library/Java/JavaVirtualMachines/graalvm-23.jdk/Contents/Home/
+
+set -x GCM_CREDENTIAL_STORE gpg
