@@ -9,13 +9,21 @@ return {
 --	    vim.cmd.colorscheme "tokyonight"
 --	end
 --   }
+--   {
+--     "diegoulloao/neofusion.nvim",
+--	 config = function()
+--	     vim.cmd.colorscheme "neofusion"
+--	     vim.o.background = "dark" 
+--	     enable_transparency()
+--	 end
+--     },
      {
-	 "diegoulloao/neofusion.nvim",
-	 config = function()
-	     vim.cmd.colorscheme "neofusion"
-	     vim.o.background = "dark" 
-	     enable_transparency()
-	 end
+	"ellisonleao/gruvbox.nvim",
+	config = function()
+	    vim.cmd.colorscheme "gruvbox"
+	    vim.o.background = "dark"
+	    enable_transparency()
+	end
      },
      {
 	 "nvim-lualine/lualine.nvim",
