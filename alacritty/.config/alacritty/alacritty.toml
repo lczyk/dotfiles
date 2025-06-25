@@ -50,9 +50,9 @@ y = 0
 # style = "Bold Oblique"
 
 [[keyboard.bindings]]
-action = "CreateNewWindow"
 key = "N"
 mods = "Command"
+action = "CreateNewWindow"
 
 [window]
 decorations = "buttonless"
