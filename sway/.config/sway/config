@@ -26,7 +26,7 @@ set $term alacritty
 # set $menu dmenu_path | wmenu | xargs swaymsg exec --
 set $menu dmenu_path | rofi -dmenu | xargs swaymsg exec --
 
-
+set $background ~/.local/share/backgrounds/dracula.png
 
 include /etc/sway/config-vars.d/*
 
@@ -37,7 +37,7 @@ include /etc/sway/config-vars.d/*
 
 # output * bg /usr/share/backgrounds/sway/Sway_Wallpaper_Blue_1920x1080.png fill
 # output * bg /usr/share/backgrounds/Einsamer_Raum_by_Orbite_Lambda.jpg fill
-output * bg ~/.local/share/backgrounds/dracula.png fill
+output * bg $background fill
 
 # Example configuration:
 #
@@ -70,14 +70,25 @@ gaps outer 1
 default_border none
 
 ### Idle configuration
-#
-# Example configuration:
-#
-# exec swayidle -w \
-#          timeout 300 'swaylock -f -c 000000' \
-#          timeout 600 'swaymsg "output * power off"' resume 'swaymsg "output * power on"' \
-#          before-sleep 'swaylock -f -c 000000'
-#
+
+set $lock2 'swaylock \
+    --daemonize \
+    --ignore-empty-password \
+    --indicator-caps-lock \
+    --color 111111 \
+'
+
+# TODO: screen saver after 60s. look into 'idlehint' of swayidle
+
+exec swayidle -w \
+    timeout 300 $lock2 \
+    timeout 600 'swaymsg "output * power off"' \
+    resume 'swaymsg "output * power on"' \
+    before-sleep $lock2
+
+# lock on lid close
+bindswitch --reload --locked lid:on exec $lock2
+
 # This will lock your screen after 300 seconds of inactivity, then turn off
 # your displays after another 300 seconds, and turn your screens back on when
 # resumed. It will also lock your screen before your computer goes to sleep.
@@ -101,8 +112,8 @@ input "1267:12747:hid-over-i2c_04F3:31CB_Touchpad" {
     dwt enabled
     tap disabled
     natural_scroll enabled
-    middle_emulation enabled
     pointer_accel 0.3
+    click_method clickfinger
 }
 
 input "type:keyboard" {
@@ -110,6 +121,26 @@ input "type:keyboard" {
     # xkb_variant ,nodeadkeys
     # xkb_options grp:alt_shift_toggle
 }
+
+
+### Media keys
+
+# https://proto.garden/blog/gnome_to_sway.html
+
+set $volume_up XF86AudioRaiseVolume
+set $volume_down XF86AudioLowerVolume
+set $mute XF86AudioMute
+
+set $brightness_up XF86MonBrightnessUp
+set $brightness_down XF86MonBrightnessDown
+
+bindsym $volume_up exec amixer set Master 10%+ toggle on
+bindsym $volume_down exec amixer set Master 10%- toggle on
+bindsym $mute exec amixer set Master toggle
+
+bindsym $brightness_up exec light -A 10
+bindsym $brightness_down exec light -U 10
+
 
 ### Key bindings
 #
@@ -162,6 +193,9 @@ input "type:keyboard" {
     bindsym $mod+Shift+Down move down
     bindsym $mod+Shift+Up move up
     bindsym $mod+Shift+Right move right
+
+    #bindsym $mod+tab focus back_and_forth
+    bindsym $mod+tab exec pkill -SIGUSR1 sway-alttab
 #
 # Workspaces:
 #
@@ -260,7 +294,7 @@ bar {
 
     # When the status_command prints a new line to stdout, swaybar updates.
     # The default just shows the current date and time.
-    status_command while date +'%Y-%m-%d %X'; do sleep 1; done
+    status_command while ~/.config/sway/scripts/status.sh; do sleep 1; done
 
     colors {
         statusline #ffffff
@@ -271,6 +305,7 @@ bar {
 }
 
 # TODO: these processes do not get claned up on logout (only on restart). add smth to deal with.
+exec sway-alttab
 exec ~/.config/sway/scripts/opacity.sh
 
 include /etc/sway/config.d/*
