@@ -5,3 +5,4 @@
     - https://askubuntu.com/questions/1313369/screen-sharing-with-wayland
     - https://bbs.archlinux.org/viewtopic.php?id=283835
     
+- https://github.com/nwg-piotr/autotiling?tab=readme-ov-file
