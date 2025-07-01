@@ -2,22 +2,23 @@
 # <short month> <numeric month>-<numeric day> <short weekday> <hour>:<minute>
 DATE=$(date +'%b %m-%d %a %H:%M')
 
-# batte
+# battery
 _upower=$(upower -i $(upower -e | grep 'battery'))
-BATTERY=$(echo "$_upower" | grep -E "percentage" | awk '{gsub(/%/,""); printf("%.0f%%",$2)}')
+battery=$(echo "$_upower" | grep -E "percentage" | awk '{gsub(/%/,""); printf("%.0f%%",$2)}')
 BATTERY_STATE=$(echo "$_upower" | grep -E "state" | awk '{print($2)}')
 
-SHORT_STATE=""
+BATTERY="${battery}"
 if [ "$BATTERY_STATE" = "charging" ]; then
-    SHORT_STATE="^"
+    BATTERY="${BATTERY} ^"
 elif [ "$BATTERY_STATE" = "discharging" ]; then
-    SHORT_STATE="v"
+    TIME_TO_EMPTY=$(echo "$_upower" | grep -E "time to empty" | awk '{printf("%.1fh",$4)}')
+    BATTERY="${BATTERY} v (${TIME_TO_EMPTY})"
 elif [ "$BATTERY_STATE" = "fully-charged" ]; then
-    SHORT_STATE="~"
+    BATTERY="${BATTERY} ~"
 elif [ "$BATTERY_STATE" = "unknown" ]; then
-    SHORT_STATE="?"
+    BATTERY="${BATTERY} ?"
 else
-    SHORT_STATE="x"
+    BATTERY="${BATTERY} x"
 fi
 
 # volume
@@ -42,6 +43,6 @@ TOP=$(top -o%CPU -bn1 | head -n9 | grep -v top | tail -n1 | awk '{print($9,$12)}
 TEMP=$(cat /sys/class/thermal/thermal_zone*/temp | sort -n | tail -n1 | awk '{printf("%.1fC",$1/1000)}')
 
 # overall status
-STATUS="${TOP} | ${TEMP} | ${WIFI_AND_VPN} | ${BRIGHTNESS} | ${VOLUME} | ${BATTERY} ${SHORT_STATE} | ${DATE}"
+STATUS="${TOP} | ${TEMP} | ${WIFI_AND_VPN} | ${BRIGHTNESS} | ${VOLUME} | ${BATTERY} | ${DATE}"
 
 echo "$STATUS "
