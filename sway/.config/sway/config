@@ -305,7 +305,8 @@ bar {
 }
 
 # TODO: these processes do not get claned up on logout (only on restart). add smth to deal with.
-exec sway-alttab
+exec ~/.cargo/bin/sway-alttab
+exec ~/.local/bin/autotiling
 exec ~/.config/sway/scripts/opacity.sh
 
 include /etc/sway/config.d/*
