@@ -17,10 +17,6 @@ function fish_greeting
 end
 
 # Add stuff to path
-# export PATH="$HOME/.poetry/bin:$PATH"
-if test -d "/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
-    export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
-end
 
 set -x SCREENSHOT_DIR "$HOME/screenshots"
 
