@@ -1,0 +1,6 @@
+[keyboard]
+
+bindings = [
+    { key = "C", mods = "Control|Shift", action = "Copy" },
+    { key = "V", mods = "Control|Shift", action = "Paste" },
+]

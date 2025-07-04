@@ -1,3 +1,9 @@
+[general]
+
+import = [
+    "~/.config/alacritty/keybindings.toml",
+]
+
 [colors]
 draw_bold_text_with_bright_colors = false
 indexed_colors = []
@@ -49,10 +55,10 @@ y = 0
 # family = "DejaVuSansM Nerd Font Mono"
 # style = "Bold Oblique"
 
-[[keyboard.bindings]]
-key = "N"
-mods = "Command"
-action = "CreateNewWindow"
+# [[keyboard.bindings]]
+# key = "N"
+# mods = "Command"
+# action = "CreateNewWindow"
 
 [window]
 decorations = "buttonless"
