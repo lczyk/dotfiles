@@ -60,6 +60,15 @@ function __lxc_throwaway_new
         return 1
     end
 
+    if not set -q LXC_THROWAWAY_KNOWN_HOSTS_PATH
+        echo "Error: LXC_THROWAWAY_KNOWN_HOSTS_PATH environment variable is not set. Please set it to the path of your known_hosts file."
+        return 1
+    end
+    if not test -f $LXC_THROWAWAY_KNOWN_HOSTS_PATH
+        echo "Error: Known hosts file '$LXC_THROWAWAY_KNOWN_HOSTS_PATH' does not exist. Please set the LXC_THROWAWAY_KNOWN_HOSTS_PATH environment variable to the path of your known_hosts file."
+        return 1
+    end
+
     # make a new container with a unique name
     set -l num 0
     set -l container_name throwaway-$name-(printf "%02d" $num)
@@ -86,7 +95,7 @@ function __lxc_throwaway_new
     end
 
     echo "Setting password for ubuntu user in $container_name"
-    lxc exec $container_name -- bash -c 'yes ubuntu | passwd ubuntu'
+    lxc exec $container_name -- bash -c 'yes ubuntu | passwd ubuntu' 1>/dev/null 2>&1
     if test $status -ne 0
         echo "Error: Failed to set password for 'ubuntu' user in container '$container_name'."
         return 1
@@ -100,10 +109,22 @@ function __lxc_throwaway_new
         return 1
     end
 
+    echo "Installing Fish shell in container '$container_name' and setting it as default shell for 'ubuntu' user"
+    lxc exec $container_name -- apt update 1>/dev/null 2>&1
+    lxc exec $container_name -- apt upgrade -y 1>/dev/null 2>&1
+    lxc exec $container_name -- apt install -y fish 1>/dev/null 2>&1
+    lxc exec $container_name -- bash -c 'chsh ubuntu -s `which fish`'
+
     set -l container_ip (lxc list -fcompact -cn4 $container_name | tail -n+2 | tr -s \[:blank:\] | cut -d' ' -f3)
+
+    # remove the container's IP from known_hosts if it exists
+    ssh-keygen -f $LXC_THROWAWAY_KNOWN_HOSTS_PATH -R $container_ip 1>/dev/null 2>&1
+    ssh-keyscan -H $container_ip >>$LXC_THROWAWAY_KNOWN_HOSTS_PATH
+    # if test $status -ne 0
 
     echo "You can now SSH into the container '$container_name' using the command:"
     echo "ssh -i $LXC_THROWAWAY_SSH_KEY_PATH ubuntu@$container_ip"
+    echo "ssh -i $LXC_THROWAWAY_SSH_KEY_PATH ubuntu@$container_ip" | fish_clipboard_copy
 end
 
 function __lxc_throwaway_which
@@ -139,5 +160,10 @@ function __lxc_throwaway_clean
         return 0
     end
     echo "Deleting $(count $throwaway_containers) throwaway containers."
+    # clean up known_hosts file
+    for container in $throwaway_containers
+        set -l container_ip (lxc list -fcompact -cn4 $container | tail -n+2 | tr -s \[:blank:\] | cut -d' ' -f3)
+        ssh-keygen -f $LXC_THROWAWAY_KNOWN_HOSTS_PATH -R $container_ip 1>/dev/null 2>&1
+    end
     lxc delete $throwaway_containers --force
 end
