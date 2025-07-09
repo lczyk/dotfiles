@@ -22,12 +22,22 @@ fi
 mode="$1"
 filename="${2:-$(date +%Y-%m-%d_%H-%M-%S).png}"
 
+# TODO: fiox bash env
+# **TEMORAROLLY** HACK IN .local/bin into the path 
+if ! command -v grim &> /dev/null; then
+    PATH="$PATH:$HOME/.local/bin"
+    if ! command -v grim &> /dev/null; then
+        echo "Error: grim is not installed or not found in PATH. Please install grim."
+        exit 1
+    fi
+fi
+
 case "$mode" in
     full)
         grim "$SCREENSHOT_DIR/$filename"
         ;;
     area)
-        grim -g "$(slurp -d)" "$SCREENSHOT_DIR/$filename" 2>/dev/null
+        grim -g "$(slurp -d)" "$SCREENSHOT_DIR/$filename"
         ;;
     window)
         grim -g "$(swaymsg -t get_tree | jq -r '.. | select(.focused? == true) | .rect | "\(.x),\(.y) \(.width)x\(.height)"')" "$SCREENSHOT_DIR/$filename"
@@ -44,5 +54,4 @@ if [ -f "$SCREENSHOT_DIR/$filename" ]; then
     cp "$SCREENSHOT_DIR/$filename" "$SCREENSHOT_DIR/recent.png"
 fi
 
-# send a notification
-# swaymsg -t get_tree | jq -r '.. | select(.focused? == true) | .name' | xargs -I {} notify-send "Screenshot taken" "Saved to $SCREENSHOT_DIR/$filename\nFocused window: {}"
+echo "Screenshot saved to $SCREENSHOT_DIR/$filename"
