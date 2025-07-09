@@ -22,3 +22,7 @@ stow -D <thing>
 - [ ] screensaver in sway
 - [ ] cmd+backspace / alt+backspace
 - [ ] alt+shift vs shift+alt ordering
+
+# links
+
+https://git.korhonen.cc/FunctionalHacker/dotfiles
