@@ -27,6 +27,7 @@ set $term alacritty
 set $menu dmenu_path | rofi -dmenu | xargs swaymsg exec --
 
 set $background ~/.local/share/backgrounds/dracula.png
+set $scripts ~/.config/sway/scripts
 
 include /etc/sway/config-vars.d/*
 
@@ -166,9 +167,17 @@ bindsym $brightness_down exec light -U 10
     bindsym $mod+Shift+c reload
 
     # Exit sway (logs you out of your Wayland session)
-    bindsym $mod+Shift+e exec \
-	swaynag -t warning \
-	-m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -B 'Yes, exit sway' 'swaymsg exit'
+    # bindsym $mod+Shift+e exec \
+	# swaynag -t warning \
+	# -m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -B 'Yes, exit sway' 'swaymsg exit'
+
+    # onseshot enable floating mode
+    set $float disable
+    bindsym $mod+g set $$float enable
+    for_window [title=".*"] floating $$float; set $$float disable
+
+    # Exit sway with a menu. Launch the terminal in a one-shot floating mode.
+    bindsym $mod+Shift+e set $$float enable; exec $term --command $scripts/exit.sh
 #
 # Moving around:
 #
@@ -294,7 +303,7 @@ bar {
 
     # When the status_command prints a new line to stdout, swaybar updates.
     # The default just shows the current date and time.
-    status_command while ~/.config/sway/scripts/status.sh --influx; do sleep 1; done
+    status_command while $scripts/status.sh --influx; do sleep 1; done
 
     colors {
         statusline #ffffff
@@ -307,7 +316,7 @@ bar {
 # TODO: these processes do not get claned up on logout (only on restart). add smth to deal with.
 exec ~/.cargo/bin/sway-alttab
 exec ~/.local/bin/autotiling
-exec ~/.config/sway/scripts/opacity.sh
+exec $scripts/opacity.sh
 
 include /etc/sway/config.d/*
 
