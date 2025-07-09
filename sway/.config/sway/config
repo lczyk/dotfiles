@@ -294,6 +294,15 @@ mode "resize" {
 }
 bindsym $mod+r mode "resize"
 
+# Bind control+I to run the screenshot script in the 'full' mode.
+# This will take a screenshot of the entire screen and save it to the
+# $SCREENSHOT_DIR directory.
+
+bindsym Ctrl+Shift+i exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh full
+bindsym Ctrl+Shift+o exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh window
+bindsym Ctrl+Shift+p exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh area
+
+
 #
 # Status Bar:
 #
