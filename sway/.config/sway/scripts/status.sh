@@ -44,8 +44,12 @@ _con=$(nmcli con show --active)
 WIFI=$(echo "$_con" | grep wifi | awk '{print $1}')
 VPN=$(echo "$_con" | grep vpn | awk '{print $1}')
 WIFI_AND_VPN="${WIFI}"
-if [ -n "$VPN" ]; then
-    WIFI_AND_VPN="${WIFI_AND_VPN} (${VPN})"
+if [ -z "$WIFI" ]; then
+    WIFI_AND_VPN="no wifi"
+else
+    if [ -n "$VPN" ]; then
+        WIFI_AND_VPN="${WIFI_AND_VPN} (${VPN})"
+    fi
 fi
 
 # get the top cpu usage but ignore 'top'
