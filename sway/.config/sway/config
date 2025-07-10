@@ -325,6 +325,7 @@ bar {
 exec ~/.cargo/bin/sway-alttab
 exec ~/.local/bin/autotiling
 exec $scripts/opacity.sh
+exec keyd-application-mapper
 
 include /etc/sway/config.d/*
 
