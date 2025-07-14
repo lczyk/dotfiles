@@ -298,9 +298,12 @@ bindsym $mod+r mode "resize"
 # This will take a screenshot of the entire screen and save it to the
 # $SCREENSHOT_DIR directory.
 
-bindsym Ctrl+Shift+i exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh full > /tmp/screenshot_log 2>&1
-bindsym Ctrl+Shift+o exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh window > /tmp/screenshot_log 2>&1
-bindsym Ctrl+Shift+p exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh area > /tmp/screenshot_log 2>&1
+# bindsym Ctrl+Shift+i exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh full > /tmp/screenshot_log 2>&1
+
+# Ctrl+Shift+minus
+bindsym Ctrl+underscore exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh window > /tmp/screenshot_log 2>&1
+# Ctrl+Shift+plus
+bindsym Ctrl+plus exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh area > /tmp/screenshot_log 2>&1
 
 #
 # Status Bar:

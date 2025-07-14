@@ -40,7 +40,8 @@ case "$mode" in
         grim -g "$(slurp -d)" "$SCREENSHOT_DIR/$filename"
         ;;
     window)
-        grim -g "$(swaymsg -t get_tree | jq -r '.. | select(.focused? == true) | .rect | "\(.x),\(.y) \(.width)x\(.height)"')" "$SCREENSHOT_DIR/$filename"
+        # grim -g "$(swaymsg -t get_tree | jq -r '.. | select(.focused? == true) | .rect | "\(.x),\(.y) \(.width)x\(.height)"')" "$SCREENSHOT_DIR/$filename"
+        grim -g "$(swaymsg -t get_tree | jq -r '.. | select(.pid? and .visible?) | "\(.rect.x+.window_rect.x),\(.rect.y+.window_rect.y) \(.window_rect.width)x\(.window_rect.height)"' | slurp)" "$SCREENSHOT_DIR/$filename"
         ;;
     *)
         echo "Invalid mode: $mode"
