@@ -101,8 +101,8 @@ return {
         require('mason-lspconfig').setup({
             ensure_installed = {
                 "lua_ls",
-                "pyright",
-                "ruff",
+                -- "pyright",
+                -- "ruff",
                 -- "ruff_lsp",
                 "gopls",
                 -- "ruby_lsp",
