@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 
+# Diff two directories and output the differences in a format similar to `diff -u`.
 # fsdiff.sh <dir1> <dir2> | grep -vE '^\+\+\+|^---|^@@' | grep '^ '
+
 DIR_1="$1"
 DIR_2="$2"
 if [ -z "$DIR_1" ] || [ -z "$DIR_2" ]; then
-    echo "Usage: $0 <directory1> <directory2>"
+    echo "Usage: $(basename "$0") <dir1> <dir2>"
+    echo "Compares two directories and outputs the differences."
     exit 1
 fi
 
