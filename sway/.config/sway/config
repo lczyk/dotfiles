@@ -82,8 +82,8 @@ set $lock2 'swaylock \
 # TODO: screen saver after 60s. look into 'idlehint' of swayidle
 
 exec swayidle -w \
-    timeout 300 $lock2 \
-    timeout 600 'swaymsg "output * power off"' \
+    timeout 600 $lock2 \
+    timeout 900 'swaymsg "output * power off"' \
     resume 'swaymsg "output * power on"' \
     before-sleep $lock2
 
