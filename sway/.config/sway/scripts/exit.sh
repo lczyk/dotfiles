@@ -12,7 +12,7 @@ Shutdown
 Reboot
 Suspend
 Lock
-Exit
+Logout
 Cancel
 EOF
 );
@@ -33,7 +33,7 @@ case "$RESP" in
 	Lock)
 		loginctl lock-session $(loginctl show-user $USER -p Sessions | cut -d'=' -f2)
 		;;
-	Exit)
+	Logout)
 		swaymsg exit
 		;;
 	*)
