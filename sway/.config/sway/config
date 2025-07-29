@@ -24,7 +24,7 @@ set $term alacritty
 # Note: pass the final command to swaymsg so that the resulting window can be opened
 # on the original workspace that the command was run on.
 # set $menu dmenu_path | wmenu | xargs swaymsg exec --
-set $menu dmenu_path | rofi -dmenu | xargs swaymsg exec --
+# set $menu dmenu_path | rofi -dmenu | xargs swaymsg exec --
 
 set $background ~/.local/share/backgrounds/dracula.png
 set $scripts ~/.config/sway/scripts
@@ -154,7 +154,7 @@ bindsym $brightness_down exec light -U 10
     bindsym $mod+q kill
 
     # Start your launcher
-    bindsym $mod+space exec $menu
+    bindsym $mod+space set $$float enable; exec $term --command $scripts/launcher.sh
 
     # Drag floating windows by holding down $mod and left mouse button.
     # Resize them with right mouse button + $mod.
@@ -329,6 +329,7 @@ exec ~/.cargo/bin/sway-alttab
 exec ~/.local/bin/autotiling
 exec $scripts/opacity.sh
 exec keyd-application-mapper
+exec mako --default-timeout 5000
 
 include /etc/sway/config.d/*
 
