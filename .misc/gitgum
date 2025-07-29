@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+# A bunhc of git commands with 'gum'
+
+
+# Usage: gitgum <command> [args]
+# Example: gitgum status
+
+
+function _giggum_tree() {
+#   local branch=$(git rev-parse --abbrev-ref HEAD)
+#   gum style --foreground 212 "Current branch: $branch"
+#   gum style --foreground 212 "Git tree structure:"
+  git log --graph --oneline --decorate
+}
+
+# > git branch -vv
+# * blah 5988c2e rockx
+#   main 5988c2e [origin/main] rockx
+
+function _giggum_push_help() {
+    echo "Usage: gitgum push [options]"
+    echo "Options:"
+    echo "  -h, --help      Show this help message"
+    echo "  -n, --dry-run   Perform a dry run without making any changes"
+    echo ""
+    echo "This command allows you to push the current branch to a remote repository."
+    echo "You can select the remote repository interactively using gum."
+}
+
+function _giggum_push() {
+    # Parse flags. We expect -h/--help and -n/--dry-run
+    local dry_run=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                _giggum_push_help
+                return 0
+                ;;
+            -n|--dry-run)
+                dry_run=1
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    if [[ $dry_run -eq 1 ]]; then
+        echo "Dry run mode enabled. No changes will be made."
+    fi
+    local remotes=$(git remote -v | awk '{print $1}' | sort -u)
+    local this_branch=$(git rev-parse --abbrev-ref HEAD)
+    local remote=$(gum choose --header "Push '$this_branch' to" $remotes)
+    if [[ -z "$remote" ]]; then
+        echo "No remote selected. Aborting push."
+        return 1
+    fi
+    # check if there is a tracking reference for this branch
+    # local tracking_ref=$(git branch -vv | grep "$this_branch" | grep -oP '\[.*?\]' | tr -d '[]')
+    # if [[ -z "$tracking_ref" ]]; then
+    #     gum confirm "No tracking reference found for branch '$this_branch'. Do you want to set '$remote/$this_branch' as the tracking reference?" || return 1
+    #     # git push -u "$remote" "$this_branch"
+    #     echo would set tracking reference for "$this_branch" to "$remote/$this_branch"
+    # else
+    #     gum confirm "Push '$this_branch' to '$remote'?" || return 1
+    #     # git push "$remote" "$this_branch"
+    #     echo would push "$this_branch" to "$remote"
+    # fi
+    local expected_remote_branch_name="$remote/$this_branch"
+    if git ls-remote --exit-code --heads "$remote" "$this_branch" &> /dev/null; then
+        # The remote branch already exists
+        # check if there are any changes to push
+        local local_commit=$(git rev-parse "$this_branch")
+        local remote_commit=$(git rev-parse "$expected_remote_branch_name" 2>/dev/null)
+        if [[ $? -ne 0 ]]; then
+            echo "Error: Could not find remote branch '$expected_remote_branch_name'."
+            return 1
+        fi
+        if [[ "$local_commit" == "$remote_commit" ]]; then
+            echo "No changes to push. Local branch '$this_branch' is up to date with remote branch '$expected_remote_branch_name'."
+            return 0
+        fi
+        gum confirm "Remote branch '$expected_remote_branch_name' already exists. Do you want to push to it?" || return 1
+        if [[ $dry_run -eq 1 ]]; then
+            echo "> git push \"$remote\" \"$this_branch\""
+        else
+            git push "$remote" "$this_branch"
+        fi   
+    else
+        gum confirm "No remote branch '$expected_remote_branch_name' found. Do you want to create it?" || return 1
+        if [[ $dry_run -eq 1 ]]; then
+            echo "> git push -u \"$remote\" \"$this_branch\""
+        else
+            git push -u "$remote" "$this_branch"
+        fi
+        echo "Created and set tracking reference for '$this_branch' to '$expected_remote_branch_name'."
+    fi
+}
+
+function gitgum() {
+  local command="$1"
+  shift
+
+  if [[ -z "$command" ]]; then
+    echo "Usage: gitgum <command> [args]"
+    return 1
+  fi
+
+  # Check if gum is installed
+  if ! command -v gum &> /dev/null; then
+    echo "gum is not installed. Please install it first."
+    return 1
+  fi
+
+  if [[ "$command" == "tree" ]]; then
+    _giggum_tree "$@"
+  elif [[ "$command" == "push" ]]; then
+    _giggum_push "$@"
+  else
+    echo "Unknown command: $command"
+    return 1
+  fi
+}
+
+gitgum "$@"
