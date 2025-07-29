@@ -10,6 +10,7 @@ function lxc-throwaway
         echo "  which <name>             Show SSH access for throwaway containers with the specified name."
         echo "  clean                    Delete all throwaway containers."
         echo "  list                     List all throwaway containers."
+        echo "  stop                     Stop all throwaway containers."
     end
 
     set __mode $argv[1]
@@ -27,6 +28,9 @@ function lxc-throwaway
             return $status
         case list
             __lxc_throwaway_list
+            return $status
+        case stop
+            __lxc_throwaway_stop
             return $status
         case '*'
             _help
@@ -166,4 +170,12 @@ function __lxc_throwaway_clean
         ssh-keygen -f $LXC_THROWAWAY_KNOWN_HOSTS_PATH -R $container_ip 1>/dev/null 2>&1
     end
     lxc delete $throwaway_containers --force
+end
+
+function __lxc_throwaway_stop
+    set -l throwaway_containers (lxc list -fcompact -cn | tail -n+2 | tr -d \[:blank:\] | string match -r '^throwaway-.*')
+    if test (count $throwaway_containers) -eq 0
+        return 0
+    end
+    lxc stop $throwaway_containers &>/dev/null
 end
