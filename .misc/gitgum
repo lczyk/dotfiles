@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+# spell-checker: words gitgum
 
 # A bunch of git commands with 'gum'
+# Written by Marcin Konowalczyk
+# @lczyk
 
 HELP="""
 Usage: gitgum <command> [args]
@@ -24,6 +27,25 @@ Usage: gitgum tree
 This command shows the git tree structure of the current repository.
 """
 
+HELP_DELETE="""
+Usage: gitgum delete
+Delete a branch or a remote branch.
+If deleting a local branch, it will also ask whether to delete the remote branch if it exists.
+"""
+
+_maybe_dry_run() {
+    if [[ $dry_run -eq 1 ]]; then
+        # squash multiple spaces into one
+        echo "> $(echo "$1" | tr -s ' ')"
+    else
+        eval "$1"
+    fi
+}
+
+_echo_if_not_dry_run() {
+    [[ $dry_run -eq 0 ]] && echo "$1"
+}
+
 function gitgum() {
     local command="$1"
     shift
@@ -39,23 +61,29 @@ function gitgum() {
         return 1
     fi
 
+    # Check if git is installed
+    if ! command -v git &>/dev/null; then
+        echo "git is not installed. Please install it first."
+        return 1
+    fi
+
     if [[ "$command" == "tree" ]]; then
-        _giggum_tree "$@"
+        _gitgum_tree "$@"
     elif [[ "$command" == "push" ]]; then
-        _giggum_push "$@"
+        _gitgum_push "$@"
+    elif [[ "$command" == "delete" ]]; then
+        _gitgum_delete "$@"
     else
         echo "Unknown command: $command"
         return 1
     fi
 }
 
-function _giggum_push() {
-    # Parse flags. We expect -h/--help and -n/--dry-run
-    local dry_run=0
+function _gitgum_parse_flags() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
         -h | --help)
-            echo "$HELP_PUSH"
+            echo "$_parse_flags_help"
             return 0
             ;;
         -n | --dry-run)
@@ -68,9 +96,17 @@ function _giggum_push() {
             ;;
         esac
     done
+    # For now just print the dry run message here
     if [[ $dry_run -eq 1 ]]; then
         echo "Dry run mode enabled. No changes will be made."
     fi
+}
+
+function _gitgum_push() {
+    # parse flags
+    local _parse_flags_help=$HELP_PUSH
+    local dry_run=0
+    _gitgum_parse_flags "$@" || return 1
     local remotes=$(git remote -v | awk '{print $1}' | sort -u)
     local this_branch=$(git rev-parse --abbrev-ref HEAD)
     local remote=$(gum choose --header "Push '$this_branch' to" $remotes)
@@ -94,8 +130,8 @@ function _giggum_push() {
         # The remote branch already exists
         # check if there are any changes to push
         local local_commit=$(git rev-parse "$this_branch")
-        local remote_commit=$(git rev-parse "$expected_remote_branch_name" 2>/dev/null)
-        if [[ $? -ne 0 ]]; then
+        local remote_commit
+        if ! remote_commit=git rev-parse "$expected_remote_branch_name" 2>/dev/null; then
             echo "Error: Could not find remote branch '$expected_remote_branch_name'."
             return 1
         fi
@@ -104,32 +140,105 @@ function _giggum_push() {
             return 0
         fi
         gum confirm "Remote branch '$expected_remote_branch_name' already exists. Do you want to push to it?" || return 1
-        if [[ $dry_run -eq 1 ]]; then
-            echo "> git push \"$remote\" \"$this_branch\""
-        else
-            git push "$remote" "$this_branch"
-        fi
+        _maybe_dry_run "git push \"$remote\" \"$this_branch\""
     else
         gum confirm "No remote branch '$expected_remote_branch_name' found. Do you want to create it?" || return 1
-        if [[ $dry_run -eq 1 ]]; then
-            echo "> git push -u \"$remote\" \"$this_branch\""
-        else
-            git push -u "$remote" "$this_branch"
-        fi
+        _maybe_dry_run "git push -u \"$remote\" \"$this_branch\""
         echo "Created and set tracking reference for '$this_branch' to '$expected_remote_branch_name'."
     fi
 }
 
-function _giggum_tree() {
-    if [[ $# -gt 0 ]] && ([[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]); then
-        echo "$HELP_TREE"
-        return 0
-    fi
+function _gitgum_tree() {
+    local _parse_flags_help=$HELP_TREE
+    local dry_run=0
+    _gitgum_parse_flags "$@" || return 1
     #   local branch=$(git rev-parse --abbrev-ref HEAD)
     #   gum style --foreground 212 "Current branch: $branch"
     #   gum style --foreground 212 "Git tree structure:"
     git log --graph --oneline --decorate
 }
 
+function _gitgum_delete() {
+    local _parse_flags_help=$HELP_DELETE
+    local dry_run=0
+    _gitgum_parse_flags "$@" || return 1
+
+    # find all local branches
+    local branches=$(git branch | sed 's/^[ *]*//')
+    if [[ -z "$branches" ]]; then
+        echo "No local branches found."
+        return 1
+    fi
+
+    # choose a branch to delete
+    local branch=$(gum choose --header "Select a branch to delete" $branches)
+    if [[ -z "$branch" ]]; then
+        echo "No branch selected. Aborting delete."
+        return 1
+    fi
+
+    # if the branch name is 'main' or 'master', warn the user
+    if [[ "$branch" == "main" ]] || [[ "$branch" == "master" ]]; then
+        gum confirm "You are about to delete the '$branch' branch. This is usually the main branch of the repository. Are you sure you want to proceed?" || return 1
+    fi
+
+    # check if the branch is the current branch
+    local current_branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$branch" == "$current_branch" ]]; then
+        gum confirm "You are currently on branch '$branch'. Do you want to switch to another branch before deleting it?" || return 1
+        # switch to another branch
+        local branches_sans_current=$(echo "$branches" | grep -v "$branch")
+        if [[ -z "$branches_sans_current" ]]; then
+            echo "No other branches found to switch to. Aborting delete."
+            return 1
+        fi
+        local other_branch=$(gum choose --header "Select a branch to switch to" $branches_sans_current)
+        if [[ -z "$other_branch" ]]; then
+            echo "No branch selected. Aborting delete."
+            return 1
+        fi
+        _maybe_dry_run "git checkout \"$other_branch\""
+        _echo_if_not_dry_run "Switched to branch '$other_branch'."
+    fi
+
+    # check whether the branch is tracking a remote branch
+    local remote_branch=$(git branch -r | grep "$branch" | sed 's/^[ *]*//')
+    local needs_to_delete_remote=-1 # -1 means no remote, 0 means no, 1 means yes
+    if [[ -n "$remote_branch" ]]; then
+        if (gum confirm \
+            "Branch '$branch' is tracking remote branch '$remote_branch'. Do you want to delete the remote branch as well?" \
+            --default="no"); then
+            needs_to_delete_remote=1
+        else
+            needs_to_delete_remote=0
+        fi
+    fi
+
+    ######################################################
+
+    # delete the local branch
+    if ! _maybe_dry_run "git branch -d \"$branch\""; then
+        # TODO: investigate why this can happen in this context
+        echo "Error: Could not delete branch '$branch'. It may not be fully merged??"
+        return 1
+    fi
+
+    # if we need to delete the remote branch, do it now
+    if [[ $needs_to_delete_remote -eq 1 ]]; then
+        if ! _maybe_dry_run "git push --delete \
+            \"$(echo "$remote_branch" | cut -d'/' -f1)\" \
+            \"$(echo "$remote_branch" | cut -d'/' -f2-)\""; then
+            echo "Error: Could not delete remote branch '$remote_branch'."
+            return 1
+        fi
+        _echo_if_not_dry_run "Deleted remote branch '$remote_branch'."
+    fi
+}
+
 # Main entry point
 gitgum "$@"
+
+## TODO:
+# - git branch and checkout in one
+# - git status + git branch -vva + git remote -v in one
+# - tests with bash_unit
