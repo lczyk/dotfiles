@@ -68,3 +68,6 @@ updateRefs = true
 
 [merge]
 conflictstyle = zdiff3
+
+[alias]
+tree = log --graph --oneline --all --decorate
