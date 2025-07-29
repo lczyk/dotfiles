@@ -1,31 +1,52 @@
 #!/usr/bin/env bash
 
-# A bunhc of git commands with 'gum'
+# A bunch of git commands with 'gum'
 
+HELP="""
+Usage: gitgum <command> [args]
+Commands:
+    tree          Show the git tree structure
+    push          Push the current branch to a remote repository interactively
+    help          Show this help message
+For more information, run 'gitgum <command> --help'.
+"""
 
-# Usage: gitgum <command> [args]
-# Example: gitgum status
+HELP_PUSH="""
+Usage: gitgum push [options]
+Options:
+  -h, --help      Show this help message
+  -n, --dry-run   Perform a dry run without making any changes
+This command allows you to push the current branch to a remote repository.
+"""
 
+HELP_TREE="""
+Usage: gitgum tree
+This command shows the git tree structure of the current repository.
+"""
 
-function _giggum_tree() {
-#   local branch=$(git rev-parse --abbrev-ref HEAD)
-#   gum style --foreground 212 "Current branch: $branch"
-#   gum style --foreground 212 "Git tree structure:"
-  git log --graph --oneline --decorate
-}
+function gitgum() {
+    local command="$1"
+    shift
 
-# > git branch -vv
-# * blah 5988c2e rockx
-#   main 5988c2e [origin/main] rockx
+    if [[ -z "$command" ]] || [[ "$command" == "help" ]] || [[ "$command" == "--help" ]] || [[ "$command" == "-h" ]]; then
+        echo "$HELP"
+        return 1
+    fi
 
-function _giggum_push_help() {
-    echo "Usage: gitgum push [options]"
-    echo "Options:"
-    echo "  -h, --help      Show this help message"
-    echo "  -n, --dry-run   Perform a dry run without making any changes"
-    echo ""
-    echo "This command allows you to push the current branch to a remote repository."
-    echo "You can select the remote repository interactively using gum."
+    # Check if gum is installed
+    if ! command -v gum &>/dev/null; then
+        echo "gum is not installed. Please install it first."
+        return 1
+    fi
+
+    if [[ "$command" == "tree" ]]; then
+        _giggum_tree "$@"
+    elif [[ "$command" == "push" ]]; then
+        _giggum_push "$@"
+    else
+        echo "Unknown command: $command"
+        return 1
+    fi
 }
 
 function _giggum_push() {
@@ -33,18 +54,18 @@ function _giggum_push() {
     local dry_run=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -h|--help)
-                _giggum_push_help
-                return 0
-                ;;
-            -n|--dry-run)
-                dry_run=1
-                shift
-                ;;
-            *)
-                echo "Unknown option: $1"
-                return 1
-                ;;
+        -h | --help)
+            echo "$HELP_PUSH"
+            return 0
+            ;;
+        -n | --dry-run)
+            dry_run=1
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            return 1
+            ;;
         esac
     done
     if [[ $dry_run -eq 1 ]]; then
@@ -69,7 +90,7 @@ function _giggum_push() {
     #     echo would push "$this_branch" to "$remote"
     # fi
     local expected_remote_branch_name="$remote/$this_branch"
-    if git ls-remote --exit-code --heads "$remote" "$this_branch" &> /dev/null; then
+    if git ls-remote --exit-code --heads "$remote" "$this_branch" &>/dev/null; then
         # The remote branch already exists
         # check if there are any changes to push
         local local_commit=$(git rev-parse "$this_branch")
@@ -87,7 +108,7 @@ function _giggum_push() {
             echo "> git push \"$remote\" \"$this_branch\""
         else
             git push "$remote" "$this_branch"
-        fi   
+        fi
     else
         gum confirm "No remote branch '$expected_remote_branch_name' found. Do you want to create it?" || return 1
         if [[ $dry_run -eq 1 ]]; then
@@ -99,29 +120,16 @@ function _giggum_push() {
     fi
 }
 
-function gitgum() {
-  local command="$1"
-  shift
-
-  if [[ -z "$command" ]]; then
-    echo "Usage: gitgum <command> [args]"
-    return 1
-  fi
-
-  # Check if gum is installed
-  if ! command -v gum &> /dev/null; then
-    echo "gum is not installed. Please install it first."
-    return 1
-  fi
-
-  if [[ "$command" == "tree" ]]; then
-    _giggum_tree "$@"
-  elif [[ "$command" == "push" ]]; then
-    _giggum_push "$@"
-  else
-    echo "Unknown command: $command"
-    return 1
-  fi
+function _giggum_tree() {
+    if [[ $# -gt 0 ]] && ([[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]); then
+        echo "$HELP_TREE"
+        return 0
+    fi
+    #   local branch=$(git rev-parse --abbrev-ref HEAD)
+    #   gum style --foreground 212 "Current branch: $branch"
+    #   gum style --foreground 212 "Git tree structure:"
+    git log --graph --oneline --decorate
 }
 
+# Main entry point
 gitgum "$@"
