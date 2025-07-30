@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# spell-checker: words gitgum
+# spell-checker: words gitgum worktree worktrees Marcin Konowalczyk lczyk
+# spell-checker: words Marcin Konowalczyk lczyk
 
 # A bunch of git commands with 'gum'
 # Written by Marcin Konowalczyk
@@ -164,7 +165,13 @@ function _gitgum_delete() {
     _gitgum_parse_flags "$@" || return 1
 
     # find all local branches
-    local branches=$(git branch | sed 's/^[ *]*//')
+    # TODO: see what happens if we try to delete a branch from another worktree
+    # TODO: we could just get the current branch from here, as opposed to rev-parsing later
+    local branches=$(
+        git branch |
+            sed 's/^[ *]*//' | # filter the marker ' *' of the current branch
+            sed 's/^[ +]*//'   # filter the marker ' +' of the branches checked out in other worktrees
+    )
     if [[ -z "$branches" ]]; then
         echo "No local branches found."
         return 1
@@ -218,9 +225,30 @@ function _gitgum_delete() {
 
     # delete the local branch
     if ! _maybe_dry_run "git branch -d \"$branch\""; then
-        # TODO: investigate why this can happen in this context
-        echo "Error: Could not delete branch '$branch'. It may not be fully merged??"
-        return 1
+        echo "Could not delete branch '$branch'. It may not be fully merged."
+        if [[ $needs_to_delete_remote -eq 1 ]]; then
+            if gum confirm \
+                "Branch '$branch' is not fully merged. Do you want to force delete the local branch and the remote branch?" \
+                --default="no"; then
+                needs_to_delete_remote=1
+            else
+                needs_to_delete_remote=0
+            fi
+        else
+            # we do not have a remote branch. for now just check whether to delete the local branch
+            # TODO: Display the diff?? otherwise attempt to somehow show what commits are being deleted
+            #       This is a bit tricky, since there are cases where this message pops up, even if no actual
+            #       commits are being lost, for example when the commits are part of another branch.
+            #       Need to investigate more / add as a feature for more advanced version of gitgum.
+            if gum confirm "Branch '$branch' does not track a remote branch. Do you want to force delete the local branch?" --default="no"; then
+                if ! _maybe_dry_run "git branch -D \"$branch\""; then
+                    echo "Error: Could not force delete branch '$branch'."
+                    return 1
+                fi
+            fi
+        fi
+
+        exit 1
     fi
 
     # if we need to delete the remote branch, do it now
