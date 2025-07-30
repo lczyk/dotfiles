@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# spellchecker: words rockx
 
 INPUT="$1"
 if [ -z "$INPUT" ]; then
@@ -31,37 +32,37 @@ fi
 rm -rf "$DIR"
 
 mkdir "$DIR"
-cd "$DIR"
+(
+    cd "$DIR" || exit 1
 
-podman run --name=rockx --replace oci-archive:"$INPUT" &> /dev/null &
-echo $! > .pid
+    podman run --name=rockx --replace oci-archive:"$INPUT" &>/dev/null &
+    echo $! >.pid
 
-# Wait for the container to start
-echo "waiting for a temp container to start..."
-id=$(podman ps --filter 'name=rockx' --format "{{.ID}}")
-while [ -z "$id" ]; do
-    sleep 1
+    # Wait for the container to start
+    echo "waiting for a temp container to start..."
     id=$(podman ps --filter 'name=rockx' --format "{{.ID}}")
-done
+    while [ -z "$id" ]; do
+        sleep 1
+        id=$(podman ps --filter 'name=rockx' --format "{{.ID}}")
+    done
 
-echo "Container started with ID: $id"
+    echo "Container started with ID: $id"
 
+    TAR=$(mktemp --suffix=.tar)
+    podman export "$id" -o "$TAR"
+    kill -s SIGINT "$(cat .pid)"
+    rm .pid
+    echo "Container exported to '$TAR' and stopped."
 
-TAR=$(mktemp --suffix=.tar)
-podman export "$id" -o "$TAR"
-kill -s SIGINT $(cat .pid)
-rm .pid
-echo "Container exported to '$TAR' and stopped."
+    if [ -f "$TAR" ]; then
+        tar -xf "$TAR" -C "$DIR"
+        rm "$TAR"
+    else
+        echo "No export.tar found in the package."
+        exit 1
+    fi
 
-if [ -f $TAR ]; then
-    tar -xf "$TAR" -C "$DIR"
-    rm "$TAR"
-else
-    echo "No export.tar found in the package."
-    exit 1
-fi
-
-cd ..
+)
 
 echo "Package extracted to '$DIR'."
 exit 0
