@@ -51,10 +51,10 @@ tar -xf "$INPUT" -C "$DIR"
     rm -rf "$DIR/blobs/sha256"
 )
 
-if command -v tree &>/dev/null; then
-    tree -aCL 4 "$DIR"
-fi
+# Show the directory structure if tree is available
+command -v tree &>/dev/null && tree -aCL 4 "$DIR"
 
 # Show the metadata if it exists
+# this is kina rock-specific. if not found does nothing
 echo "--- metadata.yaml: ---"
 find "$DIR" -name metadata.yaml -exec cat {} +
