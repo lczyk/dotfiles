@@ -34,6 +34,21 @@ Delete a branch or a remote branch.
 If deleting a local branch, it will also ask whether to delete the remote branch if it exists.
 """
 
+HELP_STATUS="""
+Usage: gitgum status
+This command shows the status of the current git repository as well as the current branch and the state of the remote branches.
+"""
+
+HELP_COMMIT="""
+Usage: gitgum commit [options]
+Options:
+  -h, --help      Show this help message
+  -n, --dry-run   Perform a dry run without making any changes
+This command allows you to commit changes in the current branch.
+"""
+
+# TODO: gg amend-message
+
 _maybe_dry_run() {
     if [[ $dry_run -eq 1 ]]; then
         # squash multiple spaces into one
@@ -68,12 +83,22 @@ function gitgum() {
         return 1
     fi
 
+    # Check if we are in a git repository
+    if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+        echo "Not inside a git repository. Please run this command inside a git repository."
+        return 1
+    fi
+
     if [[ "$command" == "tree" ]]; then
         _gitgum_tree "$@"
     elif [[ "$command" == "push" ]]; then
         _gitgum_push "$@"
     elif [[ "$command" == "delete" ]]; then
         _gitgum_delete "$@"
+    elif [[ "$command" == "status" ]]; then
+        _gitgum_status "$@"
+    elif [[ "$command" == "commit" ]]; then
+        _gitgum_commit "$@"
     else
         echo "Unknown command: $command"
         return 1
@@ -263,6 +288,111 @@ function _gitgum_delete() {
     fi
 }
 
+function _gitgum_status() {
+    local _parse_flags_help=$HELP_STATUS
+    local dry_run=0
+    _gitgum_parse_flags "$@" || return 1
+    # dry run does nothing here
+
+    local delim="----------------------------------------"
+
+    # Show the remote branches and their status
+    # TODO: -vva also shows remote branches, but it can be massive. maybe add a flag to status?
+    # echo $delim
+    git branch -vv
+
+    remotes=$(git remote -v | awk '{print($1,$2)}' | sort -u)
+    echo $delim
+    if [[ -z "$remotes" ]]; then
+        echo "No remotes."
+    else
+        echo "$remotes"
+    fi
+
+    # Show the status of the repository at the very end
+    echo $delim
+    if command -v unbuffer &>/dev/null; then
+        # use unbuffer to preserve the color output
+        unbuffer git status --short --branch | head -n1
+    else
+        # if unbuffer is not available, just show the first line of the status
+        git status --short --branch | head -n1
+    fi
+}
+
+function _gitgum_commit() {
+    local _parse_flags_help=$HELP_COMMIT
+    local dry_run=0
+    _gitgum_parse_flags "$@" || return 1
+
+    # Check if there are any changes to commit
+    staged_changes=$(git diff --cached --name-only)
+    unstaged_changes=$(git diff --name-only)
+    new_files=$(git ls-files --others --exclude-standard)
+    unstaged_changes=$(echo -e "$unstaged_changes\n$new_files" | sort -u)
+
+    # echo "Staged changes: $staged_changes"
+    # echo "Unstaged changes: $unstaged_changes"
+
+    # if we have only staged changes, we can commit
+    local needs_to_stage=0
+    if [[ -z "$staged_changes" ]] && [[ -z "$unstaged_changes" ]]; then
+        echo "No changes to commit."
+        return 0
+    elif [[ -z "$staged_changes" ]] && [[ -n "$unstaged_changes" ]]; then
+        # we have only unstaged changes.
+        if gum confirm "Only unstaged changes. Stage them all before committing?" --default="yes"; then
+            needs_to_stage=1
+        else
+            return 0
+        fi
+    elif [[ -n "$staged_changes" ]] && [[ -z "$unstaged_changes" ]]; then
+        # we have only staged changes. Nothing to do here.
+        true
+    else
+        # we have both staged and unstaged changes. Maybe we want to stage all changes before committing, or maybe we want to commit only the staged changes.
+        echo "You have both staged and unstaged changes."
+        # TODO: check if there are any files which have stages chunks and unstaged chunks
+        local answer=$(gum choose --header "What do you want to do?" \
+            "Stage all changes" \
+            "Commit only staged changes" \
+            "Abort commit")
+        case "$answer" in
+        "Stage all changes")
+            needs_to_stage=1
+            ;;
+        "Commit only staged changes")
+            needs_to_stage=0
+            ;;
+        "Abort commit")
+            return 0
+            ;;
+        *)
+            echo "Unknown option: $answer"
+            return 1
+            ;;
+        esac
+    fi
+
+    # Get the commit message
+    local commit_message=$(gum input --placeholder "Enter commit message")
+    if [[ -z "$commit_message" ]]; then
+        echo "No commit message provided. Aborting commit."
+        return 1
+    fi
+
+    #################################################################################
+
+    if [[ $needs_to_stage -eq 1 ]]; then
+        # Stage all changes
+        _maybe_dry_run "git add ."
+        _echo_if_not_dry_run "Staged all changes."
+    fi
+
+    # Commit the changes
+    _maybe_dry_run "git commit -m \"$commit_message\""
+    _echo_if_not_dry_run "Committed changes with message: '$commit_message'"
+}
 # Main entry point
 gitgum "$@"
 
