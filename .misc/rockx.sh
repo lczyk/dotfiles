@@ -2,14 +2,8 @@
 # spellchecker: words rockx
 
 INPUT="$1"
-if [ -z "$INPUT" ]; then
-    INPUT=$(find . -maxdepth 1 -type f -name "*.rock" | fzf --no-multi-line)
-fi
-
-if [ -z "$INPUT" ]; then
-    echo "No file selected."
-    exit 1
-fi
+[ -z "$INPUT" ] && INPUT=$(find . -maxdepth 1 -type f -name "*.rock" | fzf)
+[ -z "$INPUT" ] && exit 1
 
 # make sure we end with .rock
 if [[ "$INPUT" != *.rock ]]; then
