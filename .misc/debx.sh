@@ -35,7 +35,7 @@ main() {
         fi
     fi
 
-    rm -rf "$DIR"
+    rm -rf "${DIR:-}"
 
     mkdir "$DIR"
     cp "$INPUT" "$DIR"

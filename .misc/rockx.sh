@@ -23,7 +23,7 @@ if [ -d "$DIR" ]; then
     fi
 fi
 
-rm -rf "$DIR"
+rm -rf "${DIR:-}"
 
 mkdir "$DIR"
 (

@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
-# spellchecker: words rockx
+# spellchecker: words
 
 INPUT="$1"
-[ -z "$INPUT" ] && INPUT=$(find . -maxdepth 1 -type f -name "*.rock" | fzf)
+[ -z "$INPUT" ] && INPUT=$(find . -maxdepth 1 -type f | fzf)
 [ -z "$INPUT" ] && exit 1
-
-# make sure we end with .rock
-if [[ "$INPUT" != *.rock ]]; then
-    echo "Selected file is not a .rock package."
-    exit 1
-fi
 
 INPUT=$(realpath "$INPUT")
 
@@ -26,8 +20,6 @@ fi
 rm -rf "${DIR:-}"
 mkdir "$DIR"
 tar -xf "$INPUT" -C "$DIR"
-
-# go into DIR/blobs/sha256 and unpack each blob
 (
     cd "$DIR/blobs/sha256" || exit 1
 
