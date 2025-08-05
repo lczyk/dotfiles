@@ -20,29 +20,30 @@ install() {
 
 # make sure we end with .deb
 main() {
-    if [[ "$INPUT" != *.deb ]]; then
-        echo "Selected file is not a .de)b package."
+    local input="$1"
+    if [[ "$input" != *.deb ]]; then
+        echo "Selected file is not a .deb package."
         exit 1
     fi
 
-    DIR="$(echo "${INPUT%.deb}")"
-    if [ -d "$DIR" ]; then
+    local dir="$(echo "${input%.deb}")"
+    if [ -d "$dir" ] && [ $FORCE -eq 0 ]; then
         # confirm if we want to remove the existing directory
-        read -p "Directory '$DIR' already exists. Do you want to continue? ([Y]/n): " -n 1 -r
+        read -p "Directory '$dir' already exists. Do you want to continue? ([Y]/n): " -n 1 -r
         if [[ $REPLY =~ ^[Nn]$ ]]; then
             echo "Exiting without changes."
             exit 0
         fi
     fi
 
-    rm -rf "${DIR:-}"
+    rm -rf "${dir:-}"
 
-    mkdir "$DIR"
-    cp "$INPUT" "$DIR"
+    mkdir "$dir"
+    cp "$input" "$dir"
     (
-        cd "$DIR" || exit 1
+        cd "$dir" || exit 1
 
-        ar -x "$INPUT"
+        ar -x "$input"
 
         if [ -f "control.tar.gz" ]; then
             tar -xzf control.tar.gz -C control
@@ -76,18 +77,35 @@ main() {
             exit 1
         fi
 
-        rm "$INPUT"
+        rm "$input"
     )
-    tree -C "$DIR"
+    if command -v tree &>/dev/null; then
+        echo "Directory structure:"
+        tree -aC "$dir"
+    else
+        echo "Tree command not found, showing directory structure with ls:"
+        ls -laR "$dir"
+    fi
 }
 
 ################################################################
 
+# parse flags
+FORCE=0
+if [[ "$1" == "-f" || "$1" == "--force" ]]; then
+    FORCE=1
+    shift
+fi
+
 INPUT="$1"
 if [ -z "$INPUT" ]; then
-    # INPUT=$(/usr/bin/ls . | fzf --no-multi-line)
-    # NOTE: we don't use --no-multi-line because some of the older versions of fzf don't support it
-    INPUT=$(find . -maxdepth 1 -type f -name "*.deb" | fzf)
+    if command -v fzf &>/dev/null; then
+        # NOTE: we don't use --no-multi-line because some of the older versions of fzf don't support it
+        INPUT=$(find . -maxdepth 1 -type f -name "*.deb" | fzf)
+    else
+        echo "No input file provided. Please specify a .deb package or use fzf to select one."
+        exit 1
+    fi
 fi
 
 if [ -z "$INPUT" ]; then
