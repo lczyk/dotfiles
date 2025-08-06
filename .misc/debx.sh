@@ -11,7 +11,7 @@
 install() {
     local deps=(fzf binutils tree tar zstd)
     if ! command -v sudo &>/dev/null; then
-        # maybe we're in an environment without sudo
+        # maybe we're in an environment without sudo (like a container where we're root)
         apt update && apt install -y "${deps[@]}"
     else
         sudo apt update && sudo apt install -y "${deps[@]}"
@@ -92,9 +92,24 @@ main() {
 
 # parse flags
 FORCE=0
-if [[ "$1" == "-f" || "$1" == "--force" ]]; then
-    FORCE=1
-    shift
+INSTALL=0
+while [[ "$1" == -* ]]; do
+    case "$1" in
+        -f|--force)
+            FORCE=1; shift;;
+        -I|--install)
+            INSTALL=1; shift; ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+if [ $INSTALL -eq 1 ]; then
+    echo "Installing dependencies..."
+    install
+    exit 0
 fi
 
 INPUT="$1"
@@ -111,8 +126,6 @@ fi
 if [ -z "$INPUT" ]; then
     echo "No file selected."
     exit 1
-elif [ "$INPUT" == "--install" ] || [ "$INPUT" == "-I" ]; then
-    install
 else
     main "$INPUT"
 fi
