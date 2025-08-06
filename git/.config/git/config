@@ -73,4 +73,4 @@ conflictstyle = zdiff3
 tree = log --graph --oneline --all --decorate
 
 [help]
-autoCorrect = 0
+autoCorrect = never
