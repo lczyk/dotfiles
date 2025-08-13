@@ -11,16 +11,20 @@ DATE=$(date +'%b %m-%d %a %H:%M')
 
 # battery
 _upower=$(upower -i $(upower -e | grep 'battery'))
-_battery=$(echo "$_upower" | grep -E "percentage" | awk '{gsub(/%/,""); print($2)}')
+_battery=$(echo "$_upower" | sed -n 's/ *percentage: *//; tt;b;:t s/ *//;s/%//;p' )
 # check if we have influxdb to write the status
 
-BATTERY_STATE=$(echo "$_upower" | grep -E "state" | awk '{print($2)}')
+BATTERY_STATE=$(echo "$_upower" | sed -n 's/ *state: *//; tt;b;:t s/ *//;p' )
 
-BATTERY=$(echo "$_battery" | awk '{printf("%.0f%%",$0)}')
+BATTERY=$(echo "$_battery" | sed -n 's/\.[0-9]*//;s/$/%/;p' )
 if [ "$BATTERY_STATE" = "charging" ]; then
+    TIME_TO_FULL=$(echo "$_upower" | sed -n 's/ *time to full: *//;tt;b;:t s/ minutes/min/; s/ hours/h/; p' )
     BATTERY="${BATTERY} ^"
+    if [ -n "$TIME_TO_FULL" ]; then
+        BATTERY="${BATTERY} (${TIME_TO_FULL})"
+    fi
 elif [ "$BATTERY_STATE" = "discharging" ]; then
-    TIME_TO_EMPTY=$(echo "$_upower" | grep -E "time to empty" | awk '{printf("%.1fh",$4)}')
+    TIME_TO_EMPTY=$(echo "$_upower" | sed -n 's/ *time to empty: *//;tt;b;:t s/ minutes/min/; s/ hours/h/; p' )
     BATTERY="${BATTERY} v"
     if [ -n "$TIME_TO_EMPTY" ]; then
         BATTERY="${BATTERY} (${TIME_TO_EMPTY})"
@@ -34,15 +38,15 @@ else
 fi
 
 # volume
-VOLUME=$(amixer get Master | grep 'Front Left:' | awk '{ gsub(/\[|\]/,""); print $5,$6 }')
+VOLUME=$(amixer get Master | sed -n 's/ *Front Left:.*\(\[.*\]\).*\(\[.*\]\)/\1 \2/;tt;b;:t s/[][]//g; p')
 
 # brightness
-BRIGHTNESS=$(light | awk '{printf("b%.0f",$1)}')
+BRIGHTNESS=$(light | sed 's/\.[0-9]*//;s/^/b/')
 
 # wifi and, maybe, vpn
 _con=$(nmcli con show --active)
-WIFI=$(echo "$_con" | grep wifi | awk '{print $1}')
-VPN=$(echo "$_con" | grep vpn | awk '{print $1}')
+WIFI=$(echo "$_con" | sed -n '/wifi/ { s/^ *\([^ ]*\).*/\1/p }' )
+VPN=$(echo "$_con" | sed -n '/vpn/ { s/^ *\([^ ]*\).*/\1/p }' )
 WIFI_AND_VPN="${WIFI}"
 if [ -z "$WIFI" ]; then
     WIFI_AND_VPN="no wifi"
