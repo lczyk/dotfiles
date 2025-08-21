@@ -43,6 +43,7 @@ main() {
     (
         cd "$dir" || exit 1
 
+        # deb is a thin archive, so we need to use `ar`
         ar -x "$input"
 
         if [ -f "control.tar.gz" ]; then
