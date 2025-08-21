@@ -56,8 +56,16 @@ main() {
                 tar --zstd -xf control.tar.zst
                 rm control.tar.zst
             )
+        elif [ -f "control.tar.xz" ]; then
+            mkdir -p control
+            mv control.tar.xz control/
+            (
+                cd control || exit 1
+                tar -xf control.tar.xz
+                rm control.tar.xz
+            )
         else
-            echo "No control.tar.gz found in the package."
+            echo "No control archive found in the package."
             exit 1
         fi
 
@@ -72,8 +80,16 @@ main() {
                 tar --zstd -xf data.tar.zst
                 rm data.tar.zst
             )
+        elif [ -f "data.tar.xz" ]; then
+            mkdir -p data
+            mv data.tar.xz data/
+            (
+                cd data || exit 1
+                tar -xf data.tar.xz
+                rm data.tar.xz
+            )
         else
-            echo "No data.tar.gz found in the package."
+            echo "No data archive found in the package."
             exit 1
         fi
 
