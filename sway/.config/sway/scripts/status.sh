@@ -11,10 +11,10 @@ DATE=$(date +'%b %m-%d %a %H:%M')
 
 # battery
 _upower=$(upower -i $(upower -e | grep 'battery'))
-_battery=$(echo "$_upower" | sed -n 's/ *percentage: *//; tt;b;:t s/ *//;s/%//;p' )
+_battery=$(echo "$_upower" | sed -n 's/ *percentage: *//;tt;b;:t s/ *//;s/%//;p' )
 # check if we have influxdb to write the status
 
-BATTERY_STATE=$(echo "$_upower" | sed -n 's/ *state: *//; tt;b;:t s/ *//;p' )
+BATTERY_STATE=$(echo "$_upower" | sed -n 's/ *state: *//;tt;b;:t s/ *//;p' )
 
 BATTERY=$(echo "$_battery" | sed -n 's/\.[0-9]*//;s/$/%/;p' )
 if [ "$BATTERY_STATE" = "charging" ]; then
