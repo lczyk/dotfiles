@@ -7,7 +7,8 @@ fi
 
 # date
 # <short month> <numeric month>-<numeric day> <short weekday> <hour>:<minute>
-DATE=$(date +'%b %m-%d %a %H:%M')
+# DATE=$(date +'%b %m-%d %a %H:%M')
+DATE=$(date +'%b %d/%m %a %H:%M')
 
 # battery
 _upower=$(upower -i $(upower -e | grep 'battery'))
