@@ -76,8 +76,13 @@ set $lock2 'swaylock \
     --daemonize \
     --ignore-empty-password \
     --indicator-caps-lock \
-    --color 111111 \
+    --indicator-idle-visible \
+    --font "UbuntuMono" \
 '
+# --clock \
+# --timestr "%Hh %Mm %Ss"\
+# --datestr "%b-%d-%Y" \
+# --color 111111 \
 
 # TODO: screen saver after 60s. look into 'idlehint' of swayidle
 
@@ -322,6 +327,8 @@ bar {
         focused_workspace #32323200 #32323200 #5c5c5c
         inactive_workspace #323232ff #323232ff #5c5c5c
     }
+
+    font pango:UbuntuMono 11
 }
 
 # TODO: these processes do not get claned up on logout (only on restart). add smth to deal with.
