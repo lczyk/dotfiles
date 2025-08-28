@@ -33,7 +33,7 @@ background = "0x1c1c1c"
 foreground = "0xddeedd"
 
 [font]
-size = 18.0
+size = 16.0
 
 [font.offset]
 x = 0
