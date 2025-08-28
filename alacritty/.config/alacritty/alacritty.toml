@@ -39,21 +39,21 @@ size = 18.0
 x = 0
 y = 0
 
-# [font.normal]
-# family = "DejaVuSansM Nerd Font Mono"
-# style = "Regular"
+[font.normal]
+family = "Ubuntu Mono"
+style = "Regular"
+
+[font.bold]
+family = "Ubuntu Mono"
+style = "Bold"
+
+[font.italic]
+family = "Ubuntu Mono"
+style = "Italic"
 # 
-# [font.bold]
-# family = "DejaVuSansM Nerd Font Mono"
-# style = "Bold"
-# 
-# [font.italic]
-# family = "DejaVuSansM Nerd Font Mono"
-# style = "Oblique"
-# 
-# [font.bold_italic]
-# family = "DejaVuSansM Nerd Font Mono"
-# style = "Bold Oblique"
+[font.bold_italic]
+family = "Ubuntu Mono"
+style = "Bold Italic"
 
 # [[keyboard.bindings]]
 # key = "N"
