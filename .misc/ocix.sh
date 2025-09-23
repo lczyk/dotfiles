@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # spellchecker: words
 
+set -euo pipefail
+
 INPUT="$1"
 [ -z "$INPUT" ] && INPUT=$(find . -maxdepth 1 -type f | fzf)
 [ -z "$INPUT" ] && exit 1
