@@ -29,3 +29,6 @@ cnoreabbrev WQ wq!
 cnoreabbrev wq wq!
 ]])
 -- vim.api.nvim_create_user_command('Q', 'q!', {})
+
+
+-- vim.api.nvim_set_keymap('i', '<C-/>', 'copilot#Accept("<CR>")', {expr=true, silent=true})
