@@ -31,10 +31,10 @@ function main() {
         "$handler_path" record "$response"
     fi
     if [ -n "$response" ]; then
-        if command -v "$RESP" &> /dev/null; then
-            swaymsg exec -- "$RESP"
+        if command -v "$response" &> /dev/null; then
+            swaymsg exec -- "$response"
         else
-            echo "Command not found: $RESP"
+            echo "Command not found: $response"
         fi
     else
         echo "No command selected."
