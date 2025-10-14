@@ -1,26 +1,44 @@
 #!/bin/bash
+#spellchecker: ignore dmenu cacafire geckodriver swaymsg
+#spellchecker: ignore Marcin Konowalczyk lczyk
 #
-# launch a program using dmenu and fzf
+# Launch a program using dmenu and fzf
+#
+# Written by Marcin Konowalczyk @lczyk 2025
+# License: MIT-0
 
-# --tac
-
-# call dmanu_path and filter some entries out
-# for example we don't really want '[' in the launcher since
-# it is not a gui app
-SKIP=(
-    '\['
-    'cacafire'
-    'firefox.geckodriver'
-)
-DMENU_PATH=$(dmenu_path | grep -v -E "$(printf "%s|" "${SKIP[@]}" | sed 's/|$//')")
-RESP=$(echo "$DMENU_PATH" | fzf +s --exact --no-multi)
-
-if [ -n "$RESP" ]; then
-    if command -v "$RESP" &> /dev/null; then
-        swaymsg exec -- "$RESP"
+function main() {
+    local handler_path="${BASH_SOURCE[0]%/*}/launcher_handler.py"
+    local response
+    if [ ! -f "$handler_path" ]; then
+        # no handler, use default
+        # Add programs to skip here
+        SKIP=(
+            '\['
+            'cacafire'
+            'firefox.geckodriver'
+            'aa-decode'
+        )
+        local choices
+        choices=$(dmenu_path | grep -v -E "$(printf "%s|" "${SKIP[@]}" | sed 's/|$//')")
+        response=$(echo "$choices" | fzf +s --exact --no-multi)
     else
-        echo "Command not found: $RESP"
+        # use handler
+        local choices
+        #shellcheck disable=SC2046
+        choices=$("$handler_path" list --counts $(dmenu_path))
+        response=$(echo "$choices" | fzf --exact --no-multi | sed 's/ (.*)//')
+        "$handler_path" record "$response"
     fi
-else
-    echo "No command selected."
-fi
+    if [ -n "$response" ]; then
+        if command -v "$RESP" &> /dev/null; then
+            swaymsg exec -- "$RESP"
+        else
+            echo "Command not found: $RESP"
+        fi
+    else
+        echo "No command selected."
+    fi
+}
+
+main "$@"
