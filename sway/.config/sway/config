@@ -57,7 +57,7 @@ output * scale 1.5
 # probably something to do with race between the script and sway internals.
 # this way it does not matter which way around they're set.
 
-# TODO: pass opacity to opacioty.sh as args
+# TODO: pass opacity to opacity.sh as args
 
 # set $opacity 0.9
 # for_window [class=".*"] opacity $opacity
@@ -86,11 +86,11 @@ set $lock2 'swaylock \
 
 # TODO: screen saver after 60s. look into 'idlehint' of swayidle
 
-exec swayidle -w \
-    timeout 600 $lock2 \
-    timeout 900 'swaymsg "output * power off"' \
-    resume 'swaymsg "output * power on"' \
-    before-sleep $lock2
+# exec swayidle -w \
+#     timeout 600 $lock2 \
+#     timeout 900 'swaymsg "output * power off"' \
+#     resume 'swaymsg "output * power on"' \
+#     before-sleep $lock2
 
 # lock on lid close
 bindswitch --reload --locked lid:on exec $lock2
@@ -255,7 +255,7 @@ bindsym $brightness_down exec light -U 10
     bindsym $mod+f fullscreen
 
     # Toggle the current focus between tiling and floating mode
-    # bindsym $mod+Shift+space floating toggle
+    bindsym $mod+Shift+space floating toggle
 
     # Swap focus between the tiling area and the floating area
     # bindsym $mod+space focus mode_toggle
@@ -282,16 +282,20 @@ mode "resize" {
     # right will grow the containers width
     # up will shrink the containers height
     # down will grow the containers height
-    bindsym $left resize shrink width 10px
-    bindsym $down resize grow height 10px
-    bindsym $up resize shrink height 10px
-    bindsym $right resize grow width 10px
+    bindsym $left resize shrink width 30px
+    bindsym $down resize grow height 30px
+    bindsym $up resize shrink height 30px
+    bindsym $right resize grow width 30px
 
     # Ditto, with arrow keys
-    bindsym Left resize shrink width 10px
-    bindsym Down resize grow height 10px
-    bindsym Up resize shrink height 10px
-    bindsym Right resize grow width 10px
+    bindsym Left resize shrink width 30px
+    bindsym Down resize grow height 30px
+    bindsym Up resize shrink height 30px
+    bindsym Right resize grow width 30px
+    # TODO:
+    # in cmd the `resize grow width 30px` equivalent is
+    # `swaymsg resize grow width 30px`
+    # modify the bindsyms to call custom handler
 
     # Return to default mode
     bindsym Return mode "default"
@@ -306,9 +310,11 @@ bindsym $mod+r mode "resize"
 # bindsym Ctrl+Shift+i exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh full > /tmp/screenshot_log 2>&1
 
 # Ctrl+Shift+minus
-bindsym Ctrl+underscore exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh window > /tmp/screenshot_log 2>&1
+bindsym Ctrl+underscore exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh window >> /tmp/screenshot_log 2>&1
 # Ctrl+Shift+plus
-bindsym Ctrl+plus exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh area > /tmp/screenshot_log 2>&1
+bindsym Ctrl+plus exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh area >> /tmp/screenshot_log 2>&1
+# Ctrl+Shift+rightbrace
+bindcode Ctrl+Shift+35 exec SCREENSHOT_DIR=~/screenshots $scripts/screenshot.sh color-clipboard >> /tmp/screenshot_log 2>&1
 
 #
 # Status Bar:
@@ -331,12 +337,32 @@ bar {
     font pango:UbuntuMono 11
 }
 
-# TODO: these processes do not get claned up on logout (only on restart). add smth to deal with.
-exec ~/.cargo/bin/sway-alttab
+# Set popups from gimp as floating by default
+# app_id is "gimp"
+for_window [app_id="gimp"] floating enable
+
+# but not the main window
+
+        #251: con "clone.py (Working Tree) (clone.py) - cbs-tools - Visual Studio Code" (xwayland, pid: 279146, instance: "code", class: "Code", X11 window: 0xE00131)
+      #276: con "(null)"
+        #279: con "(null)"
+          #275: con "Visual Studio Code" (xwayland, pid: 279146, instance: "code", class: "Code", X11 window: 0x1001CBA)
+        #278: con "(null)"
+
+# for_window [class="Code"] floating enable
+# # but not the main window
+# for_window [title=".* - Visual Studio Code"] floating disable
+
+
+# TODO: these processes do not get cleaned up on logout (only on restart). add smth to deal with.
+# exec ~/.cargo/bin/sway-alttab
 exec ~/.local/bin/autotiling
 exec $scripts/opacity.sh
 exec keyd-application-mapper
-exec mako --default-timeout 5000
+
+exec ~/.local/bin/mako --default-timeout 5000
+
+exec ~/.local/bin/wl-clip-persist --clipboard both
 
 include /etc/sway/config.d/*
 
