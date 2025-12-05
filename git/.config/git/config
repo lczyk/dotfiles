@@ -1,5 +1,5 @@
 [user]
-name = marcin
+name = lczyk
 email = marcin.konow@lczyk.xyz
 
 [init]
@@ -65,6 +65,7 @@ autoupdate = true
 
 [rebase]
 updateRefs = true
+autoStash = true
 
 [merge]
 conflictstyle = zdiff3
