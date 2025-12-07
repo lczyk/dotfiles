@@ -360,7 +360,7 @@ exec ~/.local/bin/autotiling
 exec $scripts/opacity.sh
 exec keyd-application-mapper
 
-exec ~/.local/bin/mako --default-timeout 5000
+exec ~/.local/bin/mako
 
 exec ~/.local/bin/wl-clip-persist --clipboard both
 

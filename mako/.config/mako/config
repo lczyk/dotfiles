@@ -1,0 +1,24 @@
+font=Ubuntu Mono 12
+text-alignment=right
+default-timeout=5000
+
+# styling - Gruvbox Dark
+background-color=#282828
+text-color=#ebdbb2
+border-color=#d65d0e
+border-size=2
+margin=6
+padding=10
+border-radius=0
+
+# per-urgency settings
+[urgency=low]
+border-color=#98971a
+
+[urgency=normal]
+border-color=#d79921
+
+[urgency=high]
+border-color=#cc241d
+# don't auto-dismiss high-urgency notifications
+default-timeout=0
