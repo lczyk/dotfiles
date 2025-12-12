@@ -13,7 +13,7 @@ function fish_greeting
         fish -v
     end
     logo
-    echo 'Hello Marcin! :)'
+    echo "Hello $USER :))"
 end
 
 set -x SCREENSHOT_DIR "$HOME/screenshots"
