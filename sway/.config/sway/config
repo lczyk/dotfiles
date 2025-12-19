@@ -1,4 +1,3 @@
-
 #
 # Copy this to ~/.config/sway/config and edit it to your liking.
 #
@@ -23,7 +22,11 @@ set $scripts ~/.config/sway/scripts
 include /etc/sway/config-vars.d/*
 
 # pick a random image from the backgrounds directory
-set $background $(find ~/.local/share/backgrounds/ -type f -not -name '_*' | shuf -n 1)
+# set $background $(find ~/.local/share/backgrounds/ -type f -not -name '_*' | shuf -n 1)
+# output * bg $background fill
+
+# Use the wallpaper.sh script to set the background
+set $background $($scripts/wallpaper.sh)
 output * bg $background fill
 
 # Example configuration:
