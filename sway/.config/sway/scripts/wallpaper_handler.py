@@ -27,15 +27,16 @@ def debug(*args: object, **kwargs: object) -> None:
         print("[DEBUG]", *args, file=sys.stderr, **kwargs)  # type: ignore
 
 def sample(weights: list[float]) -> int:
-    total = sum(weights)
-    r = random.uniform(0, total)
-    cumulative: float = 0
-    for i, w in enumerate(weights):
-        cumulative += w
-        if r < cumulative:
-            return i
-    return len(weights) - 1  # Fallback
+    """Sample an index from weights. Any weight <= 0 is ignored."""
 
+    filtered_indices = [i for i, w in enumerate(weights) if w > 0]
+    filtered_weights = [weights[i] for i in filtered_indices]
+
+    selected_filtered_index = random.choices(
+        range(len(filtered_weights)), weights=filtered_weights, k=1
+    )[0]
+
+    return filtered_indices[selected_filtered_index]
 
 def main():
     # for now just pass everything to stdout
