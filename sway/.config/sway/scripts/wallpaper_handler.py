@@ -19,10 +19,10 @@ _DB_PATH = os.path.expanduser("~/.local/share/wallpaper_handler/wallpapers.db")
 
 INIT_COUNT_BIAS = 5  # initial count bias for new wallpapers
 
-_DEBUG=False
+_debug = False
 
 def debug(*args: object, **kwargs: object) -> None:
-    if _DEBUG:
+    if _debug:
         kwargs.pop("file", None)
         print("[DEBUG]", *args, file=sys.stderr, **kwargs)  # type: ignore
 
@@ -40,6 +40,9 @@ def sample(weights: list[float]) -> int:
 def main():
     # for now just pass everything to stdout
     args = parse_args()
+    if args.debug:
+        global _debug
+        _debug = True
 
     if args.command == "clean":
         if os.path.exists(_DB_PATH):
@@ -68,6 +71,14 @@ def main():
             )
         """)
 
+        # create a meta table to store last selected wallpaper
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+
         # Get the average count of all wallpapers
         c.execute("SELECT AVG(count) FROM wallpapers")
         avg_count = c.fetchone()[0] or 0
@@ -85,7 +96,7 @@ def main():
         conn.commit()
 
         # Print all wallpapers and their counts for debugging
-        if _DEBUG:
+        if _debug:
             c.execute("SELECT path, count FROM wallpapers")
             wallpapers = c.fetchall()
             for path, count in wallpapers:
@@ -98,12 +109,31 @@ def main():
         max_count = max(counts) if counts else 0
         weights = [max_count - count + 1 for count in counts]  # +1 to avoid zero weight
         debug("Weights:", weights)
+
+        # Read the last selected wallpaper to avoid immediate repetition
+        c.execute("SELECT value FROM meta WHERE key = ?", ("last_selected",))
+        last_selected = c.fetchone()
+        if last_selected:
+            last_selected = last_selected[0]
+            debug("Last selected wallpaper:", last_selected)
+            if last_selected in paths:
+                last_index = paths.index(last_selected)
+                weights[last_index] = 0
+                debug("Adjusted weights to avoid repetition:", weights)
+
         selected_index = sample(weights)
         selected_wallpaper = paths[selected_index]
         debug("Selected wallpaper:", selected_wallpaper)
         
         # Update the count for the selected wallpaper
         c.execute("UPDATE wallpapers SET count = count + 1 WHERE path = ?", (selected_wallpaper,))
+
+        # Store the selected wallpaper in meta table
+        c.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+            ("last_selected", selected_wallpaper),
+        )
+
         conn.commit()
         conn.close()
     
@@ -118,12 +148,30 @@ def main():
             devnull = os.open(os.devnull, os.O_WRONLY)
             os.dup2(devnull, sys.stdout.fileno())
             sys.exit(1)
+
+    elif args.command == "info":
+        if not os.path.exists(_DB_PATH):
+            print("No wallpaper database found.")
+            return
+        conn = sqlite3.connect(_DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT path, count FROM wallpapers ORDER BY count DESC")
+        wallpapers = c.fetchall()
+        for path, count in wallpapers:
+            print(f"{count} {path}")
+        conn.close()
+
     else:
         raise ValueError("Unknown command")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Handle wallpaper choice.")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     _clean_subparser = subparsers.add_parser("clean", help="Clean the wallpaper database.")
     select_subparser = subparsers.add_parser("select", help="Select a wallpaper from the given choices.")
@@ -132,6 +180,7 @@ def parse_args():
         nargs="*",
         help="List of paths to wallpapers.",
     )
+    _info_subparser = subparsers.add_parser("info", help="Show wallpaper usage info.")
     args = parser.parse_args()
 
     return args
