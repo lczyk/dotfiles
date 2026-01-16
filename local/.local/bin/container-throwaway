@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+
+# docker start arm64-resolute && docker exec -it arm64-resolute fish
+
+set -e
+
+BACKEND="${BACKEND:-docker}"
+
+function help() {
+    echo "Usage: container-throwaway [cmd] <ubuntu-version> <architecture>"
+    echo "Create and manage throwaway ${BACKEND} containers called 'throwaway-<ubuntu-version>-<architecture>'."
+    echo ""
+    echo "Commands:"
+    echo "  run    <ubuntu-version> <architecture>  Create and start a throwaway container"
+    echo "  delete <ubuntu-version> <architecture>  Stop the specified throwaway container"
+}
+
+function info() {
+    echo "[INFO] $*" >&2
+}
+
+function main() {
+    local cmd=$1
+    shift || true
+    case $cmd in
+        run)    run "$@" ;;
+        delete) delete "$@" ;;
+        *)      help; exit 1 ;;
+    esac
+}
+
+function delete() {
+    local ubuntu_version=$1; local architecture=$2;
+    [ -z "$ubuntu_version" ] && { help; exit 1; }
+    [ -z "$architecture" ] && { architecture=$(get_arch); }
+    local container_name="throwaway-${ubuntu_version}-${architecture}"
+    info "Deleting container '${container_name}'"
+
+    if "$BACKEND" ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
+        "$BACKEND" rm -f "${container_name}" 2>/dev/null
+    else
+        info "Container '${container_name}' does not exist."
+    fi
+}
+
+function get_arch() {
+    case $(uname -m) in
+        x86_64) echo "amd64" ;;
+        aarch64 | arm64) echo "arm64" ;;
+        *) echo "Unsupported architecture: $(uname -m)" ; exit 1 ;;
+    esac
+}
+
+function run() {
+    local ubuntu_version=$1; local architecture=$2;
+    [ -z "$ubuntu_version" ] && { help; exit 1; }
+    [ -z "$architecture" ] && { architecture=$(get_arch); }
+    local container_name="throwaway-${ubuntu_version}-${architecture}"
+
+    # if the container already exists, make sure its running
+    if "$BACKEND" ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
+        info "Starting existing container '${container_name}'"
+        "$BACKEND" start "${container_name}"
+    else
+        info "Creating new container '${container_name}'"
+        create $ubuntu_version $architecture
+    fi
+
+    # become the backer exec
+    exec "$BACKEND" exec -it "${container_name}" fish
+}
+
+_TO_INSTALL=(
+    fish
+    pax-utils
+    tree
+    bat
+    vim
+    curl
+)
+
+function create() {
+    local ubuntu_version=$1
+    local architecture=$2
+    local container_name="throwaway-${ubuntu_version}-${architecture}"
+
+    # create a container and install all the deps we might want in it
+    "$BACKEND" run -d --name "${container_name}" --platform "linux/${architecture}" ubuntu:"${ubuntu_version}" sleep infinity
+    "$BACKEND" exec -it "${container_name}" bash -c "
+        apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y ${_TO_INSTALL[*]} && \
+        ln -s batcat /usr/bin/bat
+    "
+
+    # if debx.sh is found anywhere in PATH, copy it into the container
+    local debx_path
+    debx_path=$(command -v debx.sh || true)
+    while [ -L "$debx_path" ]; do debx_path=$(readlink "$debx_path"); done
+    if [ -n "$debx_path" ] && [ -f "$debx_path" ] && [ -x "$debx_path" ]; then
+        info "Copying debx.sh into container"
+        "$BACKEND" cp "$debx_path" "${container_name}:/"
+        "$BACKEND" exec -it "${container_name}" bash -c "mv /debx.sh /usr/bin/d"
+        "$BACKEND" exec -it "${container_name}" bash -c "d -I"  # initialize debx
+    else
+        info "debx.sh not found. Skipping copy into container."
+    fi
+
+    # hack the fish shell prompt to show the container name and architecture
+    "$BACKEND" exec -it "${container_name}" \
+        sed -ri 's|(echo.*)"\$USER"(.*)|\1'"${ubuntu_version}"'\2|' /usr/share/fish/functions/fish_prompt.fish
+    "$BACKEND" exec -it "${container_name}" \
+        sed -ri 's|(echo.*)\(prompt_hostname\)(.*)|\1'"${architecture}"'\2|' /usr/share/fish/functions/fish_prompt.fish
+}
+
+main "$@"
