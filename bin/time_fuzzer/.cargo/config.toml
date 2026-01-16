@@ -1,0 +1,4 @@
+
+# Compile static binary
+[build]
+rustflags = ["-C", "target-feature=+crt-static"]

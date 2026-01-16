@@ -12,7 +12,18 @@ function main () {
     # date
     # <short month> <numeric month>-<numeric day> <short weekday> <hour>:<minute>
     # DATE=$(date +'%b %m-%d %a %H:%M')
-    DATE=$(date +'%b %d/%m %a %H:%M')
+    local fuzzy_time=""
+    if [ -x "$(command -v time_fuzzer)" ]; then
+        fuzzy_time=$(time_fuzzer "$(date +'%H:%M')" )
+    elif [ -x "$HOME/.cargo/bin/time_fuzzer" ]; then
+        fuzzy_time=$("$HOME/.cargo/bin/time_fuzzer" "$(date +'%H:%M')" )
+    fi
+
+    if [ -n "$fuzzy_time" ]; then
+        DATE="$(date +'%b %d/%m %a .') $fuzzy_time"
+    else
+        DATE=$(date +'%b %d/%m %a %H:%M')
+    fi
 
     # battery
     local upower=$(upower -i "$(upower -e | grep 'battery')")
