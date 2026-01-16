@@ -6,3 +6,8 @@ end
 if type -q code
     alias cr='code --reuse-window .'
 end
+
+
+if type -q zed
+    alias zr='zed --reuse .'
+end
