@@ -1,6 +1,9 @@
 use std::io::{self, Read};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const GIT_SHA: &str = env!("TIME_FUZZER_GIT_SHA");
+const GIT_STATUS: &str = env!("TIME_FUZZER_GIT_STATUS");
+const BUILD_DATE: &str = env!("TIME_FUZZER_BUILD_DATE");
 const HELP: &str = r#"Usage: time_fuzzer [OPTIONS] <TIME>
 Convert a specific time into a fuzzy, human-readable format.
 Options:
@@ -31,7 +34,7 @@ fn parse_args(args: &[String]) -> Args {
                 std::process::exit(0);
             }
             "-v" | "--version" => {
-                println!("time_fuzzer {}", VERSION);
+                println!("time_fuzzer {}+{} ({}, {})", VERSION, GIT_SHA, BUILD_DATE, GIT_STATUS);
                 std::process::exit(0);
             }
             "-j" | "--just" => {
