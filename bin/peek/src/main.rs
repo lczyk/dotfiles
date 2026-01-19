@@ -30,15 +30,41 @@ fn parse_args(args: &[String]) -> () {
     }
 }
 
-use std::io::{self, Read};
+use std::io::{self, BufRead, Write};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     parse_args(&args);
 
-    let mut buffer = String::new();
-    io::stdin().read_to_string(&mut buffer).expect("Failed to read from stdin");
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+    let stdout = io::stdout();
+    let mut stdout = stdout.lock();
+    let stderr = io::stderr();
+    let mut stderr = stderr.lock();
 
-    print!("{}", buffer);
-    eprint!("{}", buffer);    
+    let mut buffer = Vec::with_capacity(8192);
+    loop {
+        buffer.clear();
+        let read = stdin
+            .read_until(b'\n', &mut buffer)
+            .expect("Failed to read from stdin");
+        if read == 0 {
+            break;
+        }
+
+        if let Err(err) = stdout.write_all(&buffer) {
+            if err.kind() == io::ErrorKind::BrokenPipe {
+                return;
+            }
+            panic!("Failed to write to stdout: {err}");
+        }
+
+        if let Err(err) = stderr.write_all(&buffer) {
+            if err.kind() == io::ErrorKind::BrokenPipe {
+                return;
+            }
+            panic!("Failed to write to stderr: {err}");
+        }
+    }
 }
