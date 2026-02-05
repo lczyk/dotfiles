@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
 # spellchecker: words debx binutils zstd Marcin Konowalczyk lczyk tzdata noninteractive debname
 
-__VERSION__="0.3.2"
+__VERSION__="0.3.3"
 __AUTHOR__="Marcin Konowalczyk @lczyk"
 __LICENSE__="MIT-0"
 # aka no liability, do whatever you want with it,
 # no need to credit me, but it would be nice :)
 
-fatal() {
-    echo "$1" >&2
-    exit 1
-}
+debx::fatal() { echo "$1" >&2; exit 1; }
 
-help() {
+debx::help() {
     cat << EOF
-Usage: $0 [Install|Download|Unpack] [options] [file.deb]
+Usage: $0 [Install|Download|Info|Unpack] [options] [file.deb]
 
 Extracts the contents of a .deb package into a directory named after the package (without .deb extension).
 If no file is provided, it will attempt to use fzf to select a .deb file in the current directory.
@@ -23,6 +20,7 @@ If no mode is provided, it defaults to Unpack.
 Modes:
   Install          Installs necessary dependencies (fzf, binutils, tree, tar, zstd).
   Download         Downloads a .deb package from the apt repository and unpacks it.
+  Info             Displays information about a specified package from the apt repository.
   Unpack           Unpacks a specified .deb file (default mode).
 
 Options:
@@ -31,13 +29,13 @@ Options:
 EOF
 }
 
-download() {
+debx::download() {
     local package="$1"
-    [ -n "$package" ] || fatal "No package name provided for download."
-    command -v apt &>/dev/null || fatal "apt command not found. Cannot download package."
+    [ -n "$package" ] || debx::fatal "No package name provided for download."
+    command -v apt &>/dev/null || debx::fatal "apt command not found. Cannot download package."
     echo "Downloading package: $package"
     local tmpdir
-    tmpdir=$(mktemp -d) || fatal "Failed to create temporary directory."
+    tmpdir=$(mktemp -d) || debx::fatal "Failed to create temporary directory."
     trap 'rm -rf "$tmpdir"' EXIT
     
     (
@@ -45,13 +43,21 @@ download() {
         apt download "$package"
     )
     local debname=$(find "$tmpdir" -maxdepth 1 -type f -name "*.deb" -printf "%P\n" -quit)
-    [ -n "$debname" ] || fatal "Failed to download package '$package'."
+    [ -n "$debname" ] || debx::fatal "Failed to download package '$package'."
 
     mv "$tmpdir/$debname" ./"$debname"
     echo "Moved package to current directory: ./$debname"
 
     # unpack the downloaded package
-    unpack "$debname"
+    debx::unpack "$debname"
+}
+
+debx::info() {
+    local package="$1"
+    [ -n "$package" ] || debx::fatal "No package name provided for info."
+    command -v apt &>/dev/null || debx::fatal "apt command not found. Cannot retrieve package info."
+    echo "Retrieving info for package: $package"
+    apt show "$package" || debx::fatal "Failed to retrieve info for package '$package'."
 }
 
 # Install all dependencies if requested
@@ -61,7 +67,7 @@ download() {
 # E.g. Extracting golang-1.22-src from Ubuntu 24.04 using podman:
 # `podman run -it --rm -v$(pwd):/mnt ubuntu:24.04 bash -c 'cd mnt; ./debx.sh -I; apt download golang-1.22-src; ./debx.sh *.deb'`
 
-install() {
+debx::install() {
     echo "Installing dependencies..."
     local deps=(fzf binutils tree tar zstd)
     if ! command -v sudo &>/dev/null; then
@@ -79,11 +85,11 @@ install() {
 }
 
 # make sure we end with .deb
-unpack() {
+debx::unpack() {
     local input="$1"
-    [ -n "$input" ] || fatal "No .deb file provided for unpacking."
-    [[ "$input" != *.deb ]] && fatal "No .deb file provided for unpacking."
-    [ -f "$input" ] || fatal "File '$input' does not exist."
+    [ -n "$input" ] || debx::fatal "No .deb file provided for unpacking."
+    [[ "$input" != *.deb ]] && debx::fatal "No .deb file provided for unpacking."
+    [ -f "$input" ] || debx::fatal "File '$input' does not exist."
     local dir="$(echo "${input%.deb}")"
     if [ -d "$dir" ] && [ $FORCE -eq 0 ]; then
         # confirm if we want to remove the existing directory
@@ -91,8 +97,8 @@ unpack() {
         case $REPLY in
             [Nn]* ) echo "Exiting without changes."; exit 0; ;;
             [Yy]* ) ;;
-            [Tt]* ) tree "$dir"; exit 0; ;;
-            * ) fatal "Invalid response. Exiting." ;;
+            [Tt]* ) debx::debx_tree "$dir"; exit 0; ;;
+            * ) debx::fatal "Invalid response. Exiting." ;;
         esac
     fi
 
@@ -150,15 +156,15 @@ unpack() {
                 rm data.tar.xz
             )
         else
-            fatal "No data archive found in the package."
+            debx::fatal "No data archive found in the package."
         fi
 
         rm "$input"
     )
-    debx_tree "$dir"
+    debx::debx_tree "$dir"
 }
 
-debx_tree() {
+debx::debx_tree() {
     local dir="$1"
     if command -v tree &>/dev/null; then
         echo "Directory structure:"
@@ -175,30 +181,23 @@ debx_tree() {
 FORCE=0
 MODE=""
 ARGS=()
-parse_args() {
+debx::parse_args() {
     # parse mode. this must be the first argument
     case "$1" in
-        -I|--install|I|install)
-            MODE="install"; shift ;;
-        d|--D|--download|D|download)
-            MODE="download"; shift ;;
-        --U|--unpack|U|unpack)
-            MODE="unpack"; shift ;;
+        -I|--install|I|install)       MODE="install"; shift ;;
+        d|--D|--download|D|download)  MODE="download"; shift ;;
+        i|--info|info)                MODE="info"; shift ;;
+        --U|--unpack|U|unpack)        MODE="unpack"; shift ;;
     esac
 
     # default to unpack
-    if [ -z "$MODE" ]; then
-        MODE="unpack"
-    fi
+    [ -z "$MODE" ] && MODE="unpack"
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            -f|--force)
-                FORCE=1; shift;;
-            -h|--help) help; exit 0; ;;
-            -v|--version)
-                echo "$0 version $__VERSION__ by $__AUTHOR__"
-                exit 0 ;;
+            -f|--force)    FORCE=1; shift;;
+            -h|--help)     debx::help; exit 0; ;;
+            -v|--version)  echo "$0 version $__VERSION__ by $__AUTHOR__" ; exit 0 ;;
             *) break ;;
         esac
     done
@@ -206,38 +205,45 @@ parse_args() {
     ARGS=("$@")
 }
 
-main() {
+debx::require_fzf() { command -v fzf &>/dev/null || debx::fatal "$1"; }
+
+debx::select_package() {
+    local prompt="$1"
+    debx::require_fzf "fzf is not installed. Please install it or provide a package name as an argument."
+    local selection=$(apt-cache search . | cut -d' ' -f1 | fzf --prompt="$prompt")
+    [ -n "$selection" ] || debx::fatal "No package selected."
+    echo "$selection"
+}
+
+debx::select_deb_file() {
+    local prompt="$1"
+    debx::require_fzf "fzf is not installed. Please install it or provide a .deb file as an argument."
+    local selection=$(find . -maxdepth 1 -type f -name "*.deb" | fzf --prompt="$prompt")
+    [ -n "$selection" ] || debx::fatal "No .deb file selected."
+    echo "$selection"
+}
+
+debx::main() {
     local input="$1"
     case "$MODE" in
-        install) ;;
-        unpack)
-            if [ -z "$input" ]; then
-                command -v fzf &>/dev/null || fatal "fzf is not installed. Please install it or provide a .deb file as an argument."
-                input=$(find . -maxdepth 1 -type f -name "*.deb" | fzf --prompt="Select a .deb file: ")
-                [ -n "$input" ] || fatal "No .deb file selected."
-            fi ;;
-        download)
-            if [ -z "$input" ]; then
-                command -v fzf &>/dev/null || fatal "fzf is not installed. Please install it or provide a package name as an argument."
-                input=$(apt-cache search . | cut -d' ' -f1 | fzf --prompt="Select a package to download: ")
-                [ -n "$input" ] || fatal "No package selected."
-            fi ;;
-        *) fatal "Unknown mode: $MODE" ;;
+        install)   ;;
+        unpack)    [ -z "$input" ] && input=$(debx::select_deb_file "Select a .deb file: ") ;;
+        info)      [ -z "$input" ] && input=$(debx::select_package "Select a package for info: ") ;;
+        download)  [ -z "$input" ] && input=$(debx::select_package "Select a package to download: ") ;;
+        *)         debx::fatal "Unknown mode: $MODE" ;;
     esac
 
     case "$MODE" in
-        install)
-            install ;;
-        download)
-            download "$input" ;;
-        unpack)
-            unpack "$input" ;;
-        *) fatal "Unknown mode: $MODE" ;;
+        install)   debx::install ;;
+        download)  debx::download "$input" ;;
+        info)      debx::info "$input" ;;
+        unpack)    debx::unpack "$input" ;;
+        *)         debx::fatal "Unknown mode: $MODE" ;;
     esac
 }
 
-parse_args "$@"
-main "${ARGS[0]}"
+debx::parse_args "$@"
+debx::main "${ARGS[0]}"
 
 __LICENSE__='
 MIT No Attribution
