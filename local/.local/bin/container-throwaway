@@ -227,20 +227,95 @@ EOF
     info "Hacking fish prompt to show container info"
     "$BACKEND" exec -i "${container_name}" mkdir -p /root/.config/fish/functions
 cat <<EOF | "$BACKEND" exec -i "${container_name}" bash -c "cat > /root/.config/fish/functions/fish_prompt.fish"
+# This is a custom fish prompt that shows the container name and architecture
+# Created by 'container-throwaway' script
+
+set -g _fish_prompt_debug 0
+
+function info
+    if set -q _fish_prompt_debug; and test \$_fish_prompt_debug -eq 1
+        echo "[INFO] \$argv" >&2
+    end
+end
+
 function fish_prompt
     set -l last_status \$status
-    set -l normal (set_color normal)
+    set -l cnorm (set_color normal)
     set -l delim ">"
     # Prompt status only if it's not 0
-    set -l prompt_status
-    test \$last_status -ne 0; and set prompt_status (set_color \$fish_color_status)"[\$last_status]\$normal"
-    set -l ubuntu_version "$ubuntu_version"
-    set -l architecture "$architecture"
-    set -l current_dir (pwd)
-    if test \$current_dir = $HOME
-        set current_dir "~"
+    set -l pstatus ""
+    test \$last_status -ne 0; and set pstatus (set_color \$fish_color_status)"[\$last_status]\$cnorm "
+    set -l ubuntu "$ubuntu_version"
+    set -l arch "$architecture"
+    set -l cubuntu (set_color \$fish_color_user)
+    set -l carch (set_color \$fish_color_host)
+    # path
+    set -l pwd (prompt_pwd)
+    set -l cwd (set_color \$fish_color_cwd)
+    if test \$ubuntu = "focal"
+        # focal is messed up from some reason. punt for now
+        info "ubuntu version is focal. skipping fancy colors"
+    else
+        set cwd (set_color (random_cwd_color))
     end
-    echo -n -s (set_color \$fish_color_user) \$ubuntu_version \$normal "@" (set_color \$fish_color_host) \$architecture " " \$current_dir " " \$normal \$prompt_status \$delim
+    echo -n -s \$cubuntu \$ubuntu \$cnorm "@" \$carch \$arch \$cnorm " " \$cwd \$pwd \$cnorm " " \$pstatus \$delim
+end
+
+function random_cwd_color
+    if ! command -sq cksum
+        # fallback to whatever is the default fish color 
+        info "cksum command not found, using default color for cwd"
+        echo \$fish_color_cwd
+        return
+    end
+    # randomized cwd color
+    # We hash the physical PWD and turn that into a color. That means directories (usually) get different colors,
+    # but every directory always gets the same color. It's deterministic.
+    # We use cksum because 1. it's fast, 2. it's in POSIX, so it should be available everywhere.
+
+    set -l shas (pwd -P | cksum | cut -d' ' -f1 | math --base=hex | string sub -s 3)
+    # ensure shas is at least 6 characters long by padding with zeros, and take the first 6 characters to get a color like "1a2b3c"
+    # don't use 'string pad' since it's not available in older fish versions, do it manually with printf
+    while test (string length \$shas) -lt 6; set shas "0\$shas"; end
+    # split the shas into three parts and convert them to decimal to get RGB values between 0 and 255
+    # set -l col 0x(echo \$shas | string sub -s 1 -l 2) 0x(echo \$shas | string sub -s 3 -l 2) 0x(echo \$shas | string sub -s 5 -l 2)
+    
+    # color components between 0 and 255
+    set -l cr (printf "%d" "0x"(echo \$shas | string sub -s 1 -l 2))
+    set -l cg (printf "%d" "0x"(echo \$shas | string sub -s 3 -l 2))
+    set -l cb (printf "%d" "0x"(echo \$shas | string sub -s 5 -l 2))
+
+    info "Initial color components: \$cr \$cg \$cb"
+
+    # If the (simplified idea of) luminance is below 120 (out of 255), add some more.
+    # We add to a single, deterministic pseudo-random channel each iteration based on shas.
+    set -l max_iter 10
+    set -l iter 0
+    set -l increment 60
+    set -l luma_threshold 100
+    # NOTE: we cannot use math for min, because it might not be available in older fish versions, so we do it manually with an if statement
+    while true;
+        set -l luma (math 0.2126 x \$cr+ 0.7152 x \$cg + 0.0722 x \$cb)
+        info "Iteration \$iter: \$cr \$cg \$cb luma: \$luma"
+        if test \$luma -gt \$luma_threshold -o \$iter -gt \$max_iter
+            break
+        end
+        set -l pick_seed "\$shas\$iter"
+        set -l pick (echo \$pick_seed | cksum | cut -d' ' -f1)
+        set -l pick_mod (math "\$pick % 3")
+        if test \$pick_mod -eq 0
+            set cr (math "\$cr + \$increment"); if test \$cr -gt 255; set cr 255; end;
+        else if test \$pick_mod -eq 1
+            set cg (math "\$cg + \$increment"); if test \$cg -gt 255; set cg 255; end;
+        else
+            set cb (math "\$cb + \$increment"); if test \$cb -gt 255; set cb 255; end;
+        end
+        set iter (math \$iter + 1)
+    end
+    # set -l col (string replace 0x '' \$col | string pad -c 0 -w 2 | string join "")
+    set -l col (printf "%02x%02x%02x" \$cr \$cg \$cb)
+
+    echo \$col
 end
 EOF
     
