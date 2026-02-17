@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# spellchecker: ignore dmenu 
+# spellchecker: ignore dmenu
 # spellchecker: ignore Marcin Konowalczyk lczyk
 #
 # A script to handle recording and sorting choices from dmenu_path.
