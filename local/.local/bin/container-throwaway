@@ -15,24 +15,117 @@ function help() {
     echo "  delete <ubuntu-version> <architecture>  Stop the specified throwaway container"
 }
 
-function info() {
-    echo "[INFO] $*" >&2
-}
+function info() { echo "[INFO] $*" >&2; }
+function fatal() { echo "[FATAL] $*" >&2; exit 1; }
 
 function main() {
     local cmd=$1
     shift || true
     case $cmd in
         run)    run "$@" ;;
-        delete) delete "$@" ;;
+        del|delete) delete "$@" ;;
         *)      help; exit 1 ;;
     esac
+}
+
+# out of distro-info --all --fullname
+# Ubuntu 4.10 "Warty Warthog"
+# Ubuntu 5.04 "Hoary Hedgehog"
+# Ubuntu 5.10 "Breezy Badger"
+# Ubuntu 6.06 LTS "Dapper Drake"
+# Ubuntu 6.10 "Edgy Eft"
+# Ubuntu 7.04 "Feisty Fawn"
+# Ubuntu 7.10 "Gutsy Gibbon"
+# Ubuntu 8.04 LTS "Hardy Heron"
+# Ubuntu 8.10 "Intrepid Ibex"
+# Ubuntu 9.04 "Jaunty Jackalope"
+# Ubuntu 9.10 "Karmic Koala"
+# Ubuntu 10.04 LTS "Lucid Lynx"
+# Ubuntu 10.10 "Maverick Meerkat"
+# Ubuntu 11.04 "Natty Narwhal"
+# Ubuntu 11.10 "Oneiric Ocelot"
+# Ubuntu 12.04 LTS "Precise Pangolin"
+# Ubuntu 12.10 "Quantal Quetzal"
+# Ubuntu 13.04 "Raring Ringtail"
+
+_DISTRO_INFO_INITIALISED=
+# map of "Warty Warthog" -> "4.10"
+declare -A _CODENAME_TO_VERSION_MAP
+# map of "4.10" -> "warty
+declare -A _VERSION_TO_CODENAME_MAP
+# map of "Warty Warthog" -> "warty"
+declare -A _CODENAME_FULL_TO_SHORT_MAP
+# array of short codenames
+declare -a _UBUNTU_CODENAMES_SHORT
+
+function init_distro_info_data() {
+    if [ -n "${_DISTRO_INFO_INITIALISED:-}" ]; then
+        return
+    fi
+
+    local distro_info_output
+    distro_info_output=$(distro-info --all --fullname)
+    while IFS= read -r line; do
+        # Ubuntu 4.10 "Warty Warthog"
+        if [[ $line =~ Ubuntu[[:space:]]([0-9]+\.[0-9]+)([[:space:]]LTS)?[[:space:]]\"([^\"]+)\" ]]; then
+            local version="${BASH_REMATCH[1]}"
+            local codename_full="${BASH_REMATCH[3]}"
+            local codename_short
+            codename_short=$(echo "$codename_full" | awk '{print tolower($1)}')
+            _CODENAME_TO_VERSION_MAP["$codename_short"]="$version"
+            _VERSION_TO_CODENAME_MAP["$version"]="$codename_short"
+            _CODENAME_FULL_TO_SHORT_MAP["$codename_full"]="$codename_short"
+            _UBUNTU_CODENAMES_SHORT+=("$codename_short")
+        else
+            fatal "Failed to parse distro-info line: $line"
+        fi
+    done <<< "$distro_info_output"
+    _DISTRO_INFO_INITIALISED=1
+}
+
+# translate ubuntu version to short codename
+# e.g., "22.04" -> "jammy"
+# "jammy" -> "jammy"
+# "Jammy" -> "jammy"
+function normalise_ubuntu_version() {
+    init_distro_info_data
+    local ubuntu_version=$1
+
+    # check if it's already a codename
+    local ubuntu_version_lc
+    ubuntu_version_lc=$(echo "$ubuntu_version" | awk '{print tolower($0)}')
+    for codename in "${_UBUNTU_CODENAMES_SHORT[@]}"; do
+        if [ "$ubuntu_version_lc" = "$codename" ]; then
+            info "Already a codename: $ubuntu_version_lc"
+            echo "$ubuntu_version_lc"
+            return
+        fi
+    done
+
+    # otherwise, check if it's a version number
+    local codename="${_VERSION_TO_CODENAME_MAP[$ubuntu_version]}"
+    if [ -n "$codename" ]; then
+        info "Mapped version $ubuntu_version to codename $codename"
+        echo "$codename"
+        return
+    fi
+
+    # maybe it's a full codename like "Warty Warthog"
+    codename=${_CODENAME_FULL_TO_SHORT_MAP["$ubuntu_version"]}
+    if [ -n "$codename" ]; then
+        info "Mapped full codename '$ubuntu_version' to short codename '$codename'"
+        echo "$codename"
+        return
+    fi
+
+    fatal "Unknown Ubuntu version or codename: $ubuntu_version"
 }
 
 function delete() {
     local ubuntu_version=$1; local architecture=$2;
     [ -z "$ubuntu_version" ] && { help; exit 1; }
     [ -z "$architecture" ] && { architecture=$(get_arch); }
+    ubuntu_version=$(normalise_ubuntu_version "$ubuntu_version")
     local container_name="throwaway-${ubuntu_version}-${architecture}"
     info "Deleting container '${container_name}'"
 
@@ -55,6 +148,7 @@ function run() {
     local ubuntu_version=$1; local architecture=$2;
     [ -z "$ubuntu_version" ] && { help; exit 1; }
     [ -z "$architecture" ] && { architecture=$(get_arch); }
+    ubuntu_version=$(normalise_ubuntu_version "$ubuntu_version")
     local container_name="throwaway-${ubuntu_version}-${architecture}"
 
     # if the container already exists, make sure its running
@@ -66,8 +160,14 @@ function run() {
         create $ubuntu_version $architecture
     fi
 
+    # reconnect bridge
+    "$BACKEND" network disconnect bridge "${container_name}" 2>/dev/null || true
+    "$BACKEND" network connect bridge "${container_name}" 2>/dev/null || true
+
     # become the backer exec
-    exec "$BACKEND" exec -it "${container_name}" fish
+    info "Entering container '${container_name}'"
+    "$BACKEND" exec -it "${container_name}" bash -ic "fish -i" || \
+        "$BACKEND" exec -it "${container_name}" bash -ic "bash --login"
 }
 
 _TO_INSTALL=(
@@ -77,6 +177,12 @@ _TO_INSTALL=(
     bat
     vim
     curl
+    fzf
+    binutils
+    tree
+    tar
+    zstd
+    apt-file
 )
 
 function create() {
@@ -84,13 +190,25 @@ function create() {
     local architecture=$2
     local container_name="throwaway-${ubuntu_version}-${architecture}"
 
-    # create a container and install all the deps we might want in it
+    # # create a container and install all the deps we might want in it
     "$BACKEND" run -d --name "${container_name}" --platform "linux/${architecture}" ubuntu:"${ubuntu_version}" sleep infinity
-    "$BACKEND" exec -it "${container_name}" bash -c "
-        apt-get update && \
-        DEBIAN_FRONTEND=noninteractive apt-get install -y ${_TO_INSTALL[*]} && \
-        ln -s batcat /usr/bin/bat
-    "
+
+    # crate an apt_setup bash script to install packages
+    local apt_setup_script=$(mktemp ~/apt_setup.XXXXXX.sh)
+    cat <<EOF > "${apt_setup_script}"
+#!/usr/bin/env bash
+set -e
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y ${_TO_INSTALL[*]}
+ln -s batcat /usr/bin/bat
+EOF
+    local list_of_deps=$(mktemp ~/list_of_deps.XXXXXX.txt)
+    trap "rm -f ${apt_setup_script} ${list_of_deps}" EXIT
+
+    printf "%s\n" "${_TO_INSTALL[@]}" > "${list_of_deps}"
+    "$BACKEND" cp "${apt_setup_script}" "${container_name}:/"
+    "$BACKEND" cp "${list_of_deps}" "${container_name}:/root/list_of_deps"
+    "$BACKEND" exec "$container_name" bash -c "mv /apt_setup.*sh /usr/bin/apt_setup && chmod +x /usr/bin/apt_setup"
 
     # if debx.sh is found anywhere in PATH, copy it into the container
     local debx_path
@@ -100,16 +218,42 @@ function create() {
         info "Copying debx.sh into container"
         "$BACKEND" cp "$debx_path" "${container_name}:/"
         "$BACKEND" exec -it "${container_name}" bash -c "mv /debx.sh /usr/bin/d"
-        "$BACKEND" exec -it "${container_name}" bash -c "d -I"  # initialize debx
+        # "$BACKEND" exec -it "${container_name}" bash -c "d --install"  # initialize debx
     else
         info "debx.sh not found. Skipping copy into container."
     fi
 
     # hack the fish shell prompt to show the container name and architecture
-    "$BACKEND" exec -it "${container_name}" \
-        sed -ri 's|(echo.*)"\$USER"(.*)|\1'"${ubuntu_version}"'\2|' /usr/share/fish/functions/fish_prompt.fish
-    "$BACKEND" exec -it "${container_name}" \
-        sed -ri 's|(echo.*)\(prompt_hostname\)(.*)|\1'"${architecture}"'\2|' /usr/share/fish/functions/fish_prompt.fish
+    info "Hacking fish prompt to show container info"
+    "$BACKEND" exec -i "${container_name}" mkdir -p /root/.config/fish/functions
+cat <<EOF | "$BACKEND" exec -i "${container_name}" bash -c "cat > /root/.config/fish/functions/fish_prompt.fish"
+function fish_prompt
+    set -l last_status \$status
+    set -l normal (set_color normal)
+    set -l delim ">"
+    # Prompt status only if it's not 0
+    set -l prompt_status
+    test \$last_status -ne 0; and set prompt_status (set_color \$fish_color_status)"[\$last_status]\$normal"
+    set -l ubuntu_version "$ubuntu_version"
+    set -l architecture "$architecture"
+    set -l current_dir (pwd)
+    if test \$current_dir = $HOME
+        set current_dir "~"
+    end
+    echo -n -s (set_color \$fish_color_user) \$ubuntu_version \$normal "@" (set_color \$fish_color_host) \$architecture " " \$current_dir " " \$normal \$prompt_status \$delim
+end
+EOF
+    
+    # This takes the longest and sometimes fails.
+    info "Installing packages in container '${container_name}'"
+    "$BACKEND" exec -it "${container_name}" bash -c "apt_setup"
+
+    info "Container '${container_name}' created."
+    # stop and restart the container to make sure everything is clean
+    # "$BACKEND" stop "${container_name}"
+    # info "1"
+    # "$BACKEND" start "${container_name}"
+    # info "2"
 }
 
 main "$@"
