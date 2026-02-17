@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# spellchecker: ignore dmenu 
+# spellchecker: ignore dmenu
 # spellchecker: ignore Marcin Konowalczyk lczyk
 #
 # A script to handle choosing wallpapers based on usage frequency.
@@ -21,10 +21,12 @@ INIT_COUNT_BIAS = 5  # initial count bias for new wallpapers
 
 _debug = False
 
+
 def debug(*args: object, **kwargs: object) -> None:
     if _debug:
         kwargs.pop("file", None)
         print("[DEBUG]", *args, file=sys.stderr, **kwargs)  # type: ignore
+
 
 def sample(weights: list[float]) -> int:
     """Sample an index from weights. Any weight <= 0 is ignored."""
@@ -37,6 +39,7 @@ def sample(weights: list[float]) -> int:
     )[0]
 
     return filtered_indices[selected_filtered_index]
+
 
 def main():
     # for now just pass everything to stdout
@@ -53,16 +56,15 @@ def main():
             debug("No database to clean.")
         return
     elif args.command == "select":
-
         if not args.choices:
             debug("no wallpapers provided")
             return
-        
+
         os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
         conn = sqlite3.connect(_DB_PATH)
-        
+
         c = conn.cursor()
-        
+
         # Initialize the database if it doesn't exist
         c.execute("""
             CREATE TABLE IF NOT EXISTS wallpapers (
@@ -86,7 +88,7 @@ def main():
         debug("Average count of wallpapers:", avg_count)
 
         # Record all the wallpapers if they are not already in the database
-        # initialize with average count to avoid too much bias towards new wallpapers 
+        # initialize with average count to avoid too much bias towards new wallpapers
         init_count = max(int(avg_count) - INIT_COUNT_BIAS, 0)
         debug("Initial count for new wallpapers:", init_count)
         for choice in args.choices:
@@ -102,9 +104,14 @@ def main():
             wallpapers = c.fetchall()
             for path, count in wallpapers:
                 debug(f" Wallpaper: {path}, Count: {count}")
-        
+
         # Pick from a probability distribution based on counts. the less used, the higher chance.
-        c.execute("SELECT path, count FROM wallpapers WHERE path IN ({})".format(",".join("?"*len(args.choices))), args.choices)
+        c.execute(
+            "SELECT path, count FROM wallpapers WHERE path IN ({})".format(
+                ",".join("?" * len(args.choices))
+            ),
+            args.choices,
+        )
         wallpapers = c.fetchall()
         paths, counts = zip(*wallpapers)
         max_count = max(counts) if counts else 0
@@ -125,9 +132,12 @@ def main():
         selected_index = sample(weights)
         selected_wallpaper = paths[selected_index]
         debug("Selected wallpaper:", selected_wallpaper)
-        
+
         # Update the count for the selected wallpaper
-        c.execute("UPDATE wallpapers SET count = count + 1 WHERE path = ?", (selected_wallpaper,))
+        c.execute(
+            "UPDATE wallpapers SET count = count + 1 WHERE path = ?",
+            (selected_wallpaper,),
+        )
 
         # Store the selected wallpaper in meta table
         c.execute(
@@ -137,7 +147,7 @@ def main():
 
         conn.commit()
         conn.close()
-    
+
         # Print to stdout. Make sure we work with pipes.
         # https://docs.python.org/3/library/signal.html#note-on-sigpipe
         # spellchecker: ignore WRONLY
@@ -174,8 +184,12 @@ def parse_args():
         help="Enable debug output.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    _clean_subparser = subparsers.add_parser("clean", help="Clean the wallpaper database.")
-    select_subparser = subparsers.add_parser("select", help="Select a wallpaper from the given choices.")
+    _clean_subparser = subparsers.add_parser(
+        "clean", help="Clean the wallpaper database."
+    )
+    select_subparser = subparsers.add_parser(
+        "select", help="Select a wallpaper from the given choices."
+    )
     select_subparser.add_argument(
         "choices",
         nargs="*",
