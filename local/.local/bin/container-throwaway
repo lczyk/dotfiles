@@ -164,10 +164,23 @@ function run() {
     "$BACKEND" network disconnect bridge "${container_name}" 2>/dev/null || true
     "$BACKEND" network connect bridge "${container_name}" 2>/dev/null || true
 
-    # become the backer exec
+    # become the docker exec
     info "Entering container '${container_name}'"
-    "$BACKEND" exec -it "${container_name}" bash -ic "fish -i" || \
-        "$BACKEND" exec -it "${container_name}" bash -ic "bash --login"
+    
+    # on non-native backends start bash
+    # otherwise start fish
+
+    host_arch=$(get_arch)
+    if [ "$host_arch" != "$architecture" ]; then
+        info "Host architecture ($host_arch) does not match container architecture ($architecture). Starting bash shell."
+        "$BACKEND" exec -it "${container_name}" bash -i
+    else
+        info "Host architecture ($host_arch) matches container architecture ($architecture). Starting fish shell."
+        "$BACKEND" exec -it "${container_name}" bash -ic "fish -i"
+    fi
+
+    # "$BACKEND" exec -it "${container_name}" bash -ic "fish -i" || \
+    #     "$BACKEND" exec -it "${container_name}" bash -ic "bash --login"
 }
 
 _TO_INSTALL=(
@@ -186,12 +199,21 @@ _TO_INSTALL=(
 )
 
 function create() {
+    # set -x
     local ubuntu_version=$1
     local architecture=$2
     local container_name="throwaway-${ubuntu_version}-${architecture}"
 
     # # create a container and install all the deps we might want in it
-    "$BACKEND" run -d --name "${container_name}" --platform "linux/${architecture}" ubuntu:"${ubuntu_version}" sleep infinity
+    image="ubuntu:${ubuntu_version}"
+    if [[ "$ubuntu_version" == "resolute" ]]; then
+        # redirect to ECR
+        image="public.ecr.aws/ubuntu/ubuntu:resolute"
+    fi
+    "$BACKEND" pull --platform "linux/${architecture}" "$image"
+    "$BACKEND" create --tty --name "${container_name}" --platform "linux/${architecture}" "$image"
+    # "$BACKEND" exec --tty --detach --name "${container_name}" --platform "linux/${architecture}" "$image" sleep infinity
+    "$BACKEND" start "${container_name}"
 
     # crate an apt_setup bash script to install packages
     local apt_setup_script=$(mktemp ~/apt_setup.XXXXXX.sh)
@@ -279,7 +301,7 @@ function random_cwd_color
     while test (string length \$shas) -lt 6; set shas "0\$shas"; end
     # split the shas into three parts and convert them to decimal to get RGB values between 0 and 255
     # set -l col 0x(echo \$shas | string sub -s 1 -l 2) 0x(echo \$shas | string sub -s 3 -l 2) 0x(echo \$shas | string sub -s 5 -l 2)
-    
+
     # color components between 0 and 255
     set -l cr (printf "%d" "0x"(echo \$shas | string sub -s 1 -l 2))
     set -l cg (printf "%d" "0x"(echo \$shas | string sub -s 3 -l 2))
