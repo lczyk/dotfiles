@@ -64,7 +64,7 @@ style = "Bold Italic"
 decorations = "buttonless"
 dynamic_padding = false
 dynamic_title = true
-opacity = 0.9
+opacity = 1.0
 title = "Terminal"
 
 [window.padding]
