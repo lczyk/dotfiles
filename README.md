@@ -2,17 +2,21 @@
 
 see https://brandon.invergo.net/news/2012-05-26-using-gnu-stow-to-manage-your-dotfiles.html
 
-symlink
+## Setup
+
+Build and install binaries:
 
 ```
-stow <thing>
+make build install
 ```
 
-delete
+Stow dotfiles:
 
 ```
-stow -D <thing>
+make stow
 ```
+
+See `make help` for all targets.
 
 
 # todo
