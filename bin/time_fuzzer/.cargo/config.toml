@@ -1,4 +1,6 @@
+# Compile static binary on Linux
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-feature=+crt-static"]
 
-# Compile static binary
-[build]
+[target.aarch64-unknown-linux-gnu]
 rustflags = ["-C", "target-feature=+crt-static"]
