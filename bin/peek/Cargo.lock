@@ -10,7 +10,13 @@ checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
 
 [[package]]
 name = "peek"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "libc",
+ "version",
 ]
+
+[[package]]
+name = "version"
+version = "0.1.0"
+source = "git+https://github.com/lczyk/version?tag=rust%2Fv0.4.0#e63bb85f7a2561101aeb3f4ae19d05b7c1a0c75b"

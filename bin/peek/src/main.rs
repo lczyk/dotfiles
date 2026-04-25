@@ -1,9 +1,5 @@
 // peek is a
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-const GIT_SHA: &str = env!("PEEK_GIT_SHA");
-const GIT_STATUS: &str = env!("PEEK_GIT_STATUS");
-const BUILD_DATE: &str = env!("PEEK_BUILD_DATE");
 const HELP: &str = r#"Usage: peek [OPTIONS]
 Take all the input from stdin, print it to stderr and stdout.
 Equivalent to `tee /dev/stderr`.
@@ -22,7 +18,7 @@ fn parse_args(args: &[String]) -> bool {
     for arg in args.iter().skip(1) {
         match arg.as_str() {
             "-v" | "--version" => {
-                println!("peek {}+{} ({}, {})", VERSION, GIT_SHA, BUILD_DATE, GIT_STATUS);
+                println!("peek {}", version::version!());
                 std::process::exit(0);
             }
             "-h" | "--help" => {
