@@ -14,8 +14,8 @@
 
 # exit 0
 
-active=0.9
-inactive=0.8
+active=0.95
+inactive=0.85
 
 old=0
 while true; do
