@@ -17,7 +17,7 @@ stow -D <thing>
 
 # todo
 
-- [ ] fuzzy time
+- [x] fuzzy time
 - [ ] cmd+tab switcher
 - [ ] screensaver in sway
 - [ ] cmd+backspace / alt+backspace
