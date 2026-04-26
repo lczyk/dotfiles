@@ -46,7 +46,7 @@ output * scale 1.5
 # probably something to do with race between the script and sway internals.
 # this way it does not matter which way around they're set.
 
-# TODO: pass opacity to opacity.sh as args
+# Pass opacity values via --active / --inactive args to opacity.py.
 
 # set $opacity 0.9
 # for_window [class=".*"] opacity $opacity
@@ -346,7 +346,7 @@ for_window [app_id="gimp"] floating enable
 # TODO: these processes do not get cleaned up on logout (only on restart). add smth to deal with.
 # exec ~/.cargo/bin/sway-alttab
 exec ~/.local/bin/autotiling
-exec $scripts/opacity.sh
+exec $scripts/opacity.py --active 0.95 --inactive 0.85
 exec keyd-application-mapper
 
 exec ~/.local/bin/mako
