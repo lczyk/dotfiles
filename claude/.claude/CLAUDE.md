@@ -6,12 +6,19 @@
 - when prompting from the vscode plugin, the currently open file gets auto-attached as context. it might be relevant, but often isn't -- don't assume relevance just because it's attached. weigh it against the prompt; if the prompt doesn't connect to that file, ignore it.
 - when i ask you to generate a piece of natural language (pr comment, message, commit body, email, etc), wrap the output in a fenced code block so i can copy-paste cleanly. does not apply to direct conversational replies.
 
-## Commits and PRs
+## Git and `gh` permissions
 
+- **git read-only ops: no permission needed.** `status`, `log`, `diff`, `show`, `blame`, `branch --list`, `remote -v`, etc. -- run freely as part of investigation.
+- **`gh` needs permission unless the prompt implies it.** invocations like `gh pr view`, `gh issue view`, `gh api` count as reaching out to a remote; ask first. exception: when the prompt clearly invites it (e.g. *"look at this issue <github-link>"*, *"read the comments on PR 123"*, *"check ci status"*) -- treat that as implicit permission for the read action being requested. write `gh` ops (`gh pr create`, `gh issue create`, `gh pr comment`, etc.) follow the per-prompt explicit-permission rule below.
+- **never run write git / `gh` ops without explicit per-prompt permission.** this covers `commit`, `commit --amend`, `revert`, `branch` (create/delete), `cherry-pick`, `tag`, `push`, `reset --hard`, `checkout` of files, `gh pr create`, `gh issue create`, comments / reviews / merges via `gh`, and anything else that mutates local repo state or remote github state. permission is per-prompt: granting it for one turn does *not* carry to follow-up turns -- once the authorised op lands, permission is consumed. if a later prompt asks for a small follow-up edit, stop after the edit; do not commit / amend / revert / push unless explicitly told to in *that* prompt.
+- **never run complex / risky git ops at all.** `rebase` (interactive or not), `merge`, `reset` (any mode), `filter-branch`, `filter-repo`, `reflog expire`, `gc --prune`, force-push, branch-rename of in-use branches, history rewrites generally. these need a human; surface what youd do and stop.
 - do not create PRs unless explicitly instructed. stop after commits.
-- do not add yourself (`Co-Authored-By: Claude ...`) as a co-author on commits or in PR bodies.
 - create commits only when explicitly prompted to.
 - **commit permission does not carry across prompts.** if i ask you to do some work and commit it, that authorisation is consumed by the commit you make in that turn. once that commit lands, you no longer have permission to commit -- including for follow-up tweaks, fixups, or any further work in later prompts. wait for me to explicitly say "commit" again. this applies even if the next prompt is a small edit ("fix this typo", "add a comment") that feels like part of the same task -- stop after the change; do not commit unless told to.
+
+## Commits and PRs
+
+- do not add yourself (`Co-Authored-By: Claude ...`) as a co-author on commits or in PR bodies.
 - when creating PRs (only when asked), use Conventional Commits format for the title (e.g. `feat:`, `fix:`, `docs:`, `bench:`, `refactor:`, `revert:`, `chore:`).
 - **conventional-commit suffix markers.** two extensions to the standard prefix:
     - `!:` -- the commit is intentionally broken. signals known-bad state (failing tests, broken build, half-landed migration) committed on purpose -- e.g. tdd's failing tests landed before the impl (`test!:`), or a deliberate mid-refactor checkpoint. distinguishes intentional breakage from accidental.
@@ -22,7 +29,7 @@
     - **skip framing verbs and connective tissue** -- *introduce*, *add support for*, *implement*, *make it so that*, etc. -- when the category prefix (`feat:`, `fix:`, `refactor:`) already conveys the action.
     - **prefer the abstract noun over the concrete instance** -- name the kind of change, not the specific site; unless naming the specific thing is the point (per above).
 - **`appease <tool>` for cosmetic-only fix-ups.** when a commit exists solely to satisfy a non-functional convention tool -- formatter, linter, spellchecker, style-only rules -- use the form `appease <tool-name>` (e.g. `appease yamllint`, `appease prettier`, `appease codespell`). only for purely cosmetic conventions; do **not** use for test failures, typechecker errors, or static-analysis findings (those are real bugs and warrant a normal `fix:` with a real subject).
-- **revert PRs.** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise.
+- **revert PRs.** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise. when generating the revert with `git revert`, the default message git produces will *not* match this format -- amend the commit message after `git revert` to bring it into the format above.
 
 ## Finding repo automation
 
