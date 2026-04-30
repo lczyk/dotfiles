@@ -4,6 +4,7 @@
 
 - if i send just `.` as a message, treat it as "continue what you were doing" -- sessions sometimes get interrupted, and `.` is my resume signal. pick up where the prior turn left off.
 - when prompting from the vscode plugin, the currently open file gets auto-attached as context. it might be relevant, but often isn't -- don't assume relevance just because it's attached. weigh it against the prompt; if the prompt doesn't connect to that file, ignore it.
+- when i ask you to generate a piece of natural language (pr comment, message, commit body, email, etc), wrap the output in a fenced code block so i can copy-paste cleanly. does not apply to direct conversational replies.
 
 ## Commits and PRs
 
