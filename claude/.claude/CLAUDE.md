@@ -36,7 +36,7 @@
 - **only capitalise uncommon acronyms.** common ones stay lowercase: `pr`, `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`. product names too: `github`, `claude`, `gemini`, `sqlite`, `go`. capitalise when the acronym is genuinely obscure or its capitalisation carries meaning, e.g. `LR(1)` parser, `CASB` (cloud access security broker).
 - **casual tone.** avoid corporate or marketing voice. specifics:
     - **contractions.** fine in prose. apostrophes are optional for past contractions (`ive`, `dont`, `wasnt`). keep the apostrophe when dropping it would create a different word -- `we'll` vs `well`, `i'd` vs `id`.
-    - **short forms welcome.** `w/out`, `b/c`, `v simple`, `n/a`, `heads-up`, `ofc`, `tldr`, `noop` (not `no-op`), `vs` (no dot), `approx` (not `approximately`). `iff` is fine for *if and only if*.
+    - **short forms welcome.** `w/out`, `b/c`, `v simple`, `n/a`, `heads-up`, `ofc`, `tldr`, `noop` (not `no-op`), `tradeoff` (not `trade-off`), `vs` (no dot), `approx` (not `approximately`). `iff` is fine for *if and only if*.
     - **inline symbols ok.** `~` for *approx.* (e.g. `~15 lines`); `+` for *also* / *in addition* (e.g. `touches 4 lsh files + all definitions`); spaced `/` for *or* between phrases (e.g. `once / if we have one`, `wire up / remove`) -- the spaces distinguish it from compound forms like `ci/cd`, `w/out`, `b/c` where `/` joins without alternation.
     - **punctuation in abbreviations.** write `e.g.` and `i.e.` with the dots (not `eg` / `ie`); `n/a` stays as-is.
 - **british english.** write prose in `en-GB`. common differences:
