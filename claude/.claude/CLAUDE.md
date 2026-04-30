@@ -15,18 +15,44 @@
 - **keep commit categories clean.** one category per commit -- a `feat:` commit contains only the feature itself, and any docs changes describing that feature go in a separate `docs:` commit afterwards. same rule for `test:`, `refactor:`, `chore:`, etc. don't mix categories in one commit just because the changes were made together.
 - **revert PRs.** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise.
 
+## Finding repo automation
+
+most repos have a task runner -- `make`, `just`, `task`, `npm`/`pnpm`/`yarn` scripts, `uv` scripts, etc. before guessing at commands, find what's there.
+
+detect with explicit `ls` at repo root, not globs (fish errors on unmatched globs, and case varies):
+
+```
+ls Makefile makefile justfile Justfile Taskfile.yml taskfile.yml package.json pyproject.toml 2>/dev/null
+```
+
+once detected, list targets before invoking -- a `lint` target may chain tools (`nilaway`, `golangci-lint`) you wouldn't have invoked otherwise:
+
+- `make` -- `make help` iff defined; otherwise read the `Makefile`
+- `just` -- `just --list`
+- `task` -- `task --list`
+- `npm` / `pnpm` / `yarn` -- `npm run` / `pnpm run` / `yarn run`
+- `uv` -- `uv run --list`
+
 ## Testing before commits
 
-- before any commit, the standard test suite for the repo must pass. one exception: tdd (see below).
-- to find the right command, look in this order:
-    1. **pre-written automation in the repo** -- `Makefile`/`makefile`, `justfile`/`Justfile`, `Taskfile.yml`/`taskfile.yml`, `package.json` scripts, `pyproject.toml` scripts, etc. **detect with `ls` at repo root, not glob patterns** -- shell globs may not match (e.g. fish doesn't expand unmatched `Taskfile*` and errors out), and case varies by project. once detected, enumerate available targets with the tool's own list command (`just --list`, `make help` if defined, `npm run`, `task --list`, `uv run --list`) before guessing -- targets like `lint` may chain tools (`nilaway`, `golangci-lint`) you wouldn't have invoked otherwise. run not only the test target but every target that should pass for a healthy commit: lint, typecheck, spellcheck, format-check, etc. (only the ones that exist -- don't invent targets).
-    2. **ci/pipeline config** -- `.github/workflows/`, `.gitlab-ci.yml`, `.circleci/`, etc. if there's no local automation, mirror what ci runs on pr/push (test + lint + whatever else is gated).
-    3. **language defaults** -- only if neither of the above exist. e.g. `go test ./...`, `cargo test`, `uvx pytest` for python. when falling back to language defaults, just run tests; don't try to guess at lint/spellcheck commands.
+before any commit, every check that should pass for a healthy commit must pass -- test, lint, typecheck, format-check, spellcheck, etc. (only the ones that exist; don't invent them). one exception: tdd (see below).
+
+find the right commands in this order:
+
+1. **pre-written automation in the repo** -- see [finding repo automation](#finding-repo-automation). run every relevant target, not just the test one.
+2. **ci/pipeline config** -- if no local automation, mirror what ci runs on pr/push. check `.github/workflows/`, `.gitlab-ci.yml`, `.circleci/`.
+3. **language defaults** -- only if neither exists. e.g. `go test ./...`, `cargo test`, `uvx pytest`. in this fallback, just run tests; don't guess at lint/spellcheck commands.
+
 - **prefer `uv` / `uvx` for python.** runs in an isolated venv, doesn't pollute the system or project env.
 - **tdd exception.** if doing test-driven development, write the failing tests first. if asked to commit them before the implementation lands, use `test!:` (with the `!`) to mark the commit as intentionally not passing -- this signals the failing-tests-on-purpose case and distinguishes it from a normal `test:` commit.
 
 ## Environment boundaries
 
+- **shell may be bash or fish.** don't assume bash -- the user runs both interchangeably (and the active shell when you're invoked may be either). main pitfalls:
+    - **unmatched globs.** fish aborts the command if a glob matches nothing; bash returns the literal. for file detection, list explicit names rather than `Taskfile*` etc.
+    - **env vars.** `export FOO=bar` is bash-only. fish uses `set -x FOO bar`. for one-shot use prefer `env FOO=bar <cmd>` -- works in both.
+    - **command substitution.** `$(...)` works in both; avoid backticks.
+    - **`&&` / `||` / `;`** all work in modern fish (3.x+) and bash, so chaining is fine.
 - **never install software or packages.** not via `apt`, `brew`, `pip install`, `npm install -g`, `cargo install`, etc. if a tool is missing, stop and prompt the user; suggest the command they could run, but do not run it yourself. this applies even if the install seems trivial or clearly needed to finish the task.
     - n/a for project-local dependency resolution that's part of normal build flow (e.g. `npm ci` / `uv sync` / `cargo build` pulling declared deps into the project's own lockfile-managed env) -- those are fine.
 - **never ssh or work in remote environments** unless explicitly instructed to. no `ssh`, no `scp`, no remote `kubectl exec`, no connecting to remote shells. heads-up the user and ask before doing anything that crosses the local boundary.
