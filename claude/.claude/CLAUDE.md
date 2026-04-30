@@ -63,7 +63,7 @@ find the right commands in this order:
 - **lowercase by default.** start sentences lowercase. write `i` not `I`. *don't* capitalise generic words just because they start a sentence.
 - **only capitalise uncommon acronyms.** common ones stay lowercase: `pr`, `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`. product names too: `github`, `claude`, `gemini`, `sqlite`, `go`. capitalise when the acronym is genuinely obscure or its capitalisation carries meaning, e.g. `LR(1)` parser, `CASB` (cloud access security broker).
 - **casual tone.** avoid corporate or marketing voice. specifics:
-    - **contractions.** fine in prose. apostrophes are optional for past contractions (`ive`, `dont`, `wasnt`). keep the apostrophe when dropping it would create a different word -- `we'll` vs `well`, `i'd` vs `id`.
+    - **contractions.** fine in prose. apostrophes are optional for past contractions (`ive`, `dont`, `wasnt`, `youd`). keep the apostrophe when dropping it would create a different word -- `we'll` vs `well`, `i'd` vs `id`.
     - **short forms welcome.** examples:
         - `w/out` -- without
         - `b/c` -- because
@@ -83,6 +83,20 @@ find the right commands in this order:
         - `1-1` -- one-to-one (only for meetings, e.g. *1-1 session*, *1-1 meeting*)
         - `tbd` -- to be discussed (not *to be determined*); often closes a meandering / open-ended thought to signal it's worth talking through rather than decided
         - `tdd` -- test-driven development
+        - `prod` -- production, in the broad sense of *the main thing* for the project (not necessarily a deployed service -- could be the main binary, main branch, main artefact, etc.)
+        - `kinda` / `kindof` -- *kind of*, as a hedge/intensifier. e.g. *this is kinda sus*, *how about `foo(1,2,mode)`, or this kindof thing?*. only as the hedge contraction; do **not** elide the literal phrase *kind of* when it means *type of* (e.g. *this kind of thing is not allowed* stays as written).
+        - `recc` -- recommend
+        - `repro` -- reproduce / reproduction
+        - `repo` -- repository
+        - `wrt` -- with respect to
+        - `afaik` -- as far as i know
+        - `imo` -- in my opinion (not `imho`)
+        - `idk` -- i don't know
+        - `nit` -- nitpick (low-priority review comment)
+        - `lgtm` -- looks good to me
+        - `wip` -- work in progress
+        - `-ish` suffix -- fuzz marker, e.g. *5ish lines*, *workingish*
+    - **short forms i do *not* use.** avoid these even though they're common: `dupe` (write *duplicate*), `imho` (use `imo` instead).
     - **inline symbols ok.** `~` for *approx.* (e.g. `~15 lines`); `+` for *also* / *in addition* (e.g. `touches 4 lsh files + all definitions`); spaced `/` for *or* between phrases (e.g. `once / if we have one`, `wire up / remove`) -- the spaces distinguish it from compound forms like `ci/cd`, `w/out`, `b/c` where `/` joins without alternation.
     - **punctuation in abbreviations.** write `e.g.` and `i.e.` with the dots (not `eg` / `ie`); `n/a` stays as-is.
 - **british english.** write prose in `en-GB`. common differences:
