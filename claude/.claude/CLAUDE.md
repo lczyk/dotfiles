@@ -13,7 +13,15 @@
 - create commits only when explicitly prompted to.
 - **commit permission does not carry across prompts.** if i ask you to do some work and commit it, that authorisation is consumed by the commit you make in that turn. once that commit lands, you no longer have permission to commit -- including for follow-up tweaks, fixups, or any further work in later prompts. wait for me to explicitly say "commit" again. this applies even if the next prompt is a small edit ("fix this typo", "add a comment") that feels like part of the same task -- stop after the change; do not commit unless told to.
 - when creating PRs (only when asked), use Conventional Commits format for the title (e.g. `feat:`, `fix:`, `docs:`, `bench:`, `refactor:`, `revert:`, `chore:`).
+- **conventional-commit suffix markers.** two extensions to the standard prefix:
+    - `!:` -- the commit is intentionally broken. signals known-bad state (failing tests, broken build, half-landed migration) committed on purpose -- e.g. tdd's failing tests landed before the impl (`test!:`), or a deliberate mid-refactor checkpoint. distinguishes intentional breakage from accidental.
+    - `?:` -- we *think* the commit is valid but cannot fully verify locally; might fail ci, remote tests, or other remote validation. e.g. `fix?:`, `ci?:`. signals "best effort, watch ci".
 - **keep commit categories clean.** one category per commit -- a `feat:` commit contains only the feature itself, and any docs changes describing that feature go in a separate `docs:` commit afterwards. same rule for `test:`, `refactor:`, `chore:`, etc. don't mix categories in one commit just because the changes were made together.
+- **commit subject lines: bare-minimum reminder, not a description.** the subject is just a memory-jogger for what the commit is vaguely about; details live in the diff and (if needed) the body. principles:
+    - **avoid specific identifiers** -- function names, class names, test names, variable names. they bloat the subject and are easily found in the diff. exception: when the identifier *is* the subject (e.g. introducing a single named flag/env var/constant, where naming it conveys the whole change).
+    - **skip framing verbs and connective tissue** -- *introduce*, *add support for*, *implement*, *make it so that*, etc. -- when the category prefix (`feat:`, `fix:`, `refactor:`) already conveys the action.
+    - **prefer the abstract noun over the concrete instance** -- name the kind of change, not the specific site; unless naming the specific thing is the point (per above).
+- **`appease <tool>` for cosmetic-only fix-ups.** when a commit exists solely to satisfy a non-functional convention tool -- formatter, linter, spellchecker, style-only rules -- use the form `appease <tool-name>` (e.g. `appease yamllint`, `appease prettier`, `appease codespell`). only for purely cosmetic conventions; do **not** use for test failures, typechecker errors, or static-analysis findings (those are real bugs and warrant a normal `fix:` with a real subject).
 - **revert PRs.** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise.
 
 ## Finding repo automation
@@ -96,6 +104,8 @@ find the right commands in this order:
         - `lgtm` -- looks good to me
         - `wip` -- work in progress
         - `-ish` suffix -- fuzz marker, e.g. *5ish lines*, *workingish*
+        - `env` -- environment
+        - `re` -- regarding / about, as a topic marker. e.g. *guideline re conventional commits*, *thoughts re the rollout plan*. tighter than *regarding* / *with respect to* (`wrt`); use when introducing the subject of a thought.
     - **short forms i do *not* use.** avoid these even though they're common: `dupe` (write *duplicate*), `imho` (use `imo` instead).
     - **inline symbols ok.** `~` for *approx.* (e.g. `~15 lines`); `+` for *also* / *in addition* (e.g. `touches 4 lsh files + all definitions`); spaced `/` for *or* between phrases (e.g. `once / if we have one`, `wire up / remove`) -- the spaces distinguish it from compound forms like `ci/cd`, `w/out`, `b/c` where `/` joins without alternation.
     - **punctuation in abbreviations.** write `e.g.` and `i.e.` with the dots (not `eg` / `ie`); `n/a` stays as-is.
@@ -134,6 +144,7 @@ find the right commands in this order:
     - check/cross marks `✓ ✗` -> `[x]`, `[ ]` or words
     - math operators `≥ ≤ ≠ × ÷` -> `>=`, `<=`, `!=`, `x`, `/`
     - `™ © ®` -> drop entirely
+    - greek mu `µ` / `μ` as the *micro-* prefix -> `u` (e.g. `us` for microseconds, `ug` for micrograms)
     - non-breaking spaces and zero-width spaces -> regular space or nothing
 - **avoid llm filler phrases.** stock phrases that don't carry information are the giveaway. specifically skip: *moving the needle*, *at the end of the day*, *deep dive*, *the elephant in the room*, *boil the ocean*, *cutting-edge*, *swing for the fences*, *seamless*, *robust solution*, *leverage* (as a verb), *delve into*, *navigate* (as a metaphor). idioms the user actually uses are fine: *low-hanging fruit*, *rule of thumb*, *under the hood*, etc.
 
