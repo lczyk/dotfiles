@@ -153,18 +153,29 @@ find the right commands in this order:
     - `™ © ®` -> drop entirely
     - greek mu `µ` / `μ` as the *micro-* prefix -> `u` (e.g. `us` for microseconds, `ug` for micrograms)
     - non-breaking spaces and zero-width spaces -> regular space or nothing
-- **avoid llm filler phrases.** stock phrases that don't carry information are the giveaway. specifically skip: *moving the needle*, *at the end of the day*, *deep dive*, *the elephant in the room*, *boil the ocean*, *cutting-edge*, *swing for the fences*, *seamless*, *robust solution*, *leverage* (as a verb), *delve into*, *navigate* (as a metaphor). idioms the user actually uses are fine: *low-hanging fruit*, *rule of thumb*, *under the hood*, etc.
+- **avoid llm filler phrases.** stock phrases that don't carry information are the giveaway. specifically skip: *moving the needle*, *at the end of the day*, *deep dive*, *the elephant in the room*, *boil the ocean*, *cutting-edge*, *swing for the fences*, *seamless*, *robust* (and *robust solution*), *leverage* (as a verb), *delve into*, *navigate* (as a metaphor), *tapestry*, *vibrant*, *intricate* / *intricacies*, *foster* / *fostering*, *garner*, *showcase* (as verb), *crucial*, *valuable* (as bare praise), *key* (as filler adjective, e.g. *a key part of*). idioms the user actually uses are fine: *low-hanging fruit*, *rule of thumb*, *under the hood*, etc.
 
 ---
 
 - **PR bodies open with the description**, no fluff preamble. a one-line lead-in is fine ("this PR adds X. ...").
 - **PR template headers** like `## Proposed changes`, `### Forward porting` -- keep as-is when the repo template uses them.
 - **don't over-explain.** state what changed and why if non-obvious. skip the *what* when the diff is the answer.
+- **be realistic in PR bodies, not falsely positive or negative.** skip generic upbeat closers (*the future looks bright*, *exciting times ahead*, *a major step forward*, *this unlocks...*) and skip self-flagellating ones too. prefer concrete, verifiable signal: tests passing, benchmark numbers, before/after sizes, error counts, profile snapshots. *"reduces p99 from 240ms to 90ms on the `loadtest` bench, 3 runs"* beats *"significant performance improvement"*. if there's no measurable result yet, say so plainly rather than inflating qualitative claims.
 - **uppercase tag prefixes for callout comments.** when a code comment exists to flag a specific *kind* of concern -- not just describe the code -- lead with an uppercase tag followed by a colon so it's greppable. the rest of the comment stays lowercase per the usual style. common tags:
     - `PERF:` -- explains a non-obvious choice made for performance reasons (avoiding an alloc, caching a result, picking a less idiomatic shape because the obvious one was hot).
     - `NOTE:` -- a subtle invariant, hidden constraint, or surprising behaviour a future reader should know about.
     - `TODO:` -- deferred work; ideally followed by enough context to act on later.
     - other accepted tags: `FIXME:`, `HACK:`. use sparingly -- only when the tag genuinely adds scanning value over a plain comment.
+
+---
+
+prose that screams "an llm wrote this" has recurring shapes. avoid them:
+
+- **significance inflation.** dont puff up importance with abstract weight. ban: *testament to*, *pivotal moment*, *underscores its importance*, *evolving landscape*, *marks / represents a shift*, *vital role*, *deeply rooted*, *indelible mark*, *setting the stage for*, *a turning point*. state the fact directly; if the significance is real, the reader will see it from the fact itself.
+- **copula avoidance.** prefer plain *is / are / has*. dont substitute *serves as*, *stands as*, *functions as*, *acts as*, *boasts*, *features* (as a verb), *represents* (as identity, e.g. *X represents a new approach to Y* -- just say *X is a new approach to Y*). e.g. write *`Cache` is the in-memory store* not *`Cache` serves as the in-memory store*.
+- **superficial -ing tails.** dont tack on present-participle clauses to fake depth: *highlighting...*, *underscoring...*, *emphasising...*, *ensuring...*, *reflecting...*, *symbolising...*, *contributing to...*, *fostering...*, *showcasing...*, *encompassing...*. either cut the tail or split into a real sentence with concrete content -- the participle phrase almost never carries information.
+- **persuasive-authority tropes.** phrases that pretend to cut through noise to a deeper truth: *the real question is*, *at its core*, *fundamentally*, *what really matters*, *in reality*, *the heart of the matter*, *the deeper issue*. usually the next sentence just restates an ordinary point with extra ceremony. drop the framing; lead with the point.
+- **fragmented headers.** dont follow a heading with a one-line restating paragraph before the real content (e.g. `## Performance` then `Speed matters.` then the real text). heading, then content directly.
 
 ---
 
