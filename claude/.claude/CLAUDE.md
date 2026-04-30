@@ -103,6 +103,7 @@ find the right commands in this order:
         - `recc` -- recommend
         - `repro` -- reproduce / reproduction
         - `repo` -- repository
+        - `ppl` -- people
         - `wrt` -- with respect to
         - `afaik` -- as far as i know
         - `imo` -- in my opinion (not `imho`)
