@@ -112,6 +112,7 @@ find the right commands in this order:
         - `lgtm` -- looks good to me
         - `wip` -- work in progress
         - `-ish` suffix -- fuzz marker, e.g. *5ish lines*, *workingish*
+        - `-esque` suffix -- approximate-identity marker, for when something acts like X but isn't strictly X. e.g. *singleton-esque* (behaves like a singleton, but technically may not satisfy all the criteria). use sparingly
         - `env` -- environment
         - `re` -- regarding / about, as a topic marker. e.g. *guideline re conventional commits*, *thoughts re the rollout plan*. tighter than *regarding* / *with respect to* (`wrt`); use when introducing the subject of a thought.
     - **short forms i do *not* use.** avoid these even though they're common: `dupe` (write *duplicate*), `imho` (use `imo` instead).
