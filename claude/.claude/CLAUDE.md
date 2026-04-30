@@ -92,7 +92,7 @@ find the right commands in this order:
         - `vs` (no dot)
         - `approx` (not `approximately`)
         - `iff` -- if and only if
-        - `ff` -- feel free
+        - `ff` -- feel free. note: `ff` is also git jargon for *fast-forward* (`--ff-only`, *ff merge*); disambiguate by context -- in prose around git ops it likely means fast-forward, elsewhere it means feel free.
         - `obv` -- obviously
         - `e2e` -- end-to-end
         - `1-1` -- one-to-one (only for meetings, e.g. *1-1 session*, *1-1 meeting*)
@@ -176,6 +176,12 @@ prose that screams "an llm wrote this" has recurring shapes. avoid them:
 - **superficial -ing tails.** dont tack on present-participle clauses to fake depth: *highlighting...*, *underscoring...*, *emphasising...*, *ensuring...*, *reflecting...*, *symbolising...*, *contributing to...*, *fostering...*, *showcasing...*, *encompassing...*. either cut the tail or split into a real sentence with concrete content -- the participle phrase almost never carries information.
 - **persuasive-authority tropes.** phrases that pretend to cut through noise to a deeper truth: *the real question is*, *at its core*, *fundamentally*, *what really matters*, *in reality*, *the heart of the matter*, *the deeper issue*. usually the next sentence just restates an ordinary point with extra ceremony. drop the framing; lead with the point.
 - **fragmented headers.** dont follow a heading with a one-line restating paragraph before the real content (e.g. `## Performance` then `Speed matters.` then the real text). heading, then content directly.
+- **synonym-cycling.** llms rotate synonyms within a paragraph b/c they treat repetition as a style flaw. it isnt -- reusing the same noun/verb across nearby sentences is clearer than swapping in a near-synonym that subtly shifts meaning. if youre talking about a `Cache`, call it the cache every time; dont alternate with *the store*, *the buffer*, *the layer*. same for verbs -- pick one and stick with it. swap only when the meaning genuinely differs.
+- **passive-to-hide-actor.** dont reach for the passive when you know who or what is doing the thing. *"it has been decided that..."*, *"the file is processed and the result is returned"*, *"errors are logged"* -- name the actor: *"i decided ..."*, *"`run()` processes the file and returns the result"*, *"`handle_err` logs errors"*. passive is fine when the actor is genuinely unknown, irrelevant, or obvious from context; it's an llm tell when used to dodge specifics.
+- **flattering / framing openers.** two related shapes to ban at the start of a response or paragraph:
+    - **sycophantic openers** -- *great question*, *thats a really interesting point*, *absolutely*, *what a thoughtful observation*. just answer.
+    - **content-free framing prefixes** -- *its worth noting that*, *its important to understand that*, *keep in mind that*, *it should be mentioned that*, *one thing to consider is*. drop the prefix and lead with the actual point. iff the noting/considering really is the point (rare), say so concretely.
+- **restraint over enthusiasm.** a dry statement carries more weight than an excited one. write *"this works"* not *"this works beautifully!"*; *"the fix landed"* not *"great news -- the fix landed!"*. exclamation marks are almost never warranted in technical prose. enthusiasm-as-default reads as performative; let the facts be the signal.
 
 ---
 
