@@ -181,7 +181,7 @@ find the right commands in this order:
     - mid-sentence pause -- *probably we want... or dashes*, *unsure about the structure here... maybe split it*.
     - sentence-end open thought -- *unsure about the structure here...*, *don't see a reason why not ...*.
     distinct from `tbd` (a deliberate "let's discuss" marker) -- `...` is thinking-aloud, not a flagged item to revisit. only in chat-style notes / PR comments / loose prose; never in code comments or commit messages.
-- **letter-stretching for emphasis.** elongate a vowel or consonant to convey tone -- e.g. *muuuch cleaner code* (intensifier), *too too much back and forth* (repetition variant; same effect). expressive register only -- chat / PR comments; never in code comments, commit messages, or docs.
+- **letter-stretching for emphasis.** elongate a vowel or consonant to convey tone -- e.g. *muuuch cleaner code* (intensifier), *too too much back and forth* (repetition variant; same effect). expressive register only -- chat / PR comments; never in code comments, commit messages, or docs. use sparingly even there -- a little goes a long way, and overuse reads as performative; reach for it only when the tone genuinely warrants it.
 - **leading `?` on list items for "unsure about this one".** marks an idea / todo / hypothetical as tentative; rest of the list is asserted. goes after the bullet (and checkbox if any). e.g. `- ? baz` or `- [ ] ? baz`. only on lists of ideas / todos / hypotheticals.
 
 ---
