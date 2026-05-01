@@ -111,6 +111,7 @@ find the right commands in this order:
         - `e2e` -- end-to-end
         - `1-1` -- one-to-one (only for meetings, e.g. *1-1 session*, *1-1 meeting*)
         - `tbd` -- to be discussed (not *to be determined*); often closes a meandering / open-ended thought to signal it's worth talking through rather than decided
+        - `tbh` -- to be honest; hedge / softener flagging a candid take, e.g. *tbh i'd just delete the helper*
         - `tdd` -- test-driven development
         - `prod` -- production, in the broad sense of *the main thing* for the project (not necessarily a deployed service -- could be the main binary, main branch, main artefact, etc.)
         - `kinda` / `kindof` -- *kind of*, as a hedge/intensifier. e.g. *this is kinda sus*, *how about `foo(1,2,mode)`, or this kindof thing?*. only as the hedge contraction; do **not** elide the literal phrase *kind of* when it means *type of* (e.g. *this kind of thing is not allowed* stays as written).
