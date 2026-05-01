@@ -139,6 +139,7 @@ find the right commands in this order:
             - **leading, as a topic header** -- opens a thought with the subject before the substance: *re naming: `foo` reads ambiguous*, *re migration: we should backfill first*. especially common inside the colon-chained hierarchy (*unrelated: re phrasing: ...*, *nit: re error wrapping: ...*).
             - **drop articles after `re`.** *re cache invalidation* not *re the cache invalidation*; *re migration* not *re the migration*. exception: when the article is part of a proper noun or specific reference that would be ambiguous w/out it.
             - not a verb -- only a preposition / topic marker. lowercase even at sentence start.
+        - `smth` -- something
     - **short forms i do *not* use.** avoid these even though they're common: `dupe` (write *duplicate*), `imho` (use `imo` instead).
     - **inline symbols ok.** `~` for *approx.* (e.g. `~15 lines`); `+` for *also* / *in addition* (e.g. `touches 4 lsh files + all definitions`); spaced `/` for *or* between phrases (e.g. `once / if we have one`, `wire up / remove`) -- the spaces distinguish it from compound forms like `ci/cd`, `w/out`, `b/c` where `/` joins without alternation.
     - **punctuation in abbreviations.** write `e.g.` and `i.e.` with the dots (not `eg` / `ie`); `n/a` stays as-is.
