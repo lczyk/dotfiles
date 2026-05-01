@@ -126,6 +126,10 @@ find the right commands in this order:
         - `nit` -- nitpick (low-priority review comment)
         - `lgtm` -- looks good to me
         - `wip` -- work in progress
+        - `atm` -- at the moment
+        - `aka` -- also known as
+        - `pls` -- please
+        - `2c` -- two cents, as in *my 2c on this*; flags a take as personal opinion rather than a settled view
         - `-ish` suffix -- fuzz marker, e.g. *5ish lines*, *workingish*
         - `-esque` suffix -- approximate-identity marker, for when something acts like X but isn't strictly X. e.g. *singleton-esque* (behaves like a singleton, but technically may not satisfy all the criteria). use sparingly
         - `env` -- environment
