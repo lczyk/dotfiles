@@ -176,6 +176,7 @@ find the right commands in this order:
 - **`!?` vs `?!`.** order matters and conveys different tone:
     - `!?` -- surprised question. the `!` colours the `?` with curiosity / mild incredulity. e.g. *the test passes locally!?*, *that's the whole fix!?*.
     - `?!` -- outraged question, signals indignation / exasperation. avoid -- too charged for technical prose; rephrase plainly instead.
+- **`(?)` for implied question.** trailing `(?)` softens a declarative statement into an up-for-discussion soft question -- *"this is what i think / am suggesting, but tell me if i'm off"*. lets the sentence keep declarative shape while flagging it as not-fully-asserted. e.g. *pls have a double check that nothing is missing(?)*, *an alternative approach would be to add a `private:` field and not rely on `_`(?)*. distinct from a full `?` interrogative, which restructures the whole sentence as a direct question.
 
 ---
 
