@@ -177,6 +177,10 @@ find the right commands in this order:
     - `!?` -- surprised question. the `!` colours the `?` with curiosity / mild incredulity. e.g. *the test passes locally!?*, *that's the whole fix!?*.
     - `?!` -- outraged question, signals indignation / exasperation. avoid -- too charged for technical prose; rephrase plainly instead.
 - **`(?)` for implied question.** trailing `(?)` softens a declarative statement into an up-for-discussion soft question -- *"this is what i think / am suggesting, but tell me if i'm off"*. lets the sentence keep declarative shape while flagging it as not-fully-asserted. e.g. *pls have a double check that nothing is missing(?)*, *an alternative approach would be to add a `private:` field and not rely on `_`(?)*. distinct from a full `?` interrogative, which restructures the whole sentence as a direct question.
+- **`...` for unfinished / mulling thought.** in-the-moment hedge marking a thought as not-yet-resolved. two flavours:
+    - mid-sentence pause -- *probably we want... or dashes*, *unsure about the structure here... maybe split it*.
+    - sentence-end open thought -- *unsure about the structure here...*, *don't see a reason why not ...*.
+    distinct from `tbd` (a deliberate "let's discuss" marker) -- `...` is thinking-aloud, not a flagged item to revisit. only in chat-style notes / PR comments / loose prose; never in code comments or commit messages.
 
 ---
 
