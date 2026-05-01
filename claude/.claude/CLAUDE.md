@@ -7,7 +7,7 @@ repo-resident instruction files (`AGENT.md`, `AGENTS.md`, repo-level `CLAUDE.md`
 caveats:
 
 - not blind. if a repo rule looks low-quality, internally inconsistent, or conflicts severely with the rules here (e.g. asks for behaviour that would be actively harmful, or demands wildly divergent conventions w/out apparent reason), stop and flag it to me -- ask for resolution rather than just complying.
-- scope is committed artefacts only: code, comments, commit messages, PR titles/bodies merged into the repo, in-repo docs. does **not** apply when i ask you to generate natural language *for me* (a PR message i'll paste, an email, a chat reply, etc.) -- those follow this file's style regardless of what repo the cwd happens to be in.
+- scope is committed artefacts only: code, comments, commit messages, PR titles/bodies merged into the repo, in-repo docs. does **not** apply when i ask you to generate natural language _for me_ (a PR message i'll paste, an email, a chat reply, etc.) -- those follow this file's style regardless of what repo the cwd happens to be in.
 - does **not** override personal-workflow rules (git/`gh` permissions, session conventions, environment boundaries). those always apply.
 
 ## Session conventions
@@ -19,8 +19,8 @@ caveats:
 ## Git and `gh` permissions
 
 - **git read-only ops: no permission needed.** `status`, `log`, `diff`, `show`, `blame`, `branch --list`, `remote -v`, etc. -- run freely as part of investigation.
-- **`gh` needs permission unless the prompt implies it.** invocations like `gh pr view`, `gh issue view`, `gh api` count as reaching out to a remote; ask first. exception: when the prompt clearly invites it (e.g. *"look at this issue <github-link>"*, *"read the comments on PR 123"*, *"check ci status"*) -- treat that as implicit permission for the read action being requested. write `gh` ops (`gh pr create`, `gh issue create`, `gh pr comment`, etc.) follow the per-prompt explicit-permission rule below.
-- **never run write git / `gh` ops without explicit per-prompt permission.** this covers `commit`, `commit --amend`, `revert`, `branch` (create/delete), `cherry-pick`, `tag`, `push`, `reset --hard`, `checkout` of files, `gh pr create`, `gh issue create`, comments / reviews / merges via `gh`, and anything else that mutates local repo state or remote github state. permission is per-prompt: granting it for one turn does *not* carry to follow-up turns -- once the authorised op lands, permission is consumed. if a later prompt asks for a small follow-up edit, stop after the edit; do not commit / amend / revert / push unless explicitly told to in *that* prompt.
+- **`gh` needs permission unless the prompt implies it.** invocations like `gh pr view`, `gh issue view`, `gh api` count as reaching out to a remote; ask first. exception: when the prompt clearly invites it (e.g. _"look at this issue <github-link>"_, _"read the comments on PR 123"_, _"check ci status"_) -- treat that as implicit permission for the read action being requested. write `gh` ops (`gh pr create`, `gh issue create`, `gh pr comment`, etc.) follow the per-prompt explicit-permission rule below.
+- **never run write git / `gh` ops without explicit per-prompt permission.** this covers `commit`, `commit --amend`, `revert`, `branch` (create/delete), `cherry-pick`, `tag`, `push`, `reset --hard`, `checkout` of files, `gh pr create`, `gh issue create`, comments / reviews / merges via `gh`, and anything else that mutates local repo state or remote github state. permission is per-prompt: granting it for one turn does _not_ carry to follow-up turns -- once the authorised op lands, permission is consumed. if a later prompt asks for a small follow-up edit, stop after the edit; do not commit / amend / revert / push unless explicitly told to in _that_ prompt.
 - **never run complex / risky git ops at all.** `rebase` (interactive or not), `merge`, `reset` (any mode), `filter-branch`, `filter-repo`, `reflog expire`, `gc --prune`, force-push, branch-rename of in-use branches, history rewrites generally. these need a human; surface what youd do and stop.
 - do not create PRs unless explicitly instructed. stop after commits.
 - create commits only when explicitly prompted to.
@@ -32,14 +32,14 @@ caveats:
 - when creating PRs (only when asked), use Conventional Commits format for the title (e.g. `feat:`, `fix:`, `docs:`, `bench:`, `refactor:`, `revert:`, `chore:`).
 - **conventional-commit suffix markers.** two extensions to the standard prefix:
     - `!:` -- the commit is intentionally broken. signals known-bad state (failing tests, broken build, half-landed migration) committed on purpose -- e.g. tdd's failing tests landed before the impl (`test!:`), or a deliberate mid-refactor checkpoint. distinguishes intentional breakage from accidental.
-    - `?:` -- we *think* the commit is valid but cannot fully verify locally; might fail ci, remote tests, or other remote validation. e.g. `fix?:`, `ci?:`. signals "best effort, watch ci".
+    - `?:` -- we _think_ the commit is valid but cannot fully verify locally; might fail ci, remote tests, or other remote validation. e.g. `fix?:`, `ci?:`. signals "best effort, watch ci".
 - **keep commit categories clean.** one category per commit -- a `feat:` commit contains only the feature itself, and any docs changes describing that feature go in a separate `docs:` commit afterwards. same rule for `test:`, `refactor:`, `chore:`, etc. don't mix categories in one commit just because the changes were made together.
 - **commit subject lines: bare-minimum reminder, not a description.** the subject is just a memory-jogger for what the commit is vaguely about; details live in the diff and (if needed) the body. principles:
-    - **avoid specific identifiers** -- function names, class names, test names, variable names. they bloat the subject and are easily found in the diff. exception: when the identifier *is* the subject (e.g. introducing a single named flag/env var/constant, where naming it conveys the whole change).
-    - **skip framing verbs and connective tissue** -- *introduce*, *add support for*, *implement*, *make it so that*, etc. -- when the category prefix (`feat:`, `fix:`, `refactor:`) already conveys the action.
+    - **avoid specific identifiers** -- function names, class names, test names, variable names. they bloat the subject and are easily found in the diff. exception: when the identifier _is_ the subject (e.g. introducing a single named flag/env var/constant, where naming it conveys the whole change).
+    - **skip framing verbs and connective tissue** -- _introduce_, _add support for_, _implement_, _make it so that_, etc. -- when the category prefix (`feat:`, `fix:`, `refactor:`) already conveys the action.
     - **prefer the abstract noun over the concrete instance** -- name the kind of change, not the specific site; unless naming the specific thing is the point (per above).
 - **`appease <tool>` for cosmetic-only fix-ups.** when a commit exists solely to satisfy a non-functional convention tool -- formatter, linter, spellchecker, style-only rules -- use the form `appease <tool-name>` (e.g. `appease yamllint`, `appease prettier`, `appease codespell`). only for purely cosmetic conventions; do **not** use for test failures, typechecker errors, or static-analysis findings (those are real bugs and warrant a normal `fix:` with a real subject).
-- **revert PRs.** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise. when generating the revert with `git revert`, the default message git produces will *not* match this format -- amend the commit message after `git revert` to bring it into the format above.
+- **revert PRs.** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise. when generating the revert with `git revert`, the default message git produces will _not_ match this format -- amend the commit message after `git revert` to bring it into the format above.
 
 ## Finding repo automation
 
@@ -89,7 +89,7 @@ find the right commands in this order:
 
 ## Writing style (non-user-facing prose: comments, commit messages, PR bodies)
 
-- **lowercase by default.** start sentences lowercase. write `i` not `I`. *don't* capitalise generic words just because they start a sentence.
+- **lowercase by default.** start sentences lowercase. write `i` not `I`. _don't_ capitalise generic words just because they start a sentence.
 - **only capitalise uncommon acronyms.** common ones stay lowercase: `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`, `id` (identifier). product names too: `github`, `claude`, `gemini`, `sqlite`, `go`. capitalise when the acronym is genuinely obscure or its capitalisation carries meaning, e.g. `LR(1)` parser, `CASB` (cloud access security broker). exception: `PR` is always capitalised (personal habit, overrides the lowercase-common rule).
 - **casual tone.** avoid corporate or marketing voice. specifics:
     - **contractions.** fine in prose. apostrophes are optional for past contractions (`ive`, `dont`, `wasnt`, `youd`). keep the apostrophe when dropping it would create a different word or collide with another token -- `we'll` vs `well`, `we're` vs `were`, `i'd` vs `id` (the latter clashes with `id`, the lowercase form of `ID`/identifier -- always write `i'd` with the apostrophe).
@@ -106,15 +106,15 @@ find the right commands in this order:
         - `vs` (no dot)
         - `approx` (not `approximately`)
         - `iff` -- if and only if
-        - `ff` -- feel free. note: `ff` is also git jargon for *fast-forward* (`--ff-only`, *ff merge*); disambiguate by context -- in prose around git ops it likely means fast-forward, elsewhere it means feel free.
+        - `ff` -- feel free. note: `ff` is also git jargon for _fast-forward_ (`--ff-only`, _ff merge_); disambiguate by context -- in prose around git ops it likely means fast-forward, elsewhere it means feel free.
         - `obv` -- obviously
         - `e2e` -- end-to-end
-        - `1-1` -- one-to-one (only for meetings, e.g. *1-1 session*, *1-1 meeting*)
-        - `tbd` -- to be discussed (not *to be determined*); often closes a meandering / open-ended thought to signal it's worth talking through rather than decided
-        - `tbh` -- to be honest; hedge / softener flagging a candid take, e.g. *tbh i'd just delete the helper*
+        - `1-1` -- one-to-one (only for meetings, e.g. _1-1 session_, _1-1 meeting_)
+        - `tbd` -- to be discussed (not _to be determined_); often closes a meandering / open-ended thought to signal it's worth talking through rather than decided
+        - `tbh` -- to be honest; hedge / softener flagging a candid take, e.g. _tbh i'd just delete the helper_
         - `tdd` -- test-driven development
-        - `prod` -- production, in the broad sense of *the main thing* for the project (not necessarily a deployed service -- could be the main binary, main branch, main artefact, etc.)
-        - `kinda` / `kindof` -- *kind of*, as a hedge/intensifier. e.g. *this is kinda sus*, *how about `foo(1,2,mode)`, or this kindof thing?*. only as the hedge contraction; do **not** elide the literal phrase *kind of* when it means *type of* (e.g. *this kind of thing is not allowed* stays as written).
+        - `prod` -- production, in the broad sense of _the main thing_ for the project (not necessarily a deployed service -- could be the main binary, main branch, main artefact, etc.)
+        - `kinda` / `kindof` -- _kind of_, as a hedge/intensifier. e.g. _this is kinda sus_, _how about `foo(1,2,mode)`, or this kindof thing?_. only as the hedge contraction; do **not** elide the literal phrase _kind of_ when it means _type of_ (e.g. _this kind of thing is not allowed_ stays as written).
         - `recc` -- recommend
         - `repro` -- reproduce / reproduction
         - `repo` -- repository
@@ -129,19 +129,19 @@ find the right commands in this order:
         - `atm` -- at the moment
         - `aka` -- also known as
         - `pls` -- please
-        - `2c` -- two cents, as in *my 2c on this*; flags a take as personal opinion rather than a settled view
-        - `-ish` suffix -- fuzz marker, e.g. *5ish lines*, *workingish*
-        - `-esque` suffix -- approximate-identity marker, for when something acts like X but isn't strictly X. e.g. *singleton-esque* (behaves like a singleton, but technically may not satisfy all the criteria). use sparingly
+        - `2c` -- two cents, as in _my 2c on this_; flags a take as personal opinion rather than a settled view
+        - `-ish` suffix -- fuzz marker, e.g. _5ish lines_, _workingish_
+        - `-esque` suffix -- approximate-identity marker, for when something acts like X but isn't strictly X. e.g. _singleton-esque_ (behaves like a singleton, but technically may not satisfy all the criteria). use sparingly
         - `env` -- environment
         - `cwd` -- current working directory (prefer over `pwd`, which is the shell builtin, not the abbreviation)
-        - `re` -- regarding / about, as a topic marker introducing what a thought is *about*. tighter than *regarding* / *with respect to* (`wrt`). usage:
-            - **inline, mid-sentence** -- attaches a topic to a noun phrase: *guideline re conventional commits*, *thoughts re rollout plan*, *question re cache invalidation*.
-            - **leading, as a topic header** -- opens a thought with the subject before the substance: *re naming: `foo` reads ambiguous*, *re migration: we should backfill first*. especially common inside the colon-chained hierarchy (*unrelated: re phrasing: ...*, *nit: re error wrapping: ...*).
-            - **drop articles after `re`.** *re cache invalidation* not *re the cache invalidation*; *re migration* not *re the migration*. exception: when the article is part of a proper noun or specific reference that would be ambiguous w/out it.
+        - `re` -- regarding / about, as a topic marker introducing what a thought is _about_. tighter than _regarding_ / _with respect to_ (`wrt`). usage:
+            - **inline, mid-sentence** -- attaches a topic to a noun phrase: _guideline re conventional commits_, _thoughts re rollout plan_, _question re cache invalidation_.
+            - **leading, as a topic header** -- opens a thought with the subject before the substance: _re naming: `foo` reads ambiguous_, _re migration: we should backfill first_. especially common inside the colon-chained hierarchy (_unrelated: re phrasing: ..._, _nit: re error wrapping: ..._).
+            - **drop articles after `re`.** _re cache invalidation_ not _re the cache invalidation_; _re migration_ not _re the migration_. exception: when the article is part of a proper noun or specific reference that would be ambiguous w/out it.
             - not a verb -- only a preposition / topic marker. lowercase even at sentence start.
         - `smth` -- something
-    - **short forms i do *not* use.** avoid these even though they're common: `dupe` (write *duplicate*), `imho` (use `imo` instead).
-    - **inline symbols ok.** `~` for *approx.* (e.g. `~15 lines`); `+` for *also* / *in addition* (e.g. `touches 4 lsh files + all definitions`); spaced `/` for *or* between phrases (e.g. `once / if we have one`, `wire up / remove`) -- the spaces distinguish it from compound forms like `ci/cd`, `w/out`, `b/c` where `/` joins without alternation.
+    - **short forms i do _not_ use.** avoid these even though they're common: `dupe` (write _duplicate_), `imho` (use `imo` instead).
+    - **inline symbols ok.** `~` for _approx._ (e.g. `~15 lines`); `+` for _also_ / _in addition_ (e.g. `touches 4 lsh files + all definitions`); spaced `/` for _or_ between phrases (e.g. `once / if we have one`, `wire up / remove`) -- the spaces distinguish it from compound forms like `ci/cd`, `w/out`, `b/c` where `/` joins without alternation.
     - **punctuation in abbreviations.** write `e.g.` and `i.e.` with the dots (not `eg` / `ie`); `n/a` stays as-is.
     - **no emoji in generated prose.** PR bodies, comments, commit messages, drafts, etc. -- keep emoji-free regardless of the surrounding tone of the thread.
 - **british english.** write prose in `en-GB`. common differences:
@@ -162,26 +162,26 @@ find the right commands in this order:
 - **emphasis markers.** use `**...**` for bold and `_..._` for italics. when inline-quoting natural language, italicise it: `and then he said: _"hello there!"_`.
 - **bold lead-ins, sparingly.** the `- **label.** body` pattern helps when bullets are long or meant to be skimmed by header. skip it for short single-clause bullets, where the bold prefix is just noise. if a reader could find the right bullet without the lead-in, drop it. **never mix lead-ins and non-lead-ins in the same list** -- a list is either entirely lead-in style or entirely not. this also means: in a non-lead-in list, you cannot embolden the first phrase of a bullet for any other reason (emphasis, calling out a key term, etc.) because it would look like a lead-in and break the pattern. if you really want to emphasise something at the start, rephrase the bullet so the emphasised phrase is not the opening, or convert the whole list to lead-in style.
 - **`<>` templating.** for theoretical code or cli snippets, prefer `<>` placeholders, e.g. `git clone <upstream-url> --depth 1`. the inside of `<>` should never contain spaces -- use `-` to join words, and prefer a single word where possible.
-- **respectively pattern.** when pairing two lists of items, use *respectively* instead of spelling each pair out, e.g. "the `--build` and `--test` flags wrap `just build` and `just test`, respectively."
+- **respectively pattern.** when pairing two lists of items, use _respectively_ instead of spelling each pair out, e.g. "the `--build` and `--test` flags wrap `just build` and `just test`, respectively."
 - **`alas` for resigned acknowledgement.** drop in mid-sentence to flag that something is an unfortunate but accepted limitation -- not a problem to fix, just a fact. e.g. `` `Package` cannot, alas, really be frozen. ``. signals "i know, but that's how it is".
-- **`tbd` to close open-ended thoughts.** when a thought is meandering or genuinely undecided and worth talking through rather than resolved on the spot, end with `tbd` (*to be discussed*). signals it's an open question, not a conclusion.
-- **colon-chained hierarchy.** lay out a thought as `topic: subtopic: sub-subtopic: actual-point` -- each colon narrows scope one level, like nested error wrapping. use to flag *what* a thought is about before getting to the substance, especially in chat-style notes / review comments / loose lists where multiple unrelated points share a context. e.g. *unrelated: re phrasing: i often use ...*, *nit: naming: `foo` reads ambiguous*. lowercase throughout. don't force it -- only when there's a genuine hierarchy worth signalling.
+- **`tbd` to close open-ended thoughts.** when a thought is meandering or genuinely undecided and worth talking through rather than resolved on the spot, end with `tbd` (_to be discussed_). signals it's an open question, not a conclusion.
+- **colon-chained hierarchy.** lay out a thought as `topic: subtopic: sub-subtopic: actual-point` -- each colon narrows scope one level, like nested error wrapping. use to flag _what_ a thought is about before getting to the substance, especially in chat-style notes / review comments / loose lists where multiple unrelated points share a context. e.g. _unrelated: re phrasing: i often use ..._, _nit: naming: `foo` reads ambiguous_. lowercase throughout. don't force it -- only when there's a genuine hierarchy worth signalling.
 - **`tldr;` to open a summary line.** lead a paragraph with `tldr; <one-line gist>` when the bottom line is worth pulling up front before details. lowercase, semicolon, no caps after. use sparingly -- only in shorter / less structured bits like PR descriptions or chat-style notes; not a default. never in code comments.
-- **`-//-` for ditto.** means *same as the line above*, repeating the column-aligned text directly above. only valid when `-//-` is column-aligned with the phrase it stands in for -- works well in tables or list items where the repeat is unambiguous. e.g.
+- **`-//-` for ditto.** means _same as the line above_, repeating the column-aligned text directly above. only valid when `-//-` is column-aligned with the phrase it stands in for -- works well in tables or list items where the repeat is unambiguous. e.g.
     - `migrate the user-service handlers to the new auth middleware`
     - `-//- billing-service`
 
-    = *migrate the billing-service handlers to the new auth middleware*.
+    = _migrate the billing-service handlers to the new auth middleware_.
 - **`^` for pointer-to-above.** unlike `-//-`, does not imply alignment or repetition -- just points at something earlier in the surrounding text, often the previous bullet or sentence. e.g. `the retry path swallows the 503. ^ also masks 504s in staging.` = the retry-path-swallowing behaviour also masks 504s.
 - **`!?` vs `?!`.** order matters and conveys different tone:
-    - `!?` -- surprised question. the `!` colours the `?` with curiosity / mild incredulity. e.g. *the test passes locally!?*, *that's the whole fix!?*.
+    - `!?` -- surprised question. the `!` colours the `?` with curiosity / mild incredulity. e.g. _the test passes locally!?_, _that's the whole fix!?_.
     - `?!` -- outraged question, signals indignation / exasperation. avoid -- too charged for technical prose; rephrase plainly instead.
-- **`(?)` for implied question.** trailing `(?)` softens a declarative statement into an up-for-discussion soft question -- *"this is what i think / am suggesting, but tell me if i'm off"*. lets the sentence keep declarative shape while flagging it as not-fully-asserted. e.g. *pls have a double check that nothing is missing(?)*, *an alternative approach would be to add a `private:` field and not rely on `_`(?)*. distinct from a full `?` interrogative, which restructures the whole sentence as a direct question.
+- **`(?)` for implied question.** trailing `(?)` softens a declarative statement into an up-for-discussion soft question -- _"this is what i think / am suggesting, but tell me if i'm off"_. lets the sentence keep declarative shape while flagging it as not-fully-asserted. e.g. _pls have a double check that nothing is missing(?)_, _an alternative approach would be to add a `private:` field and not rely on `_`(?)_. distinct from a full `?` interrogative, which restructures the whole sentence as a direct question.
 - **`...` for unfinished / mulling thought.** in-the-moment hedge marking a thought as not-yet-resolved. two flavours:
-    - mid-sentence pause -- *probably we want... or dashes*, *unsure about the structure here... maybe split it*.
-    - sentence-end open thought -- *unsure about the structure here...*, *don't see a reason why not ...*.
+    - mid-sentence pause -- _probably we want... or dashes_, _unsure about the structure here... maybe split it_.
+    - sentence-end open thought -- _unsure about the structure here..._, _don't see a reason why not ..._.
     distinct from `tbd` (a deliberate "let's discuss" marker) -- `...` is thinking-aloud, not a flagged item to revisit. only in chat-style notes / PR comments / loose prose; never in code comments or commit messages.
-- **letter-stretching for emphasis.** elongate a vowel or consonant to convey tone -- e.g. *muuuch cleaner code* (intensifier), *too too much back and forth* (repetition variant; same effect). expressive register only -- chat / PR comments; never in code comments, commit messages, or docs. use sparingly even there -- a little goes a long way, and overuse reads as performative; reach for it only when the tone genuinely warrants it.
+- **letter-stretching for emphasis.** elongate a vowel or consonant to convey tone -- e.g. _muuuch cleaner code_ (intensifier), _too too much back and forth_ (repetition variant; same effect). expressive register only -- chat / PR comments; never in code comments, commit messages, or docs. use sparingly even there -- a little goes a long way, and overuse reads as performative; reach for it only when the tone genuinely warrants it.
 - **leading `?` on list items for "unsure about this one".** marks an idea / todo / hypothetical as tentative; rest of the list is asserted. goes after the bullet (and checkbox if any). e.g. `- ? baz` or `- [ ] ? baz`. only on lists of ideas / todos / hypotheticals.
 
 ---
@@ -196,25 +196,25 @@ find the right commands in this order:
     - check/cross marks `✓ ✗` -> `[x]`, `[ ]` or words
     - math operators `≥ ≤ ≠ × ÷` -> `>=`, `<=`, `!=`, `x`, `/`
     - `™ © ®` -> drop entirely
-    - greek mu `µ` / `μ` as the *micro-* prefix -> `u` (e.g. `us` for microseconds, `ug` for micrograms)
+    - greek mu `µ` / `μ` as the _micro-_ prefix -> `u` (e.g. `us` for microseconds, `ug` for micrograms)
     - non-breaking spaces and zero-width spaces -> regular space or nothing
-- **avoid llm filler phrases.** stock phrases that don't carry information are the giveaway. specifically skip: *moving the needle*, *at the end of the day*, *deep dive*, *the elephant in the room*, *boil the ocean*, *cutting-edge*, *swing for the fences*, *seamless*, *robust* (and *robust solution*), *leverage* (as a verb), *delve into*, *navigate* (as a metaphor), *tapestry*, *vibrant*, *intricate* / *intricacies*, *foster* / *fostering*, *garner*, *showcase* (as verb), *crucial*, *valuable* (as bare praise), *key* (as filler adjective, e.g. *a key part of*). idioms the user actually uses are fine: *low-hanging fruit*, *rule of thumb*, *under the hood*, etc.
+- **avoid llm filler phrases.** stock phrases that don't carry information are the giveaway. specifically skip: _moving the needle_, _at the end of the day_, _deep dive_, _the elephant in the room_, _boil the ocean_, _cutting-edge_, _swing for the fences_, _seamless_, _robust_ (and _robust solution_), _leverage_ (as a verb), _delve into_, _navigate_ (as a metaphor), _tapestry_, _vibrant_, _intricate_ / _intricacies_, _foster_ / _fostering_, _garner_, _showcase_ (as verb), _crucial_, _valuable_ (as bare praise), _key_ (as filler adjective, e.g. _a key part of_). idioms the user actually uses are fine: _low-hanging fruit_, _rule of thumb_, _under the hood_, etc.
 - **banned words with use-case-specific alternatives.** some words are banned outright but the right replacement depends on context -- pick by use case:
     - `corpus` -- banned. replacement depends on sense:
         - search (the text being searched) -- `haystack` (and `needle` for the query).
         - ml / eval (labelled fixture dataset) -- `eval set` or `test cases`.
-        - nlp / training (reference text collection, e.g. Brown, Common Crawl) -- `training set`, `dataset`, or name it directly (*the Brown dataset*).
+        - nlp / training (reference text collection, e.g. Brown, Common Crawl) -- `training set`, `dataset`, or name it directly (_the Brown dataset_).
         - rag / document store (indexed doc collection) -- `document set`, `knowledge base`, `index`, or `doc store`.
-        - codebase (*code corpus*) -- `codebase` or `source tree`.
-        - legal / academic (*corpus of work*, *corpus juris*) -- `body of work`, `body of law`, or just `works`.
+        - codebase (_code corpus_) -- `codebase` or `source tree`.
+        - legal / academic (_corpus of work_, _corpus juris_) -- `body of work`, `body of law`, or just `works`.
 
 ---
 
 - **PR bodies open with the description**, no fluff preamble. a one-line lead-in is fine ("this PR adds X. ...").
 - **PR template headers** like `## Proposed changes`, `### Forward porting` -- keep as-is when the repo template uses them.
-- **don't over-explain.** state what changed and why if non-obvious. skip the *what* when the diff is the answer.
-- **be realistic in PR bodies, not falsely positive or negative.** skip generic upbeat closers (*the future looks bright*, *exciting times ahead*, *a major step forward*, *this unlocks...*) and skip self-flagellating ones too. prefer concrete, verifiable signal: tests passing, benchmark numbers, before/after sizes, error counts, profile snapshots. *"reduces p99 from 240ms to 90ms on the `loadtest` bench, 3 runs"* beats *"significant performance improvement"*. if there's no measurable result yet, say so plainly rather than inflating qualitative claims.
-- **uppercase tag prefixes for callout comments.** when a code comment exists to flag a specific *kind* of concern -- not just describe the code -- lead with an uppercase tag followed by a colon so it's greppable. the rest of the comment stays lowercase per the usual style. common tags:
+- **don't over-explain.** state what changed and why if non-obvious. skip the _what_ when the diff is the answer.
+- **be realistic in PR bodies, not falsely positive or negative.** skip generic upbeat closers (_the future looks bright_, _exciting times ahead_, _a major step forward_, _this unlocks..._) and skip self-flagellating ones too. prefer concrete, verifiable signal: tests passing, benchmark numbers, before/after sizes, error counts, profile snapshots. _"reduces p99 from 240ms to 90ms on the `loadtest` bench, 3 runs"_ beats _"significant performance improvement"_. if there's no measurable result yet, say so plainly rather than inflating qualitative claims.
+- **uppercase tag prefixes for callout comments.** when a code comment exists to flag a specific _kind_ of concern -- not just describe the code -- lead with an uppercase tag followed by a colon so it's greppable. the rest of the comment stays lowercase per the usual style. common tags:
     - `PERF:` -- explains a non-obvious choice made for performance reasons (avoiding an alloc, caching a result, picking a less idiomatic shape because the obvious one was hot).
     - `NOTE:` -- a subtle invariant, hidden constraint, or surprising behaviour a future reader should know about.
     - `TODO:` -- deferred work; ideally followed by enough context to act on later.
@@ -224,17 +224,17 @@ find the right commands in this order:
 
 prose that screams "an llm wrote this" has recurring shapes. avoid them:
 
-- **significance inflation.** dont puff up importance with abstract weight. ban: *testament to*, *pivotal moment*, *underscores its importance*, *evolving landscape*, *marks / represents a shift*, *vital role*, *deeply rooted*, *indelible mark*, *setting the stage for*, *a turning point*. state the fact directly; if the significance is real, the reader will see it from the fact itself.
-- **copula avoidance.** prefer plain *is / are / has*. dont substitute *serves as*, *stands as*, *functions as*, *acts as*, *boasts*, *features* (as a verb), *represents* (as identity, e.g. *X represents a new approach to Y* -- just say *X is a new approach to Y*). e.g. write *`Cache` is the in-memory store* not *`Cache` serves as the in-memory store*.
-- **superficial -ing tails.** dont tack on present-participle clauses to fake depth: *highlighting...*, *underscoring...*, *emphasising...*, *ensuring...*, *reflecting...*, *symbolising...*, *contributing to...*, *fostering...*, *showcasing...*, *encompassing...*. either cut the tail or split into a real sentence with concrete content -- the participle phrase almost never carries information.
-- **persuasive-authority tropes.** phrases that pretend to cut through noise to a deeper truth: *the real question is*, *at its core*, *fundamentally*, *what really matters*, *in reality*, *the heart of the matter*, *the deeper issue*. usually the next sentence just restates an ordinary point with extra ceremony. drop the framing; lead with the point.
+- **significance inflation.** dont puff up importance with abstract weight. ban: _testament to_, _pivotal moment_, _underscores its importance_, _evolving landscape_, _marks / represents a shift_, _vital role_, _deeply rooted_, _indelible mark_, _setting the stage for_, _a turning point_. state the fact directly; if the significance is real, the reader will see it from the fact itself.
+- **copula avoidance.** prefer plain _is / are / has_. dont substitute _serves as_, _stands as_, _functions as_, _acts as_, _boasts_, _features_ (as a verb), _represents_ (as identity, e.g. _X represents a new approach to Y_ -- just say _X is a new approach to Y_). e.g. write _`Cache` is the in-memory store_ not _`Cache` serves as the in-memory store_.
+- **superficial -ing tails.** dont tack on present-participle clauses to fake depth: _highlighting..._, _underscoring..._, _emphasising..._, _ensuring..._, _reflecting..._, _symbolising..._, _contributing to..._, _fostering..._, _showcasing..._, _encompassing..._. either cut the tail or split into a real sentence with concrete content -- the participle phrase almost never carries information.
+- **persuasive-authority tropes.** phrases that pretend to cut through noise to a deeper truth: _the real question is_, _at its core_, _fundamentally_, _what really matters_, _in reality_, _the heart of the matter_, _the deeper issue_. usually the next sentence just restates an ordinary point with extra ceremony. drop the framing; lead with the point.
 - **fragmented headers.** dont follow a heading with a one-line restating paragraph before the real content (e.g. `## Performance` then `Speed matters.` then the real text). heading, then content directly.
-- **synonym-cycling.** llms rotate synonyms within a paragraph b/c they treat repetition as a style flaw. it isnt -- reusing the same noun/verb across nearby sentences is clearer than swapping in a near-synonym that subtly shifts meaning. if youre talking about a `Cache`, call it the cache every time; dont alternate with *the store*, *the buffer*, *the layer*. same for verbs -- pick one and stick with it. swap only when the meaning genuinely differs.
-- **passive-to-hide-actor.** dont reach for the passive when you know who or what is doing the thing. *"it has been decided that..."*, *"the file is processed and the result is returned"*, *"errors are logged"* -- name the actor: *"i decided ..."*, *"`run()` processes the file and returns the result"*, *"`handle_err` logs errors"*. passive is fine when the actor is genuinely unknown, irrelevant, or obvious from context; it's an llm tell when used to dodge specifics.
+- **synonym-cycling.** llms rotate synonyms within a paragraph b/c they treat repetition as a style flaw. it isnt -- reusing the same noun/verb across nearby sentences is clearer than swapping in a near-synonym that subtly shifts meaning. if youre talking about a `Cache`, call it the cache every time; dont alternate with _the store_, _the buffer_, _the layer_. same for verbs -- pick one and stick with it. swap only when the meaning genuinely differs.
+- **passive-to-hide-actor.** dont reach for the passive when you know who or what is doing the thing. _"it has been decided that..."_, _"the file is processed and the result is returned"_, _"errors are logged"_ -- name the actor: _"i decided ..."_, _"`run()` processes the file and returns the result"_, _"`handle_err` logs errors"_. passive is fine when the actor is genuinely unknown, irrelevant, or obvious from context; it's an llm tell when used to dodge specifics.
 - **flattering / framing openers.** two related shapes to ban at the start of a response or paragraph:
-    - **sycophantic openers** -- *great question*, *thats a really interesting point*, *absolutely*, *what a thoughtful observation*. just answer.
-    - **content-free framing prefixes** -- *its worth noting that*, *its important to understand that*, *keep in mind that*, *it should be mentioned that*, *one thing to consider is*. drop the prefix and lead with the actual point. iff the noting/considering really is the point (rare), say so concretely.
-- **restraint over enthusiasm.** a dry statement carries more weight than an excited one. write *"this works"* not *"this works beautifully!"*; *"the fix landed"* not *"great news -- the fix landed!"*. exclamation marks are almost never warranted in technical prose. enthusiasm-as-default reads as performative; let the facts be the signal.
+    - **sycophantic openers** -- _great question_, _thats a really interesting point_, _absolutely_, _what a thoughtful observation_. just answer.
+    - **content-free framing prefixes** -- _its worth noting that_, _its important to understand that_, _keep in mind that_, _it should be mentioned that_, _one thing to consider is_. drop the prefix and lead with the actual point. iff the noting/considering really is the point (rare), say so concretely.
+- **restraint over enthusiasm.** a dry statement carries more weight than an excited one. write _"this works"_ not _"this works beautifully!"_; _"the fix landed"_ not _"great news -- the fix landed!"_. exclamation marks are almost never warranted in technical prose. enthusiasm-as-default reads as performative; let the facts be the signal.
 
 ---
 
