@@ -1,6 +1,6 @@
-# Global instructions
+# global instructions
 
-## Repo-resident instructions
+## repo-resident instructions
 
 repo-resident instruction files (`AGENT.md`, `AGENTS.md`, repo-level `CLAUDE.md`, `.cursorrules`, contributor docs the project points at, etc.) generally win over this file for anything that lands in the repo -- code style, naming, comment conventions, commit/PR style, in-repo doc style. respect what the project asks for.
 
@@ -10,13 +10,13 @@ caveats:
 - scope is committed artefacts only: code, comments, commit messages, PR titles/bodies merged into the repo, in-repo docs. does **not** apply when i ask you to generate natural language _for me_ (a PR message i'll paste, an email, a chat reply, etc.) -- those follow this file's style regardless of what repo the cwd happens to be in.
 - does **not** override personal-workflow rules (git/`gh` permissions, session conventions, environment boundaries). those always apply.
 
-## Session conventions
+## session conventions
 
 - if i send just `.` as a message, treat it as "continue what you were doing" -- sessions sometimes get interrupted, and `.` is my resume signal. pick up where the prior turn left off.
 - when prompting from the vscode plugin, the currently open file gets auto-attached as context. it might be relevant, but often isn't -- don't assume relevance just because it's attached. weigh it against the prompt; if the prompt doesn't connect to that file, ignore it.
 - when i ask you to generate a piece of natural language (PR comment, message, commit body, email, etc), wrap the output in a fenced code block so i can copy-paste cleanly. does not apply to direct conversational replies.
 
-## Git and `gh` permissions
+## git and `gh` permissions
 
 - **git read-only ops: no permission needed** `status`, `log`, `diff`, `show`, `blame`, `branch --list`, `remote -v`, etc. -- run freely as part of investigation.
 - **`gh` needs permission unless the prompt implies it** invocations like `gh pr view`, `gh issue view`, `gh api` count as reaching out to a remote; ask first. exception: when the prompt clearly invites it (e.g. _"look at this issue <github-link>"_, _"read the comments on PR 123"_, _"check ci status"_) -- treat that as implicit permission for the read action being requested. write `gh` ops (`gh pr create`, `gh issue create`, `gh pr comment`, etc.) follow the per-prompt explicit-permission rule below.
@@ -26,7 +26,7 @@ caveats:
 - create commits only when explicitly prompted to.
 - **commit permission does not carry across prompts** if i ask you to do some work and commit it, that authorisation is consumed by the commit you make in that turn. once that commit lands, you no longer have permission to commit -- including for follow-up tweaks, fixups, or any further work in later prompts. wait for me to explicitly say "commit" again. this applies even if the next prompt is a small edit ("fix this typo", "add a comment") that feels like part of the same task -- stop after the change; do not commit unless told to.
 
-## Commits and PRs
+## commits and PRs
 
 - do not add yourself (`Co-Authored-By: Claude ...`) as a co-author on commits or in PR bodies.
 - when creating PRs (only when asked), use Conventional Commits format for the title (e.g. `feat:`, `fix:`, `docs:`, `bench:`, `refactor:`, `revert:`, `chore:`).
@@ -41,7 +41,7 @@ caveats:
 - **`appease <tool>` for cosmetic-only fix-ups** when a commit exists solely to satisfy a non-functional convention tool -- formatter, linter, spellchecker, style-only rules -- use the form `appease <tool-name>` (e.g. `appease yamllint`, `appease prettier`, `appease codespell`). only for purely cosmetic conventions; do **not** use for test failures, typechecker errors, or static-analysis findings (those are real bugs and warrant a normal `fix:` with a real subject).
 - **revert PRs** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise. when generating the revert with `git revert`, the default message git produces will _not_ match this format -- amend the commit message after `git revert` to bring it into the format above.
 
-## Finding repo automation
+## finding repo automation
 
 most repos have a task runner -- `make`, `just`, `task`, `npm`/`pnpm`/`yarn` scripts, `uv` scripts, etc. before guessing at commands, find what's there.
 
@@ -59,7 +59,7 @@ once detected, list targets before invoking -- a `lint` target may chain tools (
 - `npm` / `pnpm` / `yarn` -- `npm run` / `pnpm run` / `yarn run`
 - `uv` -- `uv run --list`
 
-## Testing before commits
+## testing before commits
 
 before any commit, every check that should pass for a healthy commit must pass -- test, lint, typecheck, format-check, spellcheck, etc. (only the ones that exist; don't invent them). one exception: tdd (see below).
 
@@ -72,7 +72,7 @@ find the right commands in this order:
 - **prefer `uv` / `uvx` for python** runs in an isolated venv, doesn't pollute the system or project env.
 - **tdd exception** if doing test-driven development, write the failing tests first. if asked to commit them before the implementation lands, use `test!:` (with the `!`) to mark the commit as intentionally not passing -- this signals the failing-tests-on-purpose case and distinguishes it from a normal `test:` commit.
 
-## Environment boundaries
+## environment boundaries
 
 - **shell may be bash or fish** don't assume bash -- the user runs both interchangeably (and the active shell when you're invoked may be either). main pitfalls:
     - **unmatched globs** fish aborts the command if a glob matches nothing; bash returns the literal. for file detection, list explicit names rather than `Taskfile*` etc.
@@ -83,11 +83,11 @@ find the right commands in this order:
     - n/a for project-local dependency resolution that's part of normal build flow (e.g. `npm ci` / `uv sync` / `cargo build` pulling declared deps into the project's own lockfile-managed env) -- those are fine.
 - **never ssh or work in remote environments** unless explicitly instructed to. no `ssh`, no `scp`, no remote `kubectl exec`, no connecting to remote shells. heads-up the user and ask before doing anything that crosses the local boundary.
 
-## Tooling hygiene
+## tooling hygiene
 
 - **adding a tool means handling its artefacts too** when you add a tool to a project (linter, formatter, test runner, type checker, build tool, etc.), also add its cache / output / artefact dirs to `.gitignore` in the same change. e.g. adding `ruff` -> add `.ruff_cache/`; `pytest` -> `.pytest_cache/`; `mypy` -> `.mypy_cache/`; `coverage` -> `.coverage`, `htmlcov/`; `cargo` -> `target/`. don't wait for the cache to show up in `git status` and surprise the user.
 
-## Writing style (non-user-facing prose: comments, commit messages, PR bodies)
+## writing style (non-user-facing prose: comments, commit messages, PR bodies)
 
 - **lowercase by default** start sentences lowercase. write `i` not `I`. _don't_ capitalise generic words just because they start a sentence.
 - **only capitalise uncommon acronyms** common ones stay lowercase: `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`, `id` (identifier). product names too: `github`, `claude`, `gemini`, `sqlite`, `go`. capitalise when the acronym is genuinely obscure or its capitalisation carries meaning, e.g. `LR(1)` parser, `CASB` (cloud access security broker). exception: `PR` is always capitalised (personal habit, overrides the lowercase-common rule).
