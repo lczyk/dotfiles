@@ -86,7 +86,7 @@ find the right commands in this order:
 ## Writing style (non-user-facing prose: comments, commit messages, PR bodies)
 
 - **lowercase by default.** start sentences lowercase. write `i` not `I`. *don't* capitalise generic words just because they start a sentence.
-- **only capitalise uncommon acronyms.** common ones stay lowercase: `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`. product names too: `github`, `claude`, `gemini`, `sqlite`, `go`. capitalise when the acronym is genuinely obscure or its capitalisation carries meaning, e.g. `LR(1)` parser, `CASB` (cloud access security broker). exception: `PR` is always capitalised (personal habit, overrides the lowercase-common rule).
+- **only capitalise uncommon acronyms.** common ones stay lowercase: `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`, `id` (identifier). product names too: `github`, `claude`, `gemini`, `sqlite`, `go`. capitalise when the acronym is genuinely obscure or its capitalisation carries meaning, e.g. `LR(1)` parser, `CASB` (cloud access security broker). exception: `PR` is always capitalised (personal habit, overrides the lowercase-common rule).
 - **casual tone.** avoid corporate or marketing voice. specifics:
     - **contractions.** fine in prose. apostrophes are optional for past contractions (`ive`, `dont`, `wasnt`, `youd`). keep the apostrophe when dropping it would create a different word -- `we'll` vs `well`, `we're` vs `were`, `i'd` vs `id`.
     - **short forms welcome.** examples:
