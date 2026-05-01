@@ -181,6 +181,7 @@ find the right commands in this order:
     - mid-sentence pause -- *probably we want... or dashes*, *unsure about the structure here... maybe split it*.
     - sentence-end open thought -- *unsure about the structure here...*, *don't see a reason why not ...*.
     distinct from `tbd` (a deliberate "let's discuss" marker) -- `...` is thinking-aloud, not a flagged item to revisit. only in chat-style notes / PR comments / loose prose; never in code comments or commit messages.
+- **letter-stretching for emphasis.** elongate a vowel or consonant to convey tone -- e.g. *muuuch cleaner code* (intensifier), *too too much back and forth* (repetition variant; same effect). expressive register only -- chat / PR comments; never in code comments, commit messages, or docs.
 
 ---
 
