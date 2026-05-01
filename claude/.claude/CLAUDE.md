@@ -130,6 +130,7 @@ find the right commands in this order:
         - `aka` -- also known as
         - `pls` -- please
         - `2c` -- two cents, as in _my 2c on this_; flags a take as personal opinion rather than a settled view
+        - `sec` -- section
         - `-ish` suffix -- fuzz marker, e.g. _5ish lines_, _workingish_
         - `-esque` suffix -- approximate-identity marker, for when something acts like X but isn't strictly X. e.g. _singleton-esque_ (behaves like a singleton, but technically may not satisfy all the criteria). use sparingly
         - `env` -- environment
