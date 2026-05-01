@@ -143,6 +143,7 @@ find the right commands in this order:
     - **short forms i do *not* use.** avoid these even though they're common: `dupe` (write *duplicate*), `imho` (use `imo` instead).
     - **inline symbols ok.** `~` for *approx.* (e.g. `~15 lines`); `+` for *also* / *in addition* (e.g. `touches 4 lsh files + all definitions`); spaced `/` for *or* between phrases (e.g. `once / if we have one`, `wire up / remove`) -- the spaces distinguish it from compound forms like `ci/cd`, `w/out`, `b/c` where `/` joins without alternation.
     - **punctuation in abbreviations.** write `e.g.` and `i.e.` with the dots (not `eg` / `ie`); `n/a` stays as-is.
+    - **no emoji in generated prose.** PR bodies, comments, commit messages, drafts, etc. -- keep emoji-free regardless of the surrounding tone of the thread.
 - **british english.** write prose in `en-GB`. common differences:
     - `-ise` not `-ize` (`synthesise`, `optimise`, `organise`, `recognise`); but `analyse` (note the `s`).
     - `-our` not `-or` (`colour`, `behaviour`, `favour`).
