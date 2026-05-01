@@ -167,6 +167,12 @@ find the right commands in this order:
 - **`tbd` to close open-ended thoughts.** when a thought is meandering or genuinely undecided and worth talking through rather than resolved on the spot, end with `tbd` (*to be discussed*). signals it's an open question, not a conclusion.
 - **colon-chained hierarchy.** lay out a thought as `topic: subtopic: sub-subtopic: actual-point` -- each colon narrows scope one level, like nested error wrapping. use to flag *what* a thought is about before getting to the substance, especially in chat-style notes / review comments / loose lists where multiple unrelated points share a context. e.g. *unrelated: re phrasing: i often use ...*, *nit: naming: `foo` reads ambiguous*. lowercase throughout. don't force it -- only when there's a genuine hierarchy worth signalling.
 - **`tldr;` to open a summary line.** lead a paragraph with `tldr; <one-line gist>` when the bottom line is worth pulling up front before details. lowercase, semicolon, no caps after. use sparingly -- only in shorter / less structured bits like PR descriptions or chat-style notes; not a default. never in code comments.
+- **`-//-` for ditto.** means *same as the line above*, repeating the column-aligned text directly above. only valid when `-//-` is column-aligned with the phrase it stands in for -- works well in tables or list items where the repeat is unambiguous. e.g.
+    - `migrate the user-service handlers to the new auth middleware`
+    - `-//- billing-service`
+
+    = *migrate the billing-service handlers to the new auth middleware*.
+- **`^` for pointer-to-above.** unlike `-//-`, does not imply alignment or repetition -- just points at something earlier in the surrounding text, often the previous bullet or sentence. e.g. `the retry path swallows the 503. ^ also masks 504s in staging.` = the retry-path-swallowing behaviour also masks 504s.
 
 ---
 
