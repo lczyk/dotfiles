@@ -173,6 +173,9 @@ find the right commands in this order:
 
     = *migrate the billing-service handlers to the new auth middleware*.
 - **`^` for pointer-to-above.** unlike `-//-`, does not imply alignment or repetition -- just points at something earlier in the surrounding text, often the previous bullet or sentence. e.g. `the retry path swallows the 503. ^ also masks 504s in staging.` = the retry-path-swallowing behaviour also masks 504s.
+- **`!?` vs `?!`.** order matters and conveys different tone:
+    - `!?` -- surprised question. the `!` colours the `?` with curiosity / mild incredulity. e.g. *the test passes locally!?*, *that's the whole fix!?*.
+    - `?!` -- outraged question, signals indignation / exasperation. avoid -- too charged for technical prose; rephrase plainly instead.
 
 ---
 
