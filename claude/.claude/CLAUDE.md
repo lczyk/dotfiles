@@ -198,6 +198,14 @@ find the right commands in this order:
     - greek mu `µ` / `μ` as the *micro-* prefix -> `u` (e.g. `us` for microseconds, `ug` for micrograms)
     - non-breaking spaces and zero-width spaces -> regular space or nothing
 - **avoid llm filler phrases.** stock phrases that don't carry information are the giveaway. specifically skip: *moving the needle*, *at the end of the day*, *deep dive*, *the elephant in the room*, *boil the ocean*, *cutting-edge*, *swing for the fences*, *seamless*, *robust* (and *robust solution*), *leverage* (as a verb), *delve into*, *navigate* (as a metaphor), *tapestry*, *vibrant*, *intricate* / *intricacies*, *foster* / *fostering*, *garner*, *showcase* (as verb), *crucial*, *valuable* (as bare praise), *key* (as filler adjective, e.g. *a key part of*). idioms the user actually uses are fine: *low-hanging fruit*, *rule of thumb*, *under the hood*, etc.
+- **banned words with use-case-specific alternatives.** some words are banned outright but the right replacement depends on context -- pick by use case:
+    - `corpus` -- banned. replacement depends on sense:
+        - search (the text being searched) -- `haystack` (and `needle` for the query).
+        - ml / eval (labelled fixture dataset) -- `eval set` or `test cases`.
+        - nlp / training (reference text collection, e.g. Brown, Common Crawl) -- `training set`, `dataset`, or name it directly (*the Brown dataset*).
+        - rag / document store (indexed doc collection) -- `document set`, `knowledge base`, `index`, or `doc store`.
+        - codebase (*code corpus*) -- `codebase` or `source tree`.
+        - legal / academic (*corpus of work*, *corpus juris*) -- `body of work`, `body of law`, or just `works`.
 
 ---
 
