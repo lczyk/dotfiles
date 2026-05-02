@@ -218,6 +218,17 @@ find the right commands in this order:
     - `™ © ®` -> drop entirely
     - greek mu `µ` / `μ` as the _micro-_ prefix -> `u` (e.g. `us` for microseconds, `ug` for micrograms)
     - non-breaking spaces and zero-width spaces -> regular space or nothing
+
+    **trap: glyphs that feel semantic, not stylistic.** the easiest slips are characters that read as "real notation" rather than typographic flourish, so the brain tags them as content and waves them through. high-risk offenders, with the contexts where they sneak in:
+
+    - `≠` / `≥` / `≤` / `×` / `÷` -- when describing logic, comparisons, or rough arithmetic in prose (_"output_layer ≠ compute_layer"_, _"~5× slower"_). always `!=` / `>=` / `<=` / `x` / `/`.
+    - `→` / `⇒` -- when sketching flow, mappings, or causation (_"input → parser → ast"_, _"flag set ⇒ skip cache"_). always `->` / `=>`.
+    - `…` -- when trailing off mid-thought or marking an unfinished list. always `...` (three ascii dots).
+    - `—` / `–` -- when joining clauses or ranges (_"5–10 lines"_, _"works — but slowly"_). always `--` / `-`.
+    - `µ` -- when writing units inline (_"~50µs"_). always `u` (-> `us`, `ug`).
+
+    these slip more often than the obviously-cosmetic ones (smart quotes, bullet glyphs, `™`) because the writer is focused on conveying meaning and the glyph feels load-bearing. it isn't -- the ascii form carries identical meaning. if you catch yourself reaching for one of these mid-sentence, swap it out before continuing.
+
 - **avoid llm filler phrases** stock phrases that don't carry information are the giveaway. specifically skip: _moving the needle_, _at the end of the day_, _deep dive_, _the elephant in the room_, _boil the ocean_, _cutting-edge_, _swing for the fences_, _seamless_, _robust_ (and _robust solution_), _leverage_ (as a verb), _delve into_, _navigate_ (as a metaphor), _tapestry_, _vibrant_, _intricate_ / _intricacies_, _foster_ / _fostering_, _garner_, _showcase_ (as verb), _crucial_, _valuable_ (as bare praise), _key_ (as filler adjective, e.g. _a key part of_). idioms the user actually uses are fine: _low-hanging fruit_, _rule of thumb_, _under the hood_, etc.
 - **banned words with use-case-specific alternatives** some words are banned outright but the right replacement depends on context -- pick by use case:
     - `corpus` -- banned. replacement depends on sense:
