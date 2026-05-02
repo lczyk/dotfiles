@@ -131,7 +131,7 @@ find the right commands in this order:
         - `tdd` -- test-driven development
         - `prod` -- production, in the broad sense of _the main thing_ for the project (not necessarily a deployed service -- could be the main binary, main branch, main artefact, etc.)
         - `kinda` / `kindof` -- _kind of_, as a hedge/intensifier. e.g. _this is kinda sus_, _how about `foo(1,2,mode)`, or this kindof thing?_. only as the hedge contraction; do **not** elide the literal phrase _kind of_ when it means _type of_ (e.g. _this kind of thing is not allowed_ stays as written).
-        - `recc` -- recommend
+        - `recc` -- recommend / reccomendation
         - `repro` -- reproduce / reproduction
         - `repo` -- repository
         - `ppl` -- people
