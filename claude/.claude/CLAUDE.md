@@ -141,6 +141,7 @@ find the right commands in this order:
         - `idk` -- i don't know
         - `nit` -- nitpick (low-priority review comment)
         - `lgtm` -- looks good to me
+        - `wdyt` -- what do you think
         - `wip` -- work in progress
         - `atm` -- at the moment
         - `aka` -- also known as
