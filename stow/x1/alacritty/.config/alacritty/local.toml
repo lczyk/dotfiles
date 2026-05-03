@@ -1,2 +1,25 @@
-# x1 alacritty overrides go here. empty for now -- file exists so common's
-# import = [..., "local.toml"] does not error.
+[font]
+size = 16.0
+
+[font.offset]
+x = 0
+y = 0
+
+[font.normal]
+family = "Ubuntu Mono"
+style = "Regular"
+
+[font.bold]
+family = "Ubuntu Mono"
+style = "Bold"
+
+[font.italic]
+family = "Ubuntu Mono"
+style = "Italic"
+
+[font.bold_italic]
+family = "Ubuntu Mono"
+style = "Bold Italic"
+
+[window]
+opacity = 1.0

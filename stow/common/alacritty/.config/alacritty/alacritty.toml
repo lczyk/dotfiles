@@ -33,39 +33,10 @@ yellow = "0xe8ae5b"
 background = "0x1c1c1c"
 foreground = "0xddeedd"
 
-[font]
-size = 16.0
-
-[font.offset]
-x = 0
-y = 0
-
-[font.normal]
-family = "Ubuntu Mono"
-style = "Regular"
-
-[font.bold]
-family = "Ubuntu Mono"
-style = "Bold"
-
-[font.italic]
-family = "Ubuntu Mono"
-style = "Italic"
-# 
-[font.bold_italic]
-family = "Ubuntu Mono"
-style = "Bold Italic"
-
-# [[keyboard.bindings]]
-# key = "N"
-# mods = "Command"
-# action = "CreateNewWindow"
-
 [window]
 decorations = "buttonless"
 dynamic_padding = false
 dynamic_title = true
-opacity = 1.0
 title = "Terminal"
 
 [window.padding]

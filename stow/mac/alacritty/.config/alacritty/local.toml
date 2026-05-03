@@ -30,14 +30,14 @@ action = "CreateNewWindow"
 [[keyboard.bindings]]
 key = "Return"
 mods = "Shift"
-chars = "\r"
+chars = "\u001B\r"
 
 # cmd+f -> send ctrl+f (0x06) to running program instead of alacritty's
 # built-in SearchForward. lets `edit` receive its find chord on macos.
 [[keyboard.bindings]]
 key = "F"
 mods = "Command"
-chars = ""
+chars = "\u0006"
 
 # cmd+c split per screen mode:
 #   alt screen (TUI apps like `edit`) -> forward to program.
