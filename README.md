@@ -28,13 +28,13 @@ packages live under:
 
 profile auto-detected from `uname -s` (Darwin -> mac, else x1). override with `make stow PROFILE=mac|x1`.
 
-sub-file splits use the host program's own include mechanism. e.g. `stow/common/git/.config/git/config` ends with `[include] path = ~/.config/git/config.local`, and each profile package provides its own `config.local`. same idea for alacritty (`local.toml` import).
+sub-file splits use the host program's own include mechanism. e.g. `stow/common/git/.config/git/config` ends with `[include] path = ~/.config/git/config.local`; profiles may provide their own `config.local` for host-specific bits (mac adds `osxkeychain` credential helper; x1 has none -- git silently ignores the missing include). same import-on-disk pattern for alacritty (`local.toml`).
 
 
 # todo
 
 - [x] fuzzy time
-- [ ] cmd+tab switcher
+- [ ] ? cmd+tab switcher
 - [ ] screensaver in sway
 - [ ] cmd+backspace / alt+backspace
 - [ ] alt+shift vs shift+alt ordering
