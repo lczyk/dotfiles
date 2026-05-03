@@ -119,6 +119,7 @@ find the right commands in this order:
         - `tldr` -- too long; didn't read
         - `noop` (not `no-op`)
         - `tradeoff` (not `trade-off`)
+        - `sidenote` (not `side note`)
         - `vs` (no dot)
         - `approx` (not `approximately`)
         - `iff` -- if and only if
