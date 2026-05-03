@@ -1,0 +1,5 @@
+[play]
+
+; Playback speed (can be fractional), default: 1
+speed = 2
+

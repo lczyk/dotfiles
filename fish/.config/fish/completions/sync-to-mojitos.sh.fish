@@ -1,0 +1,1 @@
+/Users/marcin/mojitos/my-k8s-cluster/scripts/sync-to-mojitos.sh.fish

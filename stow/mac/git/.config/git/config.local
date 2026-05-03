@@ -1,0 +1,6 @@
+[user]
+name = marcin
+email = marcin.konow@lczyk.xyz
+
+[credential]
+helper = osxkeychain

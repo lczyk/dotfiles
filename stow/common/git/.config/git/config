@@ -1,6 +1,5 @@
-[user]
-name = lczyk
-email = marcin.konow@lczyk.xyz
+[include]
+path = ~/.config/git/config.local
 
 [init]
 defaultBranch = main

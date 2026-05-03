@@ -1,0 +1,57 @@
+[font]
+size = 20.0
+
+[font.normal]
+family = "DejaVuSansM Nerd Font Mono"
+style = "Regular"
+
+[font.bold]
+family = "DejaVuSansM Nerd Font Mono"
+style = "Bold"
+
+[font.italic]
+family = "DejaVuSansM Nerd Font Mono"
+style = "Oblique"
+
+[font.bold_italic]
+family = "DejaVuSansM Nerd Font Mono"
+style = "Bold Oblique"
+
+[window]
+opacity = 0.9
+# treat option as alt so option+letter / option+backspace carry alt mod into apps.
+option_as_alt = "Both"
+
+[[keyboard.bindings]]
+key = "N"
+mods = "Command"
+action = "CreateNewWindow"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Shift"
+chars = "\r"
+
+# cmd+f -> send ctrl+f (0x06) to running program instead of alacritty's
+# built-in SearchForward. lets `edit` receive its find chord on macos.
+[[keyboard.bindings]]
+key = "F"
+mods = "Command"
+chars = ""
+
+# cmd+c split per screen mode:
+#   alt screen (TUI apps like `edit`) -> forward to program.
+#   normal screen (shell)             -> default Copy.
+# defining the user binding shadows default for both modes, so normal-screen
+# behaviour has to be re-registered explicitly.
+[[keyboard.bindings]]
+key = "C"
+mods = "Command"
+mode = "Alt"
+action = "ReceiveChar"
+
+[[keyboard.bindings]]
+key = "C"
+mods = "Command"
+mode = "~Alt"
+action = "Copy"
