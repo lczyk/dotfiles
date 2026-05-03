@@ -1,10 +1,24 @@
 .SUFFIXES:
 
 CARGO_BINS := peek time_fuzzer
-STOW_DIRS := $(shell find . -maxdepth 1 -type d ! -name '.*' ! -name 'bin' ! -name '.' | sed 's|^\./||' | sort)
-STOW_TARGET ?= $(HOME)
+
+# profile detection: mac (Darwin) / x1 (Linux). override via `PROFILE=...`.
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+PROFILE ?= mac
+else
+PROFILE ?= x1
+endif
+
+STOW_TARGET    ?= $(HOME)
+STOW_COMMON    := stow/common
+STOW_PROFILE   := stow/$(PROFILE)
+
+COMMON_DIRS  := $(shell find $(STOW_COMMON) -mindepth 1 -maxdepth 1 -type d | sed 's|^$(STOW_COMMON)/||' | sort)
+PROFILE_DIRS := $(shell [ -d $(STOW_PROFILE) ] && find $(STOW_PROFILE) -mindepth 1 -maxdepth 1 -type d | sed 's|^$(STOW_PROFILE)/||' | sort)
 
 help:  ## Show this help
+	@echo "Profile: $(PROFILE) (override with PROFILE=mac|x1)"
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
@@ -23,26 +37,38 @@ install: build  ## Symlink built rust binaries into ~/.local/bin
 	done
 
 .PHONY: stow
-stow:  ## Stow all dotfile packages into $$HOME
-	@for d in $(STOW_DIRS); do \
-		stow --target="$(STOW_TARGET)" "$$d" && echo "Stowed $$d" || echo "Failed to stow $$d"; \
+stow:  ## Stow common + $(PROFILE) packages into $$HOME
+	@for d in $(COMMON_DIRS); do \
+		stow --no-folding --dir=$(STOW_COMMON) --target=$(STOW_TARGET) "$$d" && echo "Stowed common/$$d" || echo "Failed common/$$d"; \
+	done
+	@for d in $(PROFILE_DIRS); do \
+		stow --dir=$(STOW_PROFILE) --target=$(STOW_TARGET) "$$d" && echo "Stowed $(PROFILE)/$$d" || echo "Failed $(PROFILE)/$$d"; \
 	done
 
 .PHONY: restow
-restow:  ## Restow all dotfile packages into $$HOME
-	@for d in $(STOW_DIRS); do \
-		stow --restow --target="$(STOW_TARGET)" "$$d" && echo "Restowed $$d" || echo "Failed to restow $$d"; \
+restow:  ## Restow common + $(PROFILE) packages into $$HOME
+	@for d in $(COMMON_DIRS); do \
+		stow --restow --no-folding --dir=$(STOW_COMMON) --target=$(STOW_TARGET) "$$d" && echo "Restowed common/$$d" || echo "Failed common/$$d"; \
+	done
+	@for d in $(PROFILE_DIRS); do \
+		stow --restow --dir=$(STOW_PROFILE) --target=$(STOW_TARGET) "$$d" && echo "Restowed $(PROFILE)/$$d" || echo "Failed $(PROFILE)/$$d"; \
 	done
 
 .PHONY: unstow
-unstow:  ## Unstow all dotfile packages from $$HOME
-	@for d in $(STOW_DIRS); do \
-		stow --delete --target="$(STOW_TARGET)" "$$d" && echo "Unstowed $$d" || echo "Failed to unstow $$d"; \
+unstow:  ## Unstow common + $(PROFILE) packages from $$HOME
+	@for d in $(PROFILE_DIRS); do \
+		stow --delete --dir=$(STOW_PROFILE) --target=$(STOW_TARGET) "$$d" && echo "Unstowed $(PROFILE)/$$d" || echo "Failed $(PROFILE)/$$d"; \
+	done
+	@for d in $(COMMON_DIRS); do \
+		stow --delete --no-folding --dir=$(STOW_COMMON) --target=$(STOW_TARGET) "$$d" && echo "Unstowed common/$$d" || echo "Failed common/$$d"; \
 	done
 
 .PHONY: list-stow
 list-stow:  ## List dotfile packages discovered for stow
-	@for d in $(STOW_DIRS); do echo "$$d"; done
+	@echo "common:"
+	@for d in $(COMMON_DIRS); do echo "  $$d"; done
+	@echo "$(PROFILE):"
+	@for d in $(PROFILE_DIRS); do echo "  $$d"; done
 
 .PHONY: test
 test: $(addprefix test-,$(CARGO_BINS))  ## cargo test all rust binaries
