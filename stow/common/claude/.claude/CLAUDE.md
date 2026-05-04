@@ -104,6 +104,30 @@ find the right commands in this order:
 
 - **adding a tool means handling its artefacts too** when you add a tool to a project (linter, formatter, test runner, type checker, build tool, etc.), also add its cache / output / artefact dirs to `.gitignore` in the same change. e.g. adding `ruff` -> add `.ruff_cache/`; `pytest` -> `.pytest_cache/`; `mypy` -> `.mypy_cache/`; `coverage` -> `.coverage`, `htmlcov/`; `cargo` -> `target/`. don't wait for the cache to show up in `git status` and surprise the user.
 
+## config-file style (toml, yaml, json, etc.)
+
+- **multi-item lists stay multiline** in config files (`pyproject.toml`, `tox.ini` arrays, `package.json` arrays, ci yaml lists, etc.), put each item on its own line. one-item-per-line keeps git diffs minimal (a line touched is a line changed) and makes it trivial to comment out / re-enable individual entries without rebalancing brackets or commas.
+- **trailing `# ` sentinel to lock multiline shape** end the list with a bare `# ` line (just a hash, optional empty trailing comment) before the closing bracket. this anchors the multiline form against autoformatters that would otherwise collapse a single-item list onto one line, and gives a stable place to drop a `# "FOO",` commented-out entry. e.g.
+    ```toml
+    dependencies = [
+        "torch",
+        "numpy",
+        # 
+    ]
+    ```
+    apply consistently even to short lists -- the rule is "every list, every time", not "lists above N entries".
+- **inline `# what-it-is` after opaque short tokens** when list entries are terse codes whose meaning isn't obvious from the token alone (ruff/flake8 codes like `E` / `F` / `B` / `SIM`, mypy plugin names, ci job ids, etc.), append an inline comment naming what each token expands to. align the comments at a consistent column so the file scans as a two-column table. e.g.
+    ```toml
+    select = [
+        "E",   # pycodestyle
+        "F",   # pyflakes
+        "B",   # flake8-bugbear
+        "SIM", # flake8-simplify
+        # "PL",  # pylint -- enable later
+    ]
+    ```
+    skip the inline comment when the token is self-describing (a package name, a file path, a human-readable identifier). the rule kicks in only when the token is a code or shorthand a future reader would have to look up.
+
 ## writing style (non-user-facing prose: comments, commit messages, PR bodies)
 
 - **lowercase by default** start sentences lowercase. write `i` not `I`. _don't_ capitalise generic words just because they start a sentence.
