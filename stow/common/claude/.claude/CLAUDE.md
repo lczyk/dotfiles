@@ -95,8 +95,9 @@ find the right commands in this order:
     - **env vars** `export FOO=bar` is bash-only. fish uses `set -x FOO bar`. for one-shot use prefer `env FOO=bar <cmd>` -- works in both.
     - **command substitution** `$(...)` works in both; avoid backticks.
     - **`&&` / `||` / `;`** all work in modern fish (3.x+) and bash, so chaining is fine.
-- **never install software or packages** not via `apt`, `brew`, `pip install`, `npm install -g`, `cargo install`, etc. if a tool is missing, stop and prompt the user; suggest the command they could run, but do not run it yourself. this applies even if the install seems trivial or clearly needed to finish the task.
+- **never install software or packages** not via `apt`, `brew`, `pip install`, `npm install -g`, `cargo install`, `go install`, etc. if a tool is missing, stop and prompt the user; suggest the command they could run, but do not run it yourself. this applies even if the install seems trivial or clearly needed to finish the task. also applies regardless of guards (`command -v X ||`, `which X >/dev/null ||`, `[ -x ... ] ||`, etc.) -- if the fallback path installs, it's an install.
     - n/a for project-local dependency resolution that's part of normal build flow (e.g. `npm ci` / `uv sync` / `cargo build` pulling declared deps into the project's own lockfile-managed env) -- those are fine.
+    - writes to user-global tool dirs (`~/.local/bin`, `~/go/bin` / `$GOPATH/bin`, `~/.cargo/bin`, `~/.npm-global`, `~/.local/share/...`, homebrew prefix, etc.) count as installs even though they don't need sudo. "user-only" or "no root needed" is not a green light -- the test is whether the artefact persists outside the current project tree, not whether root was involved.
 - **never ssh or work in remote environments** unless explicitly instructed to. no `ssh`, no `scp`, no remote `kubectl exec`, no connecting to remote shells. heads-up the user and ask before doing anything that crosses the local boundary.
 
 ## tooling hygiene
@@ -153,6 +154,7 @@ find the right commands in this order:
         - `cred` / `creds` -- credentials
         - `q` / `qs` -- question / questions
         - `feat` -- feature
+        - `impl` -- implementation
         - `-ish` suffix -- fuzz marker, e.g. _5ish lines_, _workingish_
         - `-esque` suffix -- approximate-identity marker, for when something acts like X but isn't strictly X. e.g. _singleton-esque_ (behaves like a singleton, but technically may not satisfy all the criteria). use sparingly
         - `env` -- environment
