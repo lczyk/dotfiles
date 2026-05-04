@@ -121,7 +121,7 @@ find the right commands in this order:
         - `tradeoff` (not `trade-off`)
         - `sidenote` (not `side note`)
         - `vs` (no dot)
-        - `approx` (not `approximately`)
+        - `approx` / `app` (not `approximately`)
         - `iff` -- if and only if
         - `ff` -- feel free. note: `ff` is also git jargon for _fast-forward_ (`--ff-only`, _ff merge_); disambiguate by context -- in prose around git ops it likely means fast-forward, elsewhere it means feel free.
         - `obv` -- obviously
@@ -149,7 +149,9 @@ find the right commands in this order:
         - `pls` -- please
         - `2c` -- two cents, as in _my 2c on this_; flags a take as personal opinion rather than a settled view
         - `sec` -- section
-        - `cred` -- credentials
+        - `org` -- organisation
+        - `cred` / `creds` -- credentials
+        - `q` / `qs` -- question / questions
         - `feat` -- feature
         - `-ish` suffix -- fuzz marker, e.g. _5ish lines_, _workingish_
         - `-esque` suffix -- approximate-identity marker, for when something acts like X but isn't strictly X. e.g. _singleton-esque_ (behaves like a singleton, but technically may not satisfy all the criteria). use sparingly
