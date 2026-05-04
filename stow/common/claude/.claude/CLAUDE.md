@@ -6,15 +6,15 @@ repo-resident instruction files (`AGENT.md`, `AGENTS.md`, repo-level `CLAUDE.md`
 
 caveats:
 
-- not blind. if a repo rule looks low-quality, internally inconsistent, or conflicts severely with the rules here (e.g. asks for behaviour that would be actively harmful, or demands wildly divergent conventions w/out apparent reason), stop and flag it to me -- ask for resolution rather than just complying.
-- scope is committed artefacts only: code, comments, commit messages, PR titles/bodies merged into the repo, in-repo docs. does **not** apply when i ask you to generate natural language _for me_ (a PR message i'll paste, an email, a chat reply, etc.) -- those follow this file's style regardless of what repo the cwd happens to be in.
+- not blind. if a repo rule looks low-quality, internally inconsistent, or conflicts severely with the rules here (e.g. asks for behaviour that would be actively harmful, or demands wildly divergent conventions w/out apparent reason), stop and flag it to the user -- ask for resolution rather than just complying.
+- scope is committed artefacts only: code, comments, commit messages, PR titles/bodies merged into the repo, in-repo docs. does **not** apply when the user asks you to generate natural language _for them_ (a PR message they'll paste, an email, a chat reply, etc.) -- those follow this file's style regardless of what repo the cwd happens to be in.
 - does **not** override personal-workflow rules (git/`gh` permissions, session conventions, environment boundaries). those always apply.
 
 ## session conventions
 
-- if i send just `.` as a message, treat it as "continue what you were doing" -- sessions sometimes get interrupted, and `.` is my resume signal. pick up where the prior turn left off.
+- if the user sends just `.` as a message, treat it as "continue what you were doing" -- sessions sometimes get interrupted, and `.` is the user's resume signal. pick up where the prior turn left off.
 - when prompting from the vscode plugin, the currently open file gets auto-attached as context. it might be relevant, but often isn't -- don't assume relevance just because it's attached. weigh it against the prompt; if the prompt doesn't connect to that file, ignore it.
-- when i ask you to generate a piece of natural language (PR comment, message, commit body, email, etc), wrap the output in a fenced code block so i can copy-paste cleanly. does not apply to direct conversational replies.
+- when the user asks you to generate a piece of natural language (PR comment, message, commit body, email, etc), wrap the output in a fenced code block so it can be copy-pasted cleanly. does not apply to direct conversational replies.
 - after you make a suggestion or ask a question, the next message authorises action only if it contains an explicit go-signal: an affirmative (_yes_ / _do it_ / _go_ / _ok_ / _sgtm_), a direct instruction (_add X_ / _change Y_), or `.` (per above). anything else -- new info, clarifications, follow-up questions, refinements, half-thoughts -- is discussion. respond in text, do not write code.
 
 ## git and `gh` permissions
@@ -25,7 +25,7 @@ caveats:
 - **never run complex / risky git ops at all** `rebase` (interactive or not), `merge`, `reset` (any mode), `filter-branch`, `filter-repo`, `reflog expire`, `gc --prune`, force-push, branch-rename of in-use branches, history rewrites generally. these need a human; surface what youd do and stop.
 - do not create PRs unless explicitly instructed. stop after commits.
 - create commits only when explicitly prompted to.
-- **commit permission does not carry across prompts** if i ask you to do some work and commit it, that authorisation is consumed by the commit you make in that turn. once that commit lands, you no longer have permission to commit -- including for follow-up tweaks, fixups, or any further work in later prompts. wait for me to explicitly say "commit" again. this applies even if the next prompt is a small edit ("fix this typo", "add a comment") that feels like part of the same task -- stop after the change; do not commit unless told to.
+- **commit permission does not carry across prompts** if the user asks for some work and a commit, that authorisation is consumed by the commit made in that turn. once that commit lands, you no longer have permission to commit -- including for follow-up tweaks, fixups, or any further work in later prompts. wait for the user to explicitly say "commit" again. this applies even if the next prompt is a small edit ("fix this typo", "add a comment") that feels like part of the same task -- stop after the change; do not commit unless told to.
 
 ## commits and PRs
 
@@ -62,7 +62,7 @@ once detected, list targets before invoking -- a `lint` target may chain tools (
 
 ## makefile style
 
-iff a repo has no automation and i've explicitly asked to add some, prefer a `makefile` (lowercase filename -- both `make` and i prefer it; some of my older repos still use `Makefile`, leave those alone). style:
+iff a repo has no automation and the user has explicitly asked to add some, prefer a `makefile` (lowercase filename -- both `make` and the user prefer it; some of the user's older repos still use `Makefile`, leave those alone). style:
 
 - **`.SUFFIXES:` at the top** disables built-in implicit rules; everything in the makefile is then explicit.
 - **`help` is the default target** sits first, prints all public targets. self-documenting via a trailing `## description` on each public target rule, rendered with a `grep` + `awk` one-liner. internal targets (helpers, intermediate steps) omit the `## ` so they don't show up.
@@ -190,7 +190,7 @@ find the right commands in this order:
             - **drop articles after `re`** _re cache invalidation_ not _re the cache invalidation_; _re migration_ not _re the migration_. exception: when the article is part of a proper noun or specific reference that would be ambiguous w/out it.
             - not a verb -- only a preposition / topic marker. lowercase even at sentence start.
         - `smth` -- something
-    - **short forms i do _not_ use** avoid these even though they're common: `dupe` (write _duplicate_), `imho` (use `imo` instead).
+    - **short forms the user does _not_ use** avoid these even though they're common: `dupe` (write _duplicate_), `imho` (use `imo` instead).
     - **inline symbols ok** `~` for _approx._ (e.g. `~15 lines`); `+` for _also_ / _in addition_ (e.g. `touches 4 lsh files + all definitions`); spaced `/` for _or_ between phrases (e.g. `once / if we have one`, `wire up / remove`) -- the spaces distinguish it from compound forms like `ci/cd`, `w/out`, `b/c` where `/` joins without alternation.
     - **punctuation in abbreviations** write `e.g.` and `i.e.` with the dots (not `eg` / `ie`); `n/a` stays as-is.
     - **no emoji in generated prose** PR bodies, comments, commit messages, drafts, etc. -- keep emoji-free regardless of the surrounding tone of the thread.
