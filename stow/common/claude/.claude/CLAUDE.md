@@ -87,6 +87,7 @@ find the right commands in this order:
 
 - **prefer `uv` / `uvx` for python** runs in an isolated venv, doesn't pollute the system or project env.
 - **tdd exception** if doing test-driven development, write the failing tests first. if asked to commit them before the implementation lands, use `test!:` (with the `!`) to mark the commit as intentionally not passing -- this signals the failing-tests-on-purpose case and distinguishes it from a normal `test:` commit.
+- **long-running tests / benchmarks** ff to run tests, benchmarks, or other checks expected to finish in a reasonable amount of time (~10min ceiling as a rough rule of thumb). for runs expected to take longer -- e.g. nn training, big sweeps, slow integration suites -- stop, hand the user the exact command(s) to run, and wait for them to come back. if the run naturally produces a giant log, redirect to a file and point at which file / which lines / which summary line to look at -- don't ask the user to paste the whole thing.
 
 ## environment boundaries
 
