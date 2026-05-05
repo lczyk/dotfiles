@@ -9,14 +9,32 @@
 
 ### structure
 
-- **`#!/usr/bin/env bash` with `-e` for bash, `#!/bin/sh -e` for dash** scripts fail on first error. libraries use a source-guard shebang instead (see defer.sh).
-- **single entry point for library/utility scripts** `function main() { ... }; main "$@"` at the bottom. keeps scope explicit, avoids top-level side effects.
+- **`#!/usr/bin/env bash` with `-e` for bash, `#!/bin/sh -e` for dash** scripts fail on first error. libraries use a source-guard shebang instead (see defer.sh). skip `-e` when error handling is manual via a `_fail`-style helper that calls `exit` directly.
+- **3-layer layout for utility scripts** top-level configuration, then top-level private helpers, then `main`:
+    ```bash
+    #!/usr/bin/env bash
+
+    # top-level configuration (ALL_CAPS, set once before main)
+    LABEL="warning"
+    FAIL=0
+
+    # top-level private helpers (_prefix)
+    function _fail() { printf '%s: %s\n' "$LABEL" "$1" >&2; shift; ...; exit $FAIL; }
+
+    # main entry point
+    function main() { local msg="$1"; ...; exit 0; }
+
+    main "$@"
+    ```
+    three layers: config vars set once → `_`-prefixed helpers at module scope → `main` entry point → `main "$@"` at the bottom. helpers go at top level, not nested inside `main` -- they are not redefined on every call.
+- **consistent indentation throughout** pick 4 spaces and stick with it. no mixing 2-space and 4-space within a file.
+- **never nest function definitions** define all functions at module scope (top level). nesting a function inside another redefines it on every outer call and makes the inner function's scope unclear. private helpers with `_` prefix go at the top level, not inside `main`.
 - **flat scripts are idiomatic for tests and simple tasks** not everything needs `main` and functions. test scripts that execute top-to-bottom are fine. the structure rules above are for reusable library/utility scripts, not one-shot test files.
 
 ### naming
 
-- **`_` prefix for private functions and variables** `_defer_extract()`, `_PATTERNS_TO_RETRY`. signals "internal; don't call from outside this module".
-- **`ALL_CAPS` for top-level constants** `_ALL_CAPS` when private. `PATTERNS_TO_RETRY`, `_PATTERNS_TO_RETRY`.
+- **`_` prefix for private functions and variables** `_defer_extract()`, `_fail()`, `_TO_INSTALL`. signals "internal; don't call from outside this module".
+- **`ALL_CAPS` for top-level constants and configuration** `_ALL_CAPS` when private. configuration vars set once before `main()` also use `ALL_CAPS` (e.g. `LABEL`, `FAIL`) — they are effectively read-only once `main` starts.
 
 ### expressions
 
