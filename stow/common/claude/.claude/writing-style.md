@@ -1,4 +1,4 @@
-## writing style (non-user-facing prose: comments, commit messages, PR bodies)
+## writing style (all non-user-facing prose: comments, commit messages, PR titles/bodies, design notes, style/instruction files)
 
 - **lowercase by default** start sentences lowercase. write `i` not `I`. _don't_ capitalise generic words just because they start a sentence.
 - **only capitalise uncommon acronyms** common ones stay lowercase: `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`, `id` (identifier). product names too: `github`, `claude`, `gemini`, `sqlite`, `go`. capitalise when the acronym is genuinely obscure or its capitalisation carries meaning, e.g. `LR(1)` parser, `CASB` (cloud access security broker). exception: `PR` is always capitalised (personal habit, overrides the lowercase-common rule).
@@ -170,4 +170,4 @@ prose that screams "an llm wrote this" has recurring shapes. avoid them:
 
 ---
 
-apply these to: code comments, commit messages, PR titles/bodies, design notes. **do not** apply to user-facing UI text or end-user-facing docs unless the user says so. for docs, judge the style from existing docs in the project -- don't use casual style in docs that aren't already casual. when creating new docs, match the style of other docs in the project. iff the project has no other docs, default to casual style.
+scope: all non-user-facing prose -- code comments, commit messages, PR titles/bodies, design notes, style/instruction files (including `.md` files in `.claude/`). **do not** apply to user-facing UI text or end-user-facing docs unless the user says so. for docs, judge the style from existing docs in the project -- don't use casual style in docs that aren't already casual. when creating new docs, match the style of other docs in the project. iff the project has no other docs, default to casual style.
