@@ -1,0 +1,7 @@
+#!/bin/bash
+# commits must not be co-authored by AI agents.
+# if this fires: remove the Co-Authored-By: line and recommit.
+if grep -qi "Co-Authored-By:" "$1"; then
+  echo "rejected: commits must not be co-authored by agents" >&2
+  exit 1
+fi

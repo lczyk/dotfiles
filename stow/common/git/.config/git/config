@@ -5,6 +5,9 @@ email = marcin.konow@lczyk.xyz
 [include]
 path = ~/.config/git/config.local
 
+[core]
+hooksPath = ~/.config/git/hooks
+
 [init]
 defaultBranch = main
 
