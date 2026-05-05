@@ -178,8 +178,8 @@ prose that screams "an llm wrote this" has recurring shapes. avoid them:
 
 read when relevant:
 
-- `./.claude/makefile-style.md` -- when writing Makefiles
-- `./.claude/shellscript-style.md` -- when writing shell scripts
+- `./.claude/styles/makefile-style.md` -- when writing Makefiles
+- `./.claude/styles/shellscript-style.md` -- when writing shell scripts
 
 ---
 
