@@ -1,23 +1,27 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # warn on non-ASCII characters in staged changes.
 
-diff=$(git diff --cached)
+function main() {
+    local diff
+    diff=$(git diff --cached)
 
-if [ -z "$diff" ]; then
-  exit 0
-fi
+    if [ -z "$diff" ]; then
+      return 0
+    fi
 
-if command -v rg >/dev/null 2>&1; then
-  hits=$(echo "$diff" | rg -n '^\+[^+].*[^\x00-\x7F]' --color=never)
-elif command -v grep >/dev/null 2>&1; then
-  hits=$(echo "$diff" | grep -nP '^\+[^+].*[^\x00-\x7F]')
-else
-  hits=$(echo "$diff" | awk '/^\+[^+]/ && /[^\x00-\x7F]/ { print NR": "$0 }')
-fi
+    local hits
+    if command -v rg >/dev/null 2>&1; then
+      hits=$(printf '%s\n' "$diff" | rg -n '^\+[^+].*[^\x00-\x7F]' --color=never)
+    elif command -v grep >/dev/null 2>&1; then
+      hits=$(printf '%s\n' "$diff" | grep -nP '^\+[^+].*[^\x00-\x7F]')
+    else
+      hits=$(printf '%s\n' "$diff" | awk '/^\+[^+]/ && /[^\x00-\x7F]/ { print NR": "$0 }')
+    fi
 
-if [ -n "$hits" ]; then
-  echo "warning: non-ASCII in staged changes:" >&2
-  echo "$hits" >&2
-fi
+    if [ -n "$hits" ]; then
+      printf 'warning: non-ASCII in staged changes:\n' >&2
+      printf '%s\n' "$hits" >&2
+    fi
+}
 
-exit 0
+main
