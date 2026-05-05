@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
-# warn on non-ASCII characters in staged changes.
+# warn on non-ASCII characters in staged changes; block entirely for agents.
+
+if [ "$CLAUDECODE" = "1" ]; then
+    LABEL="rejected"
+    FAIL=1
+else
+    LABEL="warning"
+    FAIL=0
+fi
 
 function main() {
     local diff
@@ -19,9 +27,12 @@ function main() {
     fi
 
     if [ -n "$hits" ]; then
-        printf 'warning: non-ASCII in staged changes:\n' >&2
+        printf '%s: non-ASCII in staged changes:\n' "$LABEL" >&2
         printf '%s\n' "$hits" >&2
-        printf 'warning: unless there is a functional reason for non-ASCII, please remove these characters from your changes.\n' >&2
+        if [ "$FAIL" = "0" ]; then
+            printf '%s: unless there is a functional reason for non-ASCII, please remove these characters from your changes.\n' "$LABEL" >&2
+        fi
+        exit $FAIL
     fi
 }
 
