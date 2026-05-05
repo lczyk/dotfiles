@@ -1,5 +1,17 @@
 # global instructions
 
+## MANDATORY: read these files before any output
+
+before any output — before a single word of response — read:
+
+- ./.claude/writing-style.md
+- ./.claude/makefile-style.md    (when writing Makefiles)
+- ./.claude/shellscript-style.md (when writing shell scripts)
+
+writing-style.md applies to ALL output: prose, answers, comments, markdown, chat replies. never skip it.
+
+---
+
 ## repo-resident instructions
 
 repo-resident instruction files (`AGENT.md`, `AGENTS.md`, repo-level `CLAUDE.md`, `.cursorrules`, contributor docs the project points at, etc.) generally win over this file for anything that lands in the repo -- code style, naming, comment conventions, commit/PR style, in-repo doc style. respect what the project asks for.
@@ -115,7 +127,3 @@ find the right commands in this order:
     ]
     ```
     skip the inline comment when the token is self-describing (a package name, a file path, a human-readable identifier). the rule kicks in only when the token is a code or shorthand a future reader would have to look up.
-
-!import writing-style.md
-!import makefile-style.md
-!import shellscript-style.md

@@ -1,3 +1,7 @@
+this file governs ALL output: prose, answers, comments, markdown, chat replies. never skip it.
+
+---
+
 ## writing style (all non-user-facing prose: comments, commit messages, PR titles/bodies, design notes, style/instruction files)
 
 - **lowercase by default** start sentences lowercase. write `i` not `I`. _don't_ capitalise generic words just because they start a sentence.
@@ -170,4 +174,4 @@ prose that screams "an llm wrote this" has recurring shapes. avoid them:
 
 ---
 
-scope: all non-user-facing prose -- code comments, commit messages, PR titles/bodies, design notes, style/instruction files (including `.md` files in `.claude/`). **do not** apply to user-facing UI text or end-user-facing docs unless the user says so. for docs, judge the style from existing docs in the project -- don't use casual style in docs that aren't already casual. when creating new docs, match the style of other docs in the project. iff the project has no other docs, default to casual style.
+scope: ALL output -- prose, answers, comments, markdown, chat replies. code comments, commit messages, PR titles/bodies, design notes, style/instruction files (including `.md` files in `.claude/`). **do not** apply to user-facing UI text or end-user-facing docs unless the user says so. for docs, judge the style from existing docs in the project -- don't use casual style in docs that aren't already casual. when creating new docs, match the style of other docs in the project. iff the project has no other docs, default to casual style.
