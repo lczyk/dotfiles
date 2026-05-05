@@ -26,7 +26,7 @@
 
     main "$@"
     ```
-    three layers: config vars set once → `_`-prefixed helpers at module scope → `main` entry point → `main "$@"` at the bottom. helpers go at top level, not nested inside `main` -- they are not redefined on every call.
+    three layers: config vars set once -> `_`-prefixed helpers at module scope -> `main` entry point -> `main "$@"` at the bottom. helpers go at top level, not nested inside `main` -- they are not redefined on every call.
 - **consistent indentation throughout** pick 4 spaces and stick with it. no mixing 2-space and 4-space within a file.
 - **never nest function definitions** define all functions at module scope (top level). nesting a function inside another redefines it on every outer call and makes the inner function's scope unclear. private helpers with `_` prefix go at the top level, not inside `main`.
 - **flat scripts are idiomatic for tests and simple tasks** not everything needs `main` and functions. test scripts that execute top-to-bottom are fine. the structure rules above are for reusable library/utility scripts, not one-shot test files.
@@ -34,12 +34,12 @@
 ### naming
 
 - **`_` prefix for private functions and variables** `_defer_extract()`, `_fail()`, `_TO_INSTALL`. signals "internal; don't call from outside this module".
-- **`ALL_CAPS` for top-level constants and configuration** `_ALL_CAPS` when private. configuration vars set once before `main()` also use `ALL_CAPS` (e.g. `LABEL`, `FAIL`) — they are effectively read-only once `main` starts.
+- **`ALL_CAPS` for top-level constants and configuration** `_ALL_CAPS` when private. configuration vars set once before `main()` also use `ALL_CAPS` (e.g. `LABEL`, `FAIL`) -- they are effectively read-only once `main` starts.
 
 ### expressions
 
 - **`local` for all function-local variables** `local defer_cmd="$1"`; `local rootfs="$(mktemp -d)"`. no global leak. `local` suppresses word splitting on the RHS so `local x=$(cmd)` needs no outer quotes.
-- **quote all expansions** `"${defer_name}"`, `"$@"`, `"${_PATTERNS_TO_RETRY[@]}"`. no bare `$var`. exception: intentional word splitting with shellcheck annotation (`#shellcheck disable=SC2086`).
+- **quote all expansions** `"${defer_name}"`, `"$@"`, `"${_TO_INSTALL[@]}"`. no bare `$var`. exception: intentional word splitting with shellcheck annotation (`#shellcheck disable=SC2086`).
 - **prefer parameter expansion over external tools** `${defer_cmd%%;}`, `${existing_cmd#'status=$?; '}`, `${test_name:-default}`. avoid `awk`/`sed`/`cut` for string ops the shell can do natively.
 - **prefer shell builtins over external tools** only reach for external tools when the shell has no equivalent (`mktemp`, `grep`, `find`). in bash scripts, C-style `for ((i=1; i<=n; i++))` not `seq`.
 - **C-style for loops for numeric iteration in bash** `for ((i=0; i<n; i++))`. bash-only, so only in `#!/bin/bash` scripts. cleaner and faster than `seq` or `i=0; while [ $i -lt $n ]; do ... i=$((i+1)); done`.
@@ -54,4 +54,4 @@
 
 ### other
 
-- **list multiple choices in `(...)`** for case patterns, test conditions, array values. groups alternatives visually: `case "$1" in (add|remove|list) ...`, `[ "$mode" = (a|b) ]` (dash-compatible form), `_PATTERNS_TO_RETRY=(...)`.
+- **list multiple choices in `(...)`** for case patterns, test conditions, array values. groups alternatives visually: `case "$1" in (add|remove|list) ...`, `[ "$mode" = (a|b) ]` (dash-compatible form), `_TO_INSTALL=(...)`.
