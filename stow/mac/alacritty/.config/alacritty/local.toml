@@ -55,3 +55,13 @@ key = "C"
 mods = "Command"
 mode = "~Alt"
 action = "Copy"
+
+# shift+left-click default in alacritty is PasteSelection (paste PRIMARY).
+# scope the default to the normal screen only -- in alt screen (TUI apps
+# like `edit`) the event must pass through so apps can extend-selection-to-
+# click. mode `~Alt` matches "not alt screen".
+[[mouse.bindings]]
+mouse = "Left"
+mods = "Shift"
+mode = "~Alt"
+action = "PasteSelection"
