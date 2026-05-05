@@ -1,7 +1,44 @@
 #!/bin/bash
-# commits must not be co-authored by AI agents.
-# if this fires: remove the Co-Authored-By: line and recommit.
-if grep -qi "Co-Authored-By:" "$1"; then
-  echo "rejected: commits must not be co-authored by agents" >&2
-  exit 1
+msg="$1"
+subject=$(head -n1 "$msg")
+
+if [ "$CLAUDECODE" = "1" ]; then
+  label="rejected"
+  fail=1
+else
+  label="warning"
+  fail=0
 fi
+
+fail() {
+  printf '%s: %s\n' "$label" "$1" >&2
+  shift
+  for line in "$@"; do
+    printf '  %s\n' "$line" >&2
+  done
+  exit $fail
+}
+
+# -- co-author ban --------------------------------------------------
+if grep -qi "Co-Authored-By:" "$msg"; then
+  fail "commits must not be co-authored by agents"
+fi
+
+# -- conventional commits prefix ------------------------------------
+if ! echo "$subject" | grep -qE '^(feat|fix|docs|test|refactor|chore|bench|revert|ci)(!|\?)?: '; then
+  fail "subject must use Conventional Commits" \
+       "  valid: feat:, fix:, docs:, test:, refactor:, chore:, bench:, revert:, ci:" \
+       "  suffix markers: !: (intentional breakage)  ?: (unverified)"
+fi
+
+# -- no ?! (outraged question) --------------------------------------
+if grep -Fq '?!' "$msg"; then
+  fail "avoid ?! in technical prose -- rephrase"
+fi
+
+# -- ASCII only -- full message -------------------------------------
+if ! iconv -f ASCII -t ASCII "$msg" >/dev/null 2>&1; then
+  fail "commit message must be ASCII only (no emoji, em-dash, smart quotes, ellipsis, arrows, etc.)"
+fi
+
+exit 0
