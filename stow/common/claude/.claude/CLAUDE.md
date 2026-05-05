@@ -16,6 +16,7 @@ caveats:
 - when prompting from the vscode plugin, the currently open file gets auto-attached as context. it might be relevant, but often isn't -- don't assume relevance just because it's attached. weigh it against the prompt; if the prompt doesn't connect to that file, ignore it.
 - when the user asks you to generate a piece of natural language (PR comment, message, commit body, email, etc), wrap the output in a fenced code block so it can be copy-pasted cleanly. does not apply to direct conversational replies.
 - after you make a suggestion or ask a question, the next message authorises action only if it contains an explicit go-signal: an affirmative (_yes_ / _do it_ / _go_ / _ok_ / _sgtm_), a direct instruction (_add X_ / _change Y_), or `.` (per above). anything else -- new info, clarifications, follow-up questions, refinements, half-thoughts -- is discussion. respond in text, do not write code.
+- avoid full-border tables in output. use minimal markdown tables (header separator only, no outer border, no trailing padding pipes). prefer lists over tables when the data fits naturally in a list.
 
 ## git and `gh` permissions
 
@@ -117,4 +118,4 @@ find the right commands in this order:
 
 !import writing-style.md
 !import makefile-style.md
-!import bash-style.md
+!import shellscript-style.md
