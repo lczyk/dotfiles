@@ -39,10 +39,10 @@ install: build  ## Symlink built rust binaries into ~/.local/bin
 .PHONY: stow
 stow:  ## Stow common + $(PROFILE) packages into $$HOME
 	@for d in $(COMMON_DIRS); do \
-		stow --no-folding --dir=$(STOW_COMMON) --target=$(STOW_TARGET) "$$d" && echo "Stowed common/$$d" || echo "Failed common/$$d"; \
+		stow --restow --no-folding --dir=$(STOW_COMMON) --target=$(STOW_TARGET) "$$d" && echo "Stowed common/$$d" || echo "Failed common/$$d"; \
 	done
 	@for d in $(PROFILE_DIRS); do \
-		stow --dir=$(STOW_PROFILE) --target=$(STOW_TARGET) "$$d" && echo "Stowed $(PROFILE)/$$d" || echo "Failed $(PROFILE)/$$d"; \
+		stow --restow --dir=$(STOW_PROFILE) --target=$(STOW_TARGET) "$$d" && echo "Stowed $(PROFILE)/$$d" || echo "Failed $(PROFILE)/$$d"; \
 	done
 
 .PHONY: restow
