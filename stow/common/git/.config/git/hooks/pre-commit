@@ -31,6 +31,8 @@ function check_non_ascii() {
         printf '%s\n' "$hits" >&2
         if [ "$FAIL" = "0" ]; then
             printf '%s: unless there is a functional reason for non-ASCII, please remove these characters from your changes.\n' "$LABEL" >&2
+        else
+            printf '%s: if you believe this commit should actually happen and there is a good reason for it (e.g. the file genuinely requires non-ASCII content -- test fixtures, locale data, i18n strings), explicitly ask the user for permission to use the --no-verify flag.\n' "$LABEL" >&2
         fi
         return "$FAIL"
     fi
@@ -56,6 +58,7 @@ function check_nocommit() {
         printf 'rejected: nocommit marker in staged changes:\n' >&2
         printf '%s\n' "$hits" >&2
         printf 'rejected: remove or unstage nocommit-tagged lines before committing.\n' >&2
+        printf 'rejected: if you believe this commit should actually happen and there is a good reason for it (e.g. the file documents or tests the nocommit marker itself, like this hook and its tests), explicitly ask the user for permission to use the --no-verify flag.\n' >&2
         return 1
     fi
 }
