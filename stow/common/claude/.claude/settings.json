@@ -26,5 +26,8 @@
   "effortLevel": "medium",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "enabledPlugins": {
+    "caveman@caveman": true
+  }
 }
