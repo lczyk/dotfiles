@@ -10,21 +10,25 @@ setup() {
     git config core.hooksPath /dev/null
     git config user.email "t@t"
     git config user.name "t"
+    # seed an initial commit so the index is well-defined
+    : > .gitkeep
+    git add .gitkeep
+    git commit -q -m init
 }
 
 strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
 
-@test "prints branch from cwd in payload" {
+@test "prints pwd/branch from cwd in payload" {
     run bash -c "echo '{\"cwd\":\"$REPO\"}' | '$BADGE'"
     [ "$status" -eq 0 ]
     out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[mybranch]" ]
+    [ "$out" = "[repo/mybranch]" ]
 }
 
 @test "falls back to PWD when cwd absent" {
     run bash -c "cd '$REPO' && echo '{}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[mybranch]" ]
+    [ "$out" = "[repo/mybranch]" ]
 }
 
 @test "silent when not in a git repo" {
@@ -37,7 +41,7 @@ strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
     git -C "$REPO" checkout -q -b "weird\$name"
     run bash -c "echo '{\"cwd\":\"$REPO\"}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[weirdname]" ]
+    [ "$out" = "[repo/weirdname]" ]
 }
 
 @test "caps branch length at 40 chars" {
@@ -45,6 +49,54 @@ strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
     git -C "$REPO" checkout -q -b "$long"
     run bash -c "echo '{\"cwd\":\"$REPO\"}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
-    inside=${out#[}; inside=${inside%]}
+    # extract branch portion after "repo/"
+    inside=${out#[repo/}; inside=${inside%]}
     [ "${#inside}" -eq 40 ]
+}
+
+@test "no dirty marker when worktree clean" {
+    run bash -c "echo '{\"cwd\":\"$REPO\"}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[repo/mybranch]" ]
+}
+
+@test "shows (N) for unstaged modifications" {
+    echo change > "$REPO/.gitkeep"
+    echo new > "$REPO/newfile"
+    run bash -c "echo '{\"cwd\":\"$REPO\"}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[repo/mybranch(2)]" ]
+}
+
+@test "shows (N) for staged changes" {
+    echo a > "$REPO/a"
+    echo b > "$REPO/b"
+    git -C "$REPO" add a b
+    run bash -c "echo '{\"cwd\":\"$REPO\"}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[repo/mybranch(2)]" ]
+}
+
+@test "counts staged and unstaged together" {
+    echo a > "$REPO/a"
+    git -C "$REPO" add a
+    echo change > "$REPO/.gitkeep"
+    run bash -c "echo '{\"cwd\":\"$REPO\"}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[repo/mybranch(2)]" ]
+}
+
+@test "counts deleted files" {
+    rm "$REPO/.gitkeep"
+    run bash -c "echo '{\"cwd\":\"$REPO\"}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[repo/mybranch(1)]" ]
+}
+
+@test "uses basename of cwd as pwd label" {
+    nested="$REPO/sub"
+    mkdir -p "$nested"
+    run bash -c "echo '{\"cwd\":\"$nested\"}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[sub/mybranch]" ]
 }
