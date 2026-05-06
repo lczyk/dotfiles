@@ -28,9 +28,10 @@ function main() {
     fi
 
     # -- conventional commits prefix ------------------------------------
-    if ! echo "$subject" | grep -qE '^(feat|fix|docs|test|refactor|chore|bench|revert|ci)(!|\?)?: '; then
+    if ! echo "$subject" | grep -qE '^(feat|fix|docs|test|refactor|chore|bench|revert|ci)(\([a-z0-9._-]+\))?(!|\?)?: '; then
       _fail "subject must use Conventional Commits" \
            "  valid: feat:, fix:, docs:, test:, refactor:, chore:, bench:, revert:, ci:" \
+           "  optional scope: feat(scope):, fix(api):, docs(claude):" \
            "  suffix markers: !: (intentional breakage)  ?: (unverified)"
     fi
 
