@@ -71,7 +71,7 @@ list-stow:  ## List dotfile packages discovered for stow
 	@for d in $(PROFILE_DIRS); do echo "  $$d"; done
 
 .PHONY: test
-test: test-cargo test-hooks test-py  ## Run all tests (rust + bats hooks + pytest)
+test: test-cargo test-hooks test-statusline test-py  ## Run all tests (rust + bats + pytest)
 
 .PHONY: test-cargo
 test-cargo: $(addprefix test-cargo-,$(CARGO_BINS))  ## cargo test all rust binaries
@@ -83,6 +83,10 @@ test-cargo-%:
 .PHONY: test-hooks
 test-hooks:  ## Run bats tests for shell hooks
 	bats tests/hooks/
+
+.PHONY: test-statusline
+test-statusline:  ## Run bats tests for claude statusline
+	bats tests/statusline/
 
 .PHONY: test-py
 test-py:  ## Run pytest for python scripts
