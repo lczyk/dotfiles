@@ -142,7 +142,7 @@ bindsym $brightness_down exec light -U 10
 # Basics:
 #
     # Start a terminal
-    bindsym $mod+Return exec $term
+    bindsym $mod+Return exec $scripts/spawn-term.py
 
     # Kill focused window
     bindsym $mod+q kill
