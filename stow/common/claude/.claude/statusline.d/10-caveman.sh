@@ -17,12 +17,19 @@ shopt -u nullglob
 
 [ "${#candidates[@]}" -eq 0 ] && exit 0
 
+# NOTE: gnu stat (linux) uses -c '%Y'; bsd stat (mac/*bsd) uses -f '%m'. can't
+# chain them with || -- gnu stat accepts -f too (filesystem status), so a
+# bsd-first try succeeds with non-numeric garbage on linux. detect by uname.
+case "$(uname -s)" in
+    Darwin|*BSD) stat_mtime() { stat -f '%m' "$1"; } ;;
+    *)           stat_mtime() { stat -c '%Y' "$1"; } ;;
+esac
+
 latest=""
 latest_mtime=0
 for path in "${candidates[@]}"; do
     [ -f "$path" ] || continue
-    # NOTE: stat -f on bsd/mac, stat -c on gnu. try bsd form first, fall back.
-    mtime=$(stat -f '%m' "$path" 2>/dev/null || stat -c '%Y' "$path" 2>/dev/null)
+    mtime=$(stat_mtime "$path" 2>/dev/null)
     [ -z "$mtime" ] && continue
     if [ "$mtime" -gt "$latest_mtime" ]; then
         latest_mtime=$mtime
