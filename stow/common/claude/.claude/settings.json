@@ -3,6 +3,10 @@
     "type": "command",
     "command": "bash \"$HOME/.claude/statusline.sh\""
   },
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true
+  },
   "extraKnownMarketplaces": {
     "caveman": {
       "source": {
@@ -26,8 +30,5 @@
   "effortLevel": "medium",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
-  "voiceEnabled": true,
-  "enabledPlugins": {
-    "caveman@caveman": true
-  }
+  "voiceEnabled": false
 }
