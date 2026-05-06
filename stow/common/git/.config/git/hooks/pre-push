@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# block agents from pushing entirely. humans pass through unaffected.
+
+if [ "$CLAUDECODE" = "1" ]; then
+    printf 'rejected: agents are not allowed to push. hand off to the user.\n' >&2
+    exit 1
+fi
+
+exit 0
