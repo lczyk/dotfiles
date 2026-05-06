@@ -21,30 +21,29 @@ def find_focused(node: dict) -> dict | None:
     return None
 
 
-def read_proc_table() -> dict[int, tuple[int, str]]:
+def walk_subtree(root: int) -> dict[int, tuple[int, str]]:
+    # walk only the descendants of `root` via /proc/<pid>/task/<pid>/children
+    # (avoids scanning every pid on the system).
     out: dict[int, tuple[int, str]] = {}
-    for entry in os.listdir("/proc"):
-        if not entry.isdigit():
-            continue
+    stack = [(root, 0)]
+    while stack:
+        pid, ppid = stack.pop()
         try:
-            with open(f"/proc/{entry}/stat", "rb") as f:
-                data = f.read().decode("utf-8", "replace")
+            with open(f"/proc/{pid}/comm", "rb") as f:
+                comm = f.read().decode("utf-8", "replace").rstrip("\n")
         except OSError:
             continue
-        # comm is field 2, wrapped in (), may contain spaces and parens.
-        # split on the last ')' to recover the rest of the fields.
-        rparen = data.rfind(")")
-        if rparen < 0:
+        out[pid] = (ppid, comm)
+        try:
+            with open(f"/proc/{pid}/task/{pid}/children", "rb") as f:
+                children = f.read().decode("ascii", "replace").split()
+        except OSError:
             continue
-        lparen = data.find("(")
-        if lparen < 0 or lparen > rparen:
-            continue
-        comm = data[lparen + 1:rparen]
-        rest = data[rparen + 2:].split()
-        if len(rest) < 2:
-            continue
-        ppid = int(rest[1])  # field 4 overall = rest[1] (state is rest[0])
-        out[int(entry)] = (ppid, comm)
+        for c in children:
+            try:
+                stack.append((int(c), pid))
+            except ValueError:
+                continue
     return out
 
 
@@ -82,7 +81,7 @@ def resolve_cwd() -> str | None:
     pid = focused.get("pid")
     if not isinstance(pid, int):
         return None
-    procs = read_proc_table()
+    procs = walk_subtree(pid)
     shell_pid = find_deepest_shell(procs, pid)
     if shell_pid is None:
         return None
