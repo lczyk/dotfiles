@@ -40,4 +40,8 @@ done
 [ -z "$latest" ] && exit 0
 [ -x "$latest" ] || [ -r "$latest" ] || exit 0
 
-exec bash "$latest"
+# upstream prints [CAVEMAN] / [CAVEMAN:<mode>] (+ optional savings suffix).
+# we only care whether caveman is active; collapse any non-empty output to [C].
+out=$(bash "$latest")
+[ -z "$out" ] && exit 0
+printf '\033[38;5;172m[C]\033[0m'

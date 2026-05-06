@@ -35,17 +35,35 @@ EOF
     [ -z "$output" ]
 }
 
-@test "execs single installed caveman" {
+strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
+
+@test "renders [C] when caveman is active" {
     plant "abc123" "CAVEMAN-OUT" 100
     run bash -c "echo '{}' | '$BADGE'"
     [ "$status" -eq 0 ]
-    [ "$output" = "CAVEMAN-OUT" ]
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[C]" ]
+}
+
+@test "silent when newest script outputs nothing" {
+    plant "abc123" "" 100
+    run bash -c "echo '{}' | '$BADGE'"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
 }
 
 @test "picks newest by mtime when multiple installed" {
-    plant "old" "OLD" 1000
-    plant "new" "NEW" 10
-    plant "mid" "MID" 500
+    plant "old" "" 1000
+    plant "new" "ACTIVE" 10
+    plant "mid" "" 500
     run bash -c "echo '{}' | '$BADGE'"
-    [ "$output" = "NEW" ]
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[C]" ]
+}
+
+@test "newest empty wins -> silent" {
+    plant "old" "ACTIVE" 1000
+    plant "new" "" 10
+    run bash -c "echo '{}' | '$BADGE'"
+    [ -z "$output" ]
 }
