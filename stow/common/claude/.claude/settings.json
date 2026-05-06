@@ -1,5 +1,18 @@
 {
-  "model": "opus",
+  "model": "haiku",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/block-dangerous.sh\""
+          }
+        ]
+      }
+    ]
+  },
   "statusLine": {
     "type": "command",
     "command": "bash \"$HOME/.claude/statusline.sh\""
@@ -27,19 +40,6 @@
         "repo": "humanplane/homunculus"
       }
     }
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/block-dangerous.sh\""
-          }
-        ]
-      }
-    ]
   },
   "effortLevel": "medium",
   "skipDangerousModePermissionPrompt": true,
