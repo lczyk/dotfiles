@@ -5,14 +5,19 @@
 # add aliases below to render shorter labels for known display names. anything
 # not in the map falls back to the raw display name, capped at 20 chars.
 
-declare -A MODEL_ALIASES=(
-    ["Opus 4.7"]="O47"
-    ["Opus 4.7 (1M context)"]="O47-1M"
-    ["Opus 4.6"]="O46"
-    ["Sonnet 4.6"]="S46"
-    ["Sonnet 4.6 (1M context)"]="S46-1M"
-    ["Haiku 4.5"]="H45"
-)
+# NOTE: case-statement instead of `declare -A` -- macos ships bash 3.2 which
+# doesn't have associative arrays, and the script needs to work under it.
+alias_for() {
+    case "$1" in
+        "Opus 4.7")                echo "O47" ;;
+        "Opus 4.7 (1M context)")   echo "O47-1M" ;;
+        "Opus 4.6")                echo "O46" ;;
+        "Sonnet 4.6")              echo "S46" ;;
+        "Sonnet 4.6 (1M context)") echo "S46-1M" ;;
+        "Haiku 4.5")               echo "H45" ;;
+        *)                         echo "$1" ;;
+    esac
+}
 
 INPUT=$(cat)
 [ -z "$INPUT" ] && exit 0
@@ -27,11 +32,7 @@ fi
 
 [ -z "$name" ] && exit 0
 
-if [ -n "${MODEL_ALIASES[$name]+x}" ]; then
-    label=${MODEL_ALIASES[$name]}
-else
-    label=$name
-fi
+label=$(alias_for "$name")
 
 # whitelist + length cap. blocks ansi-escape injection if a future claude build
 # ever surfaces user-controlled strings in the model field.
