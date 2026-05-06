@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 # model-name badge. prints [<model-display-name>] from the json payload claude
 # code pipes on stdin. silent when stdin is empty or the field is missing.
+#
+# add aliases below to render shorter labels for known display names. anything
+# not in the map falls back to the raw display name, capped at 20 chars.
+
+declare -A MODEL_ALIASES=(
+    ["Opus 4.7"]="O47"
+    ["Opus 4.7 (1M context)"]="O47-1M"
+    ["Opus 4.6"]="O46"
+    ["Sonnet 4.6"]="S46"
+    ["Sonnet 4.6 (1M context)"]="S46-1M"
+    ["Haiku 4.5"]="H45"
+)
 
 INPUT=$(cat)
 [ -z "$INPUT" ] && exit 0
@@ -13,9 +25,17 @@ else
         | sed -n 's/.*"model"[^{]*{[^}]*"display_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 fi
 
-# whitelist + length cap. blocks ansi-escape injection if a future claude build
-# ever surfaces user-controlled strings in the model field.
-name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9 ._-' | head -c 32)
 [ -z "$name" ] && exit 0
 
-printf '\033[38;5;39m[%s]\033[0m' "$name"
+if [ -n "${MODEL_ALIASES[$name]+x}" ]; then
+    label=${MODEL_ALIASES[$name]}
+else
+    label=$name
+fi
+
+# whitelist + length cap. blocks ansi-escape injection if a future claude build
+# ever surfaces user-controlled strings in the model field.
+label=$(printf '%s' "$label" | tr -cd 'A-Za-z0-9 ._-' | head -c 20)
+[ -z "$label" ] && exit 0
+
+printf '\033[38;5;39m[%s]\033[0m' "$label"

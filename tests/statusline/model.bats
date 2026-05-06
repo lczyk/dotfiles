@@ -10,11 +10,23 @@ strip_ansi() {
     sed 's/\x1b\[[0-9;]*m//g'
 }
 
-@test "prints display_name from json" {
+@test "maps known display_name to alias" {
     run bash -c "echo '{\"model\":{\"display_name\":\"Opus 4.7\"}}' | '$BADGE'"
     [ "$status" -eq 0 ]
     out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[Opus 4.7]" ]
+    [ "$out" = "[O47]" ]
+}
+
+@test "maps display_name with parens to alias" {
+    run bash -c "echo '{\"model\":{\"display_name\":\"Opus 4.7 (1M context)\"}}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[O47-1M]" ]
+}
+
+@test "passes through unknown display_name unchanged when short" {
+    run bash -c "echo '{\"model\":{\"display_name\":\"Mystery 9.9\"}}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[Mystery 9.9]" ]
 }
 
 @test "falls back to model.id when no display_name" {
@@ -41,12 +53,12 @@ strip_ansi() {
     [ "$out" = "[weirdname]" ]
 }
 
-@test "caps name length at 32 chars" {
+@test "caps unknown name length at 20 chars" {
     long=$(printf 'A%.0s' {1..50})
     run bash -c "echo '{\"model\":{\"display_name\":\"$long\"}}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
     inside=${out#[}; inside=${inside%]}
-    [ "${#inside}" -eq 32 ]
+    [ "${#inside}" -eq 20 ]
 }
 
 @test "blocks ansi-escape injection in name" {
