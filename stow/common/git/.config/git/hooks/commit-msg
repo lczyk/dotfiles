@@ -17,6 +17,8 @@ function _fail() {
     exit $FAIL
 }
 
+HEADERS=(feat fix docs test refactor chore bench revert ci perf)
+
 function main() {
     local msg="$1"
     local subject
@@ -28,9 +30,12 @@ function main() {
     fi
 
     # -- conventional commits prefix ------------------------------------
-    if ! echo "$subject" | grep -qE '^(feat|fix|docs|test|refactor|chore|bench|revert|ci|perf)(\([a-z0-9._-]+\))?(!|\?)?: '; then
+    local types_alt types_list
+    types_alt=$(IFS='|'; echo "${HEADERS[*]}")
+    types_list=$(IFS=,; echo "${HEADERS[*]}" | sed 's/,/:, /g')":"
+    if ! echo "$subject" | grep -qE "^(${types_alt})(\([a-z0-9._-]+\))?(!|\?)?: "; then
       _fail "subject must use Conventional Commits" \
-           "  valid: feat:, fix:, docs:, test:, refactor:, chore:, bench:, revert:, ci:, perf:" \
+           "  valid: ${types_list}" \
            "  optional scope: feat(scope):, fix(api):, docs(claude):" \
            "  suffix markers: !: (intentional breakage)  ?: (unverified)"
     fi
