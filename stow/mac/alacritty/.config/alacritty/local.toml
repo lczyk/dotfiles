@@ -32,6 +32,14 @@ key = "Return"
 mods = "Shift"
 chars = "\u001B\r"
 
+# option_as_alt = "Both" eats option+3, which is how macos types `#`.
+# rebind it back explicitly. add more glyphs here if other option-composed
+# chars start going missing.
+[[keyboard.bindings]]
+key = "Key3"
+mods = "Alt"
+chars = "#"
+
 # cmd+f -> send ctrl+f (0x06) to running program instead of alacritty's
 # built-in SearchForward. lets `edit` receive its find chord on macos.
 [[keyboard.bindings]]
