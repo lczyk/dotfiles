@@ -80,3 +80,42 @@ EOF
     run "$HOOK"
     [ "$status" -eq 0 ]
 }
+
+# -- nocommit checks (always block, regardless of CLAUDECODE) --
+
+@test "rejects lowercase nocommit in added line" {
+    fake_diff $'+print("debug") // nocommit\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects uppercase NOCOMMIT in added line" {
+    fake_diff $'+NOCOMMIT: temporary debug dump\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects mixed-case NoCommit in added line" {
+    fake_diff $'+// NoCommit remove this\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "ignores nocommit on context lines" {
+    fake_diff $' old line // nocommit\n+new clean line\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+@test "ignores nocommit on removed lines" {
+    fake_diff $'-removed line // nocommit\n+new clean line\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+@test "rejects nocommit even in non-claude mode" {
+    unset CLAUDECODE
+    fake_diff $'+debug print // nocommit\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}

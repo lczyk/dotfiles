@@ -155,6 +155,7 @@ scope: ALL output -- prose, answers, comments, markdown, chat replies. code comm
     - `NOTE:` -- a subtle invariant, hidden constraint, or surprising behaviour a future reader should know about.
     - `TODO:` -- deferred work; ideally followed by enough context to act on later.
     - `COVER:` -- explains why a test exists when it would otherwise look oddly specific or arbitrary. used when the test is driven by coverage -- exercising a particular branch / edge case -- rather than by an obvious behavioural spec. helps future readers understand why the test is shaped the way it is, and why it shouldn't be deleted as redundant.
+    - `NOCOMMIT:` -- marks code that must not be committed: scratch files, temporary debug prints, WIP scaffolding, etc. a pre-commit hook rejects any staged change containing `nocommit` (case-insensitive) in added lines. use the short inline form (`// nocommit` or `# nocommit`) for quick guards on single lines; use the full tag (`NOCOMMIT: <reason>`) when there's a non-obvious explanation worth leaving for your future self.
     - other accepted tags: `FIXME:`, `HACK:`. use sparingly -- only when the tag genuinely adds scanning value over a plain comment.
 
 ---
