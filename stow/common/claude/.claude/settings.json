@@ -28,6 +28,19 @@
       }
     }
   },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/block-dangerous.sh\""
+          }
+        ]
+      }
+    ]
+  },
   "effortLevel": "medium",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
