@@ -17,7 +17,7 @@ function _fail() {
     exit $FAIL
 }
 
-HEADERS=(feat fix docs test refactor chore bench revert ci perf)
+HEADERS=(feat fix docs test refactor chore bench revert ci perf release)
 
 function main() {
     local msg="$1"

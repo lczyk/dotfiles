@@ -53,6 +53,12 @@ write_msg() { printf '%s\n' "$1" > "$MSG"; }
     [ "$status" -eq 0 ]
 }
 
+@test "accepts release:" {
+    write_msg "release: v1.2.3"
+    run "$HOOK" "$MSG"
+    [ "$status" -eq 0 ]
+}
+
 # -- conventional commits prefix: rejected forms ------------------------
 
 @test "rejects unknown type" {
