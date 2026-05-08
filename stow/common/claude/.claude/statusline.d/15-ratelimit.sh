@@ -50,6 +50,6 @@ case "$cost" in
 esac
 
 printf -v cost_fmt '%.2f' "$cost" 2>/dev/null || cost_fmt="$cost"
-[ -z "$cost_fmt" ] && exit 0
+case "$cost_fmt" in ''|0|0.00) exit 0 ;; esac
 
 printf '\033[38;5;71m[$%s]\033[0m' "$cost_fmt"
