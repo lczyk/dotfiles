@@ -10,6 +10,7 @@ setup() {
     git config core.hooksPath /dev/null
     git config user.email "t@t"
     git config user.name "t"
+    git config commit.gpgsign false
     # seed an initial commit so the index is well-defined
     : > .gitkeep
     git add .gitkeep
