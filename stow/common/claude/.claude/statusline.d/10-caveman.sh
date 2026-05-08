@@ -2,12 +2,15 @@
 # caveman badge. reads mode flag file, renders short badge.
 # [C] full, [c] lite, [C!] ultra, [W]/[w]/[W!] wenyan, [x] off/missing.
 #
-# plugin state vs badge:
-#   plugin enabled  + flag present  ->normal badge per mode
-#   plugin enabled  + flag missing  ->[x] (something wrong, plugin should've written it)
-#   plugin disabled explicitly      ->[-] (deliberate)
-#   plugin missing from settings    ->[x] (not installed/configured)
-#   flag says off                   ->[x] (mode off, but plugin is there)
+# detection: plugin (caveman@caveman in enabledPlugins) OR vendored
+# (hooks referencing caveman-activate / caveman-mode-tracker).
+#
+# state vs badge:
+#   configured      + flag present  -> normal badge per mode
+#   configured      + flag missing  -> [x] (hooks should've written it)
+#   plugin disabled explicitly      -> [-] (deliberate)
+#   not configured at all           -> [x]
+#   flag says off                   -> [x] (mode off, but hooks are there)
 
 CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 FLAG="${CONFIG_DIR}/.caveman-active"
@@ -15,15 +18,25 @@ SETTINGS="${CONFIG_DIR}/settings.json"
 
 badge() { printf '\033[38;5;172m[%s]\033[0m' "$1"; }
 
+_caveman_configured() {
+    [ -f "$SETTINGS" ] || return 1
+    # plugin path
+    grep -q '"caveman@caveman"[[:space:]]*:[[:space:]]*true' "$SETTINGS" 2>/dev/null && return 0
+    # vendored path: hooks reference caveman activate/tracker
+    grep -q 'caveman-activate' "$SETTINGS" 2>/dev/null && return 0
+    return 1
+}
+
 if [ -f "$SETTINGS" ]; then
     if grep -q '"caveman@caveman"[[:space:]]*:[[:space:]]*false' "$SETTINGS" 2>/dev/null; then
-        badge "-"  # deliberately disabled
+        badge "-"
         exit 0
     fi
-    if ! grep -q '"caveman@caveman"' "$SETTINGS" 2>/dev/null; then
-        badge "x"  # plugin not installed/configured
-        exit 0
-    fi
+fi
+
+if ! _caveman_configured; then
+    badge "x"
+    exit 0
 fi
 
 # plugin is enabled. flag should exist.

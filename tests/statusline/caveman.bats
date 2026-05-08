@@ -143,9 +143,32 @@ write_flag() {
     [ "$out" = "[x]" ]
 }
 
-@test "[C] when plugin entry absent but settings.json exists with other keys" {
+@test "[x] when no plugin and no vendored hooks" {
     write_settings <<<'{"enabledPlugins":{"other@plugin":true}}'
     write_flag "full"
+    run bash -c "echo '{}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[x]" ]
+}
+
+@test "[C] with vendored hooks (no plugin entry)" {
+    write_settings <<<'{"hooks":{"SessionStart":[{"hooks":[{"command":"node caveman-activate.js"}]}]}}'
+    write_flag "full"
+    run bash -c "echo '{}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[C]" ]
+}
+
+@test "[c] with vendored hooks and lite mode" {
+    write_settings <<<'{"hooks":{"SessionStart":[{"hooks":[{"command":"node caveman-activate.js"}]}]}}'
+    write_flag "lite"
+    run bash -c "echo '{}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[c]" ]
+}
+
+@test "[x] with vendored hooks but flag missing" {
+    write_settings <<<'{"hooks":{"SessionStart":[{"hooks":[{"command":"node caveman-activate.js"}]}]}}'
     run bash -c "echo '{}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
     [ "$out" = "[x]" ]
