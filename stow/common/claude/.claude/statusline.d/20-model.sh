@@ -12,6 +12,7 @@ alias_for() {
         "Opus 4.7")                echo "O47" ;;
         "Opus 4.7 (1M context)")   echo "O47-1M" ;;
         "Opus 4.6")                echo "O46" ;;
+        "Opus 4.6 (1M context)")   echo "O46-1M" ;;
         "Sonnet 4.6")              echo "S46" ;;
         "Sonnet 4.6 (1M context)") echo "S46-1M" ;;
         "Haiku 4.5")               echo "H45" ;;
