@@ -300,3 +300,8 @@ find the right commands in this order:
     ]
     ```
     skip the inline comment when the token is self-describing (a package name, a file path, a human-readable identifier). the rule kicks in only when the token is a code or shorthand a future reader would have to look up.
+
+## agent usage
+
+- **don't spawn a single agent and sit idle** either do the work inline or spawn multiple agents in parallel. the main thread waiting on one agent is wasted time -- you could've done it inline with no overhead.
+- **single fork is justified only when both conditions hold** (a) the tool output would meaningfully pollute context (heavy research, large grep sweeps, multi-file exploration), and (b) there's genuinely nothing else to progress on while it runs. if (b) doesn't hold, fork but keep working on the next thing. if (a) doesn't hold, just do it inline.
