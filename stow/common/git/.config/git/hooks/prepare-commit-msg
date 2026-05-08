@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# rewrite git's default revert message to conventional commits format.
+# Revert "<subject>" -> revert: "<subject>"
+
+MSGFILE="$1"
+
+subject=$(head -n1 "$MSGFILE")
+
+if [[ "$subject" =~ ^Revert\ \"(.*)\"$ ]]; then
+    inner="${BASH_REMATCH[1]}"
+    new_subject="revert: \"${inner}\""
+    rest=$(tail -n +2 "$MSGFILE")
+    printf '%s\n' "$new_subject" > "$MSGFILE"
+    if [ -n "$rest" ]; then
+        printf '%s\n' "$rest" >> "$MSGFILE"
+    fi
+fi
