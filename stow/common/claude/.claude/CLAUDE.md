@@ -212,6 +212,7 @@ caveats:
 - do not create PRs unless explicitly instructed. stop after commits.
 - create commits only when explicitly prompted to.
 - **commit permission does not carry across prompts** if the user asks for some work and a commit, that authorisation is consumed by the commit made in that turn. once that commit lands, you no longer have permission to commit -- including for follow-up tweaks, fixups, or any further work in later prompts. wait for the user to explicitly say "commit" again. this applies even if the next prompt is a small edit ("fix this typo", "add a comment") that feels like part of the same task -- stop after the change; do not commit unless told to.
+- **don't touch what you didn't change** when committing, only stage files you intentionally modified as part of the task. if `git status` shows untracked files or unexpected edits (user's wip, scratch files, unrelated changes), leave them alone -- don't stage them, don't delete them, don't revert them. mention them if relevant, but they're not yours to act on.
 
 ## commits and PRs
 
