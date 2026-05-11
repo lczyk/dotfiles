@@ -202,6 +202,7 @@ caveats:
 - when the user asks you to generate a piece of natural language (PR comment, message, commit body, email, etc), wrap the output in a fenced code block so it can be copy-pasted cleanly. does not apply to direct conversational replies.
 - after you make a suggestion or ask a question, the next message authorises action only if it contains an explicit go-signal: an affirmative (_yes_ / _do it_ / _go_ / _ok_ / _sgtm_), a direct instruction (_add X_ / _change Y_), or `.` (per above). anything else -- new info, clarifications, follow-up questions, refinements, half-thoughts -- is discussion. respond in text, do not write code.
 - avoid full-border tables in output. use minimal markdown tables (header separator only, no outer border, no trailing padding pipes). prefer lists over tables when the data fits naturally in a list.
+- **always surface assumptions** whenever you make a non-trivial assumption to fill a gap in the prompt (ambiguous scope, missing context, inferred intent, defaulted value), state it explicitly in your response. one line per assumption is enough -- no preamble. skip obvious/trivially-derivable ones.
 
 ## git and `gh` permissions
 
