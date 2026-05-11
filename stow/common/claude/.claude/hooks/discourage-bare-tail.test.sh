@@ -100,24 +100,32 @@ CASES=(
     "0|cmd | tee /tmp/a.log /tmp/b.log /tmp/claude/log/x.log | tail -5"
 )
 
-pass=0; fail=0; failures=()
-for case in "${CASES[@]}"; do
-    expected="${case%%|*}"
-    cmd="${case#*|}"
-    payload=$(jq -nc --arg c "$cmd" '{tool_input: {command: $c}}')
-    actual=0
-    out=$(printf '%s' "$payload" | bash "$HOOK" 2>&1) || actual=$?
-    if [[ "$actual" == "$expected" ]]; then
-        ((pass++))
-    else
-        ((fail++))
-        failures+=("expected=$expected actual=$actual cmd='$cmd' out='$out'")
+total_fail=0
+for engine in rg grep awk; do
+    if ! command -v "$engine" >/dev/null 2>&1; then
+        printf 'skip: %s not installed\n' "$engine"
+        continue
+    fi
+    pass=0; fail=0; failures=()
+    for case in "${CASES[@]}"; do
+        expected="${case%%|*}"
+        cmd="${case#*|}"
+        payload=$(jq -nc --arg c "$cmd" '{tool_input: {command: $c}}')
+        actual=0
+        out=$(printf '%s' "$payload" | RE_ENGINE="$engine" bash "$HOOK" 2>&1) || actual=$?
+        if [[ "$actual" == "$expected" ]]; then
+            ((pass++))
+        else
+            ((fail++))
+            failures+=("expected=$expected actual=$actual cmd='$cmd' out='$out'")
+        fi
+    done
+    printf '[%s] %d passed, %d failed (of %d)\n' "$engine" "$pass" "$fail" $((pass+fail))
+    if ((fail)); then
+        for f in "${failures[@]}"; do printf '  - %s\n' "$f"; done
+        ((total_fail+=fail))
     fi
 done
 
-printf '%d passed, %d failed (of %d)\n' "$pass" "$fail" $((pass+fail))
-if ((fail)); then
-    printf '\nfailures:\n'
-    for f in "${failures[@]}"; do printf '  - %s\n' "$f"; done
-    exit 1
-fi
+((total_fail)) && exit 1
+exit 0
