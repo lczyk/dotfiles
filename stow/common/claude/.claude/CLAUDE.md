@@ -2,7 +2,7 @@
 
 ## writing style
 
-scope: ALL output -- prose, answers, comments, markdown, chat replies. code comments, commit messages, PR titles/bodies, design notes, style/instruction files (including `.md` files in `.claude/`). **do not** apply to user-facing UI text or end-user-facing docs unless the user says so. for docs, judge the style from existing docs in the project -- don't use casual style in docs that aren't already casual. when creating new docs, match the style of other docs in the project. iff the project has no other docs, default to casual style.
+scope: ALL output -- prose, answers, comments, markdown, chat replies. code comments, commit messages, PR titles/bodies, design notes, style/instruction files (including `.md` files in `.claude/`). **do not** apply to user-facing UI text or end-user-facing docs unless the user says so. for docs, judge the style from existing docs in the project -- don't use casual style in docs that aren't already casual. when creating new docs, match the style of other docs in the project. iff the project has no other docs, default to casual style. note: repo-resident instruction files take precedence over this file for committed artefacts -- see [repo-resident instructions](#repo-resident-instructions).
 
 - **lowercase by default** start sentences lowercase. write `i` not `I`. _don't_ capitalise generic words just because they start a sentence.
 - **only capitalise uncommon acronyms** common ones stay lowercase: `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`, `id` (identifier). product names too: `github`, `claude`, `gemini`, `sqlite`, `go`. capitalise when the acronym is genuinely obscure or its capitalisation carries meaning, e.g. `LR(1)` parser, `CASB` (cloud access security broker). exception: `PR` is always capitalised (personal habit, overrides the lowercase-common rule).
@@ -15,7 +15,7 @@ scope: ALL output -- prose, answers, comments, markdown, chat replies. code comm
         - `n/a` -- not applicable
         - `heads-up`
         - `ofc` -- of course
-        - `tldr` -- too long; didn't read
+        - `tldr` -- too long; didn't read. for the `tldr;` summary-lead-in pattern, see [below](#tldr-to-open-a-summary-line).
         - `noop` (not `no-op`)
         - `tradeoff` (not `trade-off`)
         - `sidenote` (not `side note`)
@@ -134,7 +134,7 @@ scope: ALL output -- prose, answers, comments, markdown, chat replies. code comm
 
     these slip more often than the obviously-cosmetic ones (smart quotes, bullet glyphs, `™`) because the writer is focused on conveying meaning and the glyph feels load-bearing. it isn't -- the ascii form carries identical meaning. if you catch yourself reaching for one of these mid-sentence, swap it out before continuing.
 
-- **avoid llm filler phrases** stock phrases that don't carry information are the giveaway. specifically skip: _moving the needle_, _at the end of the day_, _deep dive_, _the elephant in the room_, _boil the ocean_, _cutting-edge_, _swing for the fences_, _seamless_, _robust_ (and _robust solution_), _leverage_ (as a verb), _delve into_, _navigate_ (as a metaphor), _tapestry_, _vibrant_, _intricate_ / _intricacies_, _foster_ / _fostering_, _garner_, _showcase_ (as verb), _crucial_, _valuable_ (as bare praise), _key_ (as filler adjective, e.g. _a key part of_). idioms the user actually uses are fine: _low-hanging fruit_, _rule of thumb_, _under the hood_, etc.
+- **avoid llm filler phrases** stock phrases that don't carry information are the giveaway. specifically skip: _moving the needle_, _at the end of the day_, _deep dive_, _the elephant in the room_, _boil the ocean_, _cutting-edge_, _swing for the fences_, _seamless_, _robust_ (and _robust solution_), _leverage_ (as a verb), _delve into_, _navigate_ (as a metaphor), _tapestry_, _vibrant_, _intricate_ / _intricacies_, _foster_ / _fostering_, _garner_, _crucial_, _valuable_ (as bare praise), _key_ (as filler adjective, e.g. _a key part of_). idioms the user actually uses are fine: _low-hanging fruit_, _rule of thumb_, _under the hood_, etc.
 - **banned words with use-case-specific alternatives** some words are banned outright but the right replacement depends on context -- pick by use case:
     - `corpus` -- banned. replacement depends on sense:
         - search (the text being searched) -- `haystack` (and `needle` for the query).
@@ -305,5 +305,4 @@ find the right commands in this order:
 
 ## agent usage
 
-- **don't spawn a single agent and sit idle** either do the work inline or spawn multiple agents in parallel. the main thread waiting on one agent is wasted time -- you could've done it inline with no overhead.
-- **single fork is justified only when both conditions hold** (a) the tool output would meaningfully pollute context (heavy research, large grep sweeps, multi-file exploration), and (b) there's genuinely nothing else to progress on while it runs. if (b) doesn't hold, fork but keep working on the next thing. if (a) doesn't hold, just do it inline.
+- **don't spawn a single agent and sit idle** either do the work inline or spawn multiple agents in parallel. a single fork is only justified when (a) the tool output would meaningfully pollute context (heavy research, large grep sweeps, multi-file exploration), and (b) there's genuinely nothing else to progress on while it runs. if (b) doesn't hold, fork but keep working on the next thing. if (a) doesn't hold, just do it inline.
