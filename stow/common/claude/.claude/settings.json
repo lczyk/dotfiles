@@ -1,5 +1,5 @@
 {
-  "model": "claude-opus-4-6[1m]",
+  "model": "sonnet",
   "hooks": {
     "SessionStart": [
       {
@@ -59,7 +59,7 @@
       }
     }
   },
-  "effortLevel": "medium",
+  "effortLevel": "low",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
   "voiceEnabled": false
