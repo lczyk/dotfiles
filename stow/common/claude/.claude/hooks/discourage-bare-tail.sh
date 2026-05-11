@@ -63,7 +63,7 @@ BLOCKED: bare `| tail` / `| head` discards the full log. use tee so it persists:
     mkdir -p /tmp/claude/log
     cmd 2>&1 | tee /tmp/claude/log/<name>.log | tail -50
 
-if later you realise you would have wnated more output from that command, just read /tmp/claude/log/<name>.log. Only rerun if you expect the output to have changed.
+if later you realise you would have wanted more output from that command, just read /tmp/claude/log/<name>.log. Only rerun if you expect the output to have changed.
 EOF
     exit 2
 fi
