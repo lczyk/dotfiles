@@ -1,5 +1,4 @@
 {
-  "model": "sonnet",
   "hooks": {
     "SessionStart": [
       {
@@ -32,6 +31,10 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/block-dangerous.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/discourage-bare-tail.sh\""
           }
         ]
       }
@@ -59,7 +62,7 @@
       }
     }
   },
-  "effortLevel": "low",
+  "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
   "voiceEnabled": false
