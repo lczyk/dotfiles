@@ -51,6 +51,53 @@ CASES=(
     # --- allowed: words that start with 'tail' but aren't tail ---
     "0|ls | tailscale up"
     "0|cmd | tailor --fit"
+
+    # --- blocked (false negative fix): `head` equivalents ---
+    "2|ls /tmp | head"
+    "2|ls /tmp | head -5"
+    "2|ls /tmp | head -50"
+    "2|ls /tmp | head -n 50"
+    "2|ls /tmp | head -n50"
+    "2|cat huge.log | head -100"
+    "2|cmd 2>&1 | head -50"
+    "2|find . -name foo | grep bar | head -10"
+
+    # --- allowed: words that start with 'head' but aren't head ---
+    "0|cmd | header --format=json"
+    "0|cmd | heading --level 2"
+
+    # --- allowed: bare head reading a file (not piped) ---
+    "0|head -50 /var/log/syslog"
+    "0|head /etc/passwd"
+
+    # --- blocked (false negative fix): long-form tail/head flags ---
+    "2|cmd | tail --lines=50"
+    "2|cmd | tail --bytes=1024"
+    "2|cmd | tail --follow"
+    "2|cmd | tail -c 100"
+    "2|cmd | tail -F"
+    "2|cmd | head --lines=50"
+    "2|cmd | head --bytes=1024"
+    "2|cmd | head -c 100"
+
+    # --- blocked (false negative fix): process substitution ---
+    "2|tail -5 <(ls /tmp)"
+    "2|tail -n 50 <(some-cmd)"
+    "2|head -5 <(ls /tmp)"
+    "2|head -n 50 <(some-cmd)"
+
+    # --- allowed (false positive fix): tee -a (append) to log dir ---
+    "0|cmd 2>&1 | tee -a /tmp/claude/log/foo.log | tail -5"
+    "0|cmd 2>&1 | tee --append /tmp/claude/log/foo.log | tail -5"
+
+    # --- allowed (false positive fix): quoted log path ---
+    "0|cmd 2>&1 | tee \"/tmp/claude/log/foo.log\" | tail -5"
+    "0|cmd 2>&1 | tee '/tmp/claude/log/foo.log' | tail -5"
+    "0|cmd 2>&1 | tee -a \"/tmp/claude/log/foo.log\" | tail -5"
+
+    # --- allowed (false positive fix): tee multi-file w/ log dir not first ---
+    "0|cmd | tee /tmp/other.log /tmp/claude/log/x.log | tail -5"
+    "0|cmd | tee /tmp/a.log /tmp/b.log /tmp/claude/log/x.log | tail -5"
 )
 
 pass=0; fail=0; failures=()

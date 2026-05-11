@@ -9,6 +9,10 @@
 #
 # allowed: any command that tees into /tmp/claude/log/ (log is preserved).
 # blocked: | tail without tee to /tmp/claude/log/ (output lost after read).
+#
+# TODO: edge cases not handled -- require real shell parsing:
+#   - variable-expanded log path:  LOG=/tmp/claude/log/x.log; cmd | tee $LOG | tail
+#   - literal `| tail` inside quoted string: git commit -m "fix | tail crash"
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
