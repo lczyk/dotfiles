@@ -8,6 +8,12 @@
             "command": "node \"$HOME/.claude/hooks/caveman-activate.js\"",
             "timeout": 5,
             "statusMessage": "Loading caveman mode..."
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/frugal-activate.js\"",
+            "timeout": 5,
+            "statusMessage": "Loading frugal mode..."
           }
         ]
       }
@@ -20,6 +26,12 @@
             "command": "node \"$HOME/.claude/hooks/caveman-mode-tracker.js\"",
             "timeout": 5,
             "statusMessage": "Tracking caveman mode..."
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/frugal-mode-tracker.js\"",
+            "timeout": 5,
+            "statusMessage": "Tracking frugal mode..."
           }
         ]
       }
@@ -62,7 +74,7 @@
       }
     }
   },
-  "effortLevel": "high",
+  "effortLevel": "low",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
   "voiceEnabled": false
