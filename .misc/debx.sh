@@ -244,8 +244,10 @@ debx::main() {
     esac
 }
 
-debx::parse_args "$@"
-debx::main "${ARGS[0]}"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    debx::parse_args "$@"
+    debx::main "${ARGS[0]}"
+fi
 
 __LICENSE__='
 MIT No Attribution
