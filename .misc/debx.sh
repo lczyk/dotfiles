@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # spellchecker: words debx binutils zstd Marcin Konowalczyk lczyk tzdata noninteractive debname
 
-__VERSION__="0.3.3"
+__VERSION__="0.3.4"
 __AUTHOR__="Marcin Konowalczyk @lczyk"
 __LICENSE__="MIT-0"
 # aka no liability, do whatever you want with it,
@@ -113,6 +113,7 @@ debx::unpack() {
         ar -x "$input"
 
         if [ -f "control.tar.gz" ]; then
+            mkdir -p control
             tar -xzf control.tar.gz -C control
             rm control.tar.gz
         elif [ -f "control.tar.zst" ]; then
@@ -137,7 +138,8 @@ debx::unpack() {
         fi
 
         if [ -f "data.tar.gz" ]; then
-            tar -xzf data.tar.gz
+            mkdir -p data
+            tar -xzf data.tar.gz -C data
             rm data.tar.gz
         elif [ -f "data.tar.zst" ]; then
             mkdir -p data
