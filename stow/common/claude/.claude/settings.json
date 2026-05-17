@@ -8,12 +8,6 @@
             "command": "node \"$HOME/.claude/hooks/caveman-activate.js\"",
             "timeout": 5,
             "statusMessage": "Loading caveman mode..."
-          },
-          {
-            "type": "command",
-            "command": "node \"$HOME/.claude/hooks/frugal-activate.js\"",
-            "timeout": 5,
-            "statusMessage": "Loading frugal mode..."
           }
         ]
       }
@@ -26,12 +20,6 @@
             "command": "node \"$HOME/.claude/hooks/caveman-mode-tracker.js\"",
             "timeout": 5,
             "statusMessage": "Tracking caveman mode..."
-          },
-          {
-            "type": "command",
-            "command": "node \"$HOME/.claude/hooks/frugal-mode-tracker.js\"",
-            "timeout": 5,
-            "statusMessage": "Tracking frugal mode..."
           }
         ]
       }
@@ -58,7 +46,8 @@
   },
   "enabledPlugins": {
     "gopls-lsp@claude-plugins-official": true,
-    "rust-analyzer-lsp@claude-plugins-official": true
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "context-mode": {
@@ -74,7 +63,7 @@
       }
     }
   },
-  "effortLevel": "low",
+  "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
   "voiceEnabled": false
