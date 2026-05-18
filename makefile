@@ -1,6 +1,6 @@
 .SUFFIXES:
 
-CARGO_BINS := peek time_fuzzer
+CARGO_BINS := peek time_fuzzer funnel
 
 # profile detection: mac (Darwin) / x1 (Linux). override via `PROFILE=...`.
 UNAME_S := $(shell uname -s)
