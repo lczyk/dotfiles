@@ -119,3 +119,112 @@ EOF
     run "$HOOK"
     [ "$status" -ne 0 ]
 }
+
+# -- trailing whitespace --
+
+@test "rejects trailing space on added line" {
+    fake_diff $'+hello   \n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects trailing tab on added line" {
+    fake_diff $'+hello\t\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "ignores trailing whitespace on context lines" {
+    fake_diff $' old line   \n+clean\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+# -- TODO/FIXME tag form --
+
+@test "rejects bare TODO in added line" {
+    fake_diff $'+// TODO fix this later\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects bare FIXME in added line" {
+    fake_diff $'+// FIXME broken\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "accepts TODO(name): form" {
+    fake_diff $'+// TODO(marcin): fix this later\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+@test "accepts FIXME(alice): form" {
+    fake_diff $'+// FIXME(alice): broken\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+@test "ignores bare TODO on context lines" {
+    fake_diff $' // TODO old\n+clean\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+# -- secret scan --
+
+@test "rejects AWS AKIA key" {
+    fake_diff $'+aws_key = "AKIAIOSFODNN7EXAMPLE"\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects GitHub PAT (ghp_)" {
+    fake_diff $'+token = ghp_abcdefghijklmnopqrstuvwxyz0123456789\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects OpenAI sk- key" {
+    fake_diff $'+OPENAI=sk-abcdefghijklmnopqrstuvwxyz0123\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects Anthropic sk-ant- key" {
+    fake_diff $'+ANTHROPIC=sk-ant-abcdefghijklmnopqrstuvwxyz0123\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects PEM private key header" {
+    fake_diff $'+-----BEGIN RSA PRIVATE KEY-----\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects generic password= literal" {
+    fake_diff $'+password = "hunter2hunter2"\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects api_key= literal" {
+    fake_diff $'+api_key: "abcd1234efgh5678"\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "ignores empty password assignment" {
+    fake_diff $'+password = ""\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+@test "secrets blocked even in non-claude mode" {
+    unset CLAUDECODE
+    fake_diff $'+token = ghp_abcdefghijklmnopqrstuvwxyz0123456789\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
