@@ -38,6 +38,91 @@ function check_non_ascii() {
     fi
 }
 
+function check_trailing_ws() {
+    local diff="$1"
+
+    if [ -z "$diff" ]; then
+        return 0
+    fi
+
+    local hits
+    if command -v rg >/dev/null 2>&1; then
+        hits=$(printf '%s\n' "$diff" | rg -n '^\+[^+].*[ 	]+$' --color=never)
+    else
+        hits=$(printf '%s\n' "$diff" | grep -nE '^\+[^+].*[ 	]+$')
+    fi
+
+    if [ -n "$hits" ]; then
+        printf '%s: trailing whitespace in staged changes:\n' "$LABEL" >&2
+        printf '%s\n' "$hits" >&2
+        printf '%s: strip trailing spaces/tabs before committing.\n' "$LABEL" >&2
+        return "$FAIL"
+    fi
+}
+
+_added_lines() {
+    # emit only +-added lines (skip ++ header lines).
+    printf '%s\n' "$1" | awk '/^\+[^+]/'
+}
+
+function check_todo_tag() {
+    local diff="$1"
+
+    if [ -z "$diff" ]; then
+        return 0
+    fi
+
+    # require TODO(name): or FIXME(name): form. match bare TODO/FIXME not
+    # followed by `(`. needs PCRE for negative lookahead.
+    local added pattern='\b(TODO|FIXME)\b(?!\()'
+    added=$(_added_lines "$diff")
+
+    local hits
+    if command -v rg >/dev/null 2>&1; then
+        hits=$(printf '%s\n' "$added" | rg -nP --color=never -- "$pattern")
+    else
+        hits=$(printf '%s\n' "$added" | grep -nP -- "$pattern")
+    fi
+
+    if [ -n "$hits" ]; then
+        printf '%s: bare TODO/FIXME in staged changes:\n' "$LABEL" >&2
+        printf '%s\n' "$hits" >&2
+        printf '%s: use TODO(name): / FIXME(name): form so orphan todos do not accumulate.\n' "$LABEL" >&2
+        return "$FAIL"
+    fi
+}
+
+function check_secrets() {
+    local diff="$1"
+
+    if [ -z "$diff" ]; then
+        return 0
+    fi
+
+    # high-signal secret patterns:
+    # AWS access key (AKIA...), GitHub PATs (ghp_/gho_/ghs_/ghu_/ghr_),
+    # Anthropic sk-ant-..., OpenAI sk-..., PEM private key headers,
+    # generic password=/api_key=/secret=/token= with quoted non-trivial literal.
+    local pattern='(AKIA[0-9A-Z]{16}|gh[posur]_[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_\-]{20,}|sk-[A-Za-z0-9]{20,}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|(password|passwd|api[_-]?key|secret|token)\s*[:=]\s*["'"'"'][^"'"'"' ]{8,}["'"'"'])'
+
+    local added hits
+    added=$(_added_lines "$diff")
+
+    if command -v rg >/dev/null 2>&1; then
+        hits=$(printf '%s\n' "$added" | rg -niP --color=never -- "$pattern")
+    else
+        hits=$(printf '%s\n' "$added" | grep -niP -- "$pattern")
+    fi
+
+    if [ -n "$hits" ]; then
+        printf 'rejected: possible secret in staged changes:\n' >&2
+        printf '%s\n' "$hits" >&2
+        printf 'rejected: remove the secret, rotate the credential, and add the file to .gitignore or use a secrets manager.\n' >&2
+        printf 'rejected: if this is a false positive (test fixture, doc example), explicitly ask the user for permission to use --no-verify.\n' >&2
+        return 1
+    fi
+}
+
 function check_nocommit() {
     local diff="$1"
 
@@ -69,6 +154,9 @@ function main() {
 
     local rc=0
     check_non_ascii "$diff" || rc=$?
+    check_trailing_ws "$diff" || rc=$?
+    check_todo_tag "$diff" || rc=$?
+    check_secrets "$diff" || rc=$?
     check_nocommit "$diff" || rc=$?
     return $rc
 }

@@ -1,9 +1,71 @@
 #!/usr/bin/env bash
-# block agents from pushing entirely. humans pass through unaffected.
+# - block agents from pushing entirely. humans pass through.
+# - for humans: block force-push / deletion / non-ff to protected branches
+#   (main, master, trunk, release/*).
+#
+# git invokes pre-push with: <remote-name> <remote-url>
+# and feeds lines on stdin: <local-ref> <local-sha> <remote-ref> <remote-sha>
 
 if [ "$CLAUDECODE" = "1" ]; then
     printf 'rejected: agents are not allowed to push. hand off to the user.\n' >&2
     exit 1
 fi
 
-exit 0
+PROTECTED_EXACT=(refs/heads/main refs/heads/master refs/heads/trunk)
+PROTECTED_PREFIX=(refs/heads/release/)
+
+is_protected() {
+    local ref="$1"
+    for p in "${PROTECTED_EXACT[@]}"; do
+        [ "$ref" = "$p" ] && return 0
+    done
+    for p in "${PROTECTED_PREFIX[@]}"; do
+        case "$ref" in
+            "$p"*) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+is_force_invocation() {
+    local parent_cmd
+    if [ -r "/proc/$PPID/cmdline" ]; then
+        parent_cmd=$(tr '\0' ' ' < "/proc/$PPID/cmdline")
+    else
+        parent_cmd=$(ps -o command= -p "$PPID" 2>/dev/null)
+    fi
+    case " $parent_cmd " in
+        *" --force "*|*" -f "*|*" --force-with-lease"*|*" --force-with-lease="*) return 0 ;;
+    esac
+    return 1
+}
+
+z40="0000000000000000000000000000000000000000"
+
+rc=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "$remote_ref" ] && continue
+    is_protected "$remote_ref" || continue
+
+    if [ "$local_sha" = "$z40" ]; then
+        printf 'rejected: refusing to delete protected branch %s\n' "$remote_ref" >&2
+        rc=1
+        continue
+    fi
+
+    if [ "$remote_sha" != "$z40" ]; then
+        if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+            printf 'rejected: non-fast-forward push to protected branch %s\n' "$remote_ref" >&2
+            printf 'rejected: force-pushing to main/master/trunk/release/* is blocked. resolve via merge or revert instead.\n' >&2
+            rc=1
+            continue
+        fi
+    fi
+
+    if is_force_invocation; then
+        printf 'rejected: --force / --force-with-lease push to protected branch %s\n' "$remote_ref" >&2
+        rc=1
+    fi
+done
+
+exit "$rc"
