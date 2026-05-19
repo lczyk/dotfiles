@@ -212,8 +212,8 @@ fn term_width() -> usize {
 }
 
 // emit one line (content excludes trailing newline) per long-line mode.
-fn emit_line(
-    out: &mut io::StdoutLock,
+fn emit_line<W: Write>(
+    out: &mut W,
     prefix: &[u8],
     prefix_width: usize,
     content: &[u8],
@@ -227,9 +227,31 @@ fn emit_line(
             out.write_all(b"\n")?;
         }
         LongLines::Trim => {
-            let avail = width.saturating_sub(prefix_width);
             let s = String::from_utf8_lossy(content);
-            let cut: String = s.chars().take(avail).collect();
+            let mut cut = String::new();
+            let mut col = prefix_width;
+            for c in s.chars() {
+                // tab expands to next 8-col stop in terminal coords
+                let w = if c == '\t' {
+                    8 - (col % 8)
+                } else if (c as u32) < 0x20 || c == '\x7f' {
+                    // control chars: skip, no width
+                    continue;
+                } else {
+                    1
+                };
+                if col + w > width {
+                    break;
+                }
+                if c == '\t' {
+                    for _ in 0..w {
+                        cut.push(' ');
+                    }
+                } else {
+                    cut.push(c);
+                }
+                col += w;
+            }
             out.write_all(prefix)?;
             out.write_all(cut.as_bytes())?;
             out.write_all(b"\n")?;
