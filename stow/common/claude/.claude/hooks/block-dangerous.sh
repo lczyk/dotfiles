@@ -54,6 +54,14 @@ GIT_WRITE_PATTERNS=(
 )
 GIT_WRITE_REASON="agent is fenced to read-only git -- run write ops yourself or disable the hook"
 
+# wide `git add` -- agent must stage explicit paths, not sweep the worktree.
+# blocks -A / --all / -u / --update / `.` / `*` (and combined short flags
+# containing A or u, e.g. -Au, -Av). pass file paths explicitly instead.
+GIT_ADD_PATTERNS=(
+    "(^|[ ;|&])git add (-[A-Za-z]*[Au][A-Za-z]*|--all|--update|\\.|\\*)( |$)"
+)
+GIT_ADD_REASON="stage explicit paths only -- wide \`git add\` may grab unrelated wip / scratch files"
+
 # any write `gh` op. read ops (view/list/status/api GET) are fine.
 GH_WRITE_PATTERNS=(
     "(^|[ ;|&])gh pr (create|comment|edit|review|close|reopen|ready|checkout|lock|unlock|update-branch)"
@@ -117,6 +125,7 @@ check() {
 
 check "$GIT_REASON"       "${GIT_PATTERNS[@]}"
 check "$GIT_WRITE_REASON" "${GIT_WRITE_PATTERNS[@]}"
+check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 check "$GPG_REASON"       "${GPG_PATTERNS[@]}"
 check "$INSTALL_REASON"   "${INSTALL_PATTERNS[@]}"
