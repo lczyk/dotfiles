@@ -155,6 +155,27 @@ write_msg() { printf '%s\n' "$1" > "$MSG"; }
     [ "$status" -eq 0 ]
 }
 
+# -- backtick ban -------------------------------------------------------
+
+@test "rejects backtick in subject" {
+    write_msg 'feat: tweak `foo` handling'
+    run "$HOOK" "$MSG"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects backtick in body" {
+    printf 'feat: x\n\nuse `bar` instead\n' > "$MSG"
+    run "$HOOK" "$MSG"
+    [ "$status" -ne 0 ]
+}
+
+@test "non-claude run warns but exits 0 on backtick" {
+    unset CLAUDECODE
+    write_msg 'feat: tweak `foo`'
+    run "$HOOK" "$MSG"
+    [ "$status" -eq 0 ]
+}
+
 # -- ascii only ---------------------------------------------------------
 
 @test "rejects em-dash" {
