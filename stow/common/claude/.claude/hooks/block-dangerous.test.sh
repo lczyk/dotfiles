@@ -84,6 +84,23 @@ CASES=(
     "2|gh api -X PATCH_ /x"
     "2|gh api repos/x/y --method P_UT"
 
+    # --- blocked: wide git add ---
+    "2|git add -A"
+    "2|git add --all"
+    "2|git add -u"
+    "2|git add --update"
+    "2|git add ."
+    "2|git add -Av"
+    "2|git add -An ."
+
+    # --- allowed: explicit-path git add ---
+    "0|git add src/foo.rs"
+    "0|git add path/to/file.txt other.md"
+    "0|git add -p src/foo.rs"
+    "0|git add -n src/foo.rs"
+    "0|git add ./src/foo.rs"
+    "0|git add Allusers.txt"
+
     # --- blocked: gpg / installs / remote ---
     "2|git C0MMIT --no-gpg-sign -m foo"
 
