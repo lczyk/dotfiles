@@ -635,3 +635,69 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn emit(content: &[u8], mode: LongLines, width: usize) -> String {
+        let prefix = b"[lbl] ";
+        let prefix_width = 6;
+        let mut out = Vec::new();
+        emit_line(&mut out, prefix, prefix_width, content, mode, width).unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn trim_plain_fits() {
+        assert_eq!(emit(b"hello", LongLines::Trim, 20), "[lbl] hello\n");
+    }
+
+    #[test]
+    fn trim_plain_overflow() {
+        // width 12, prefix 6, avail 6
+        assert_eq!(emit(b"abcdefghij", LongLines::Trim, 12), "[lbl] abcdef\n");
+    }
+
+    #[test]
+    fn trim_tab_expands_to_stop() {
+        // prefix col=6, tab -> 2 spaces (to col 8), then "x"
+        // width 20, plenty of room
+        assert_eq!(emit(b"\tx", LongLines::Trim, 20), "[lbl]   x\n");
+    }
+
+    #[test]
+    fn trim_tab_blocks_overflow() {
+        // regression: prior impl counted tab as 1 char so "\txxx" with avail=3
+        // emitted "\txxx" raw -> terminal renders as 2+3=5 cols, wrapping.
+        // now tab eats 2 cols (6 -> 8), only 2 chars fit (width 12 -> col<=12).
+        // expansion: tab=2 spaces (col 6->8), x (8->9), x (9->10), x (10->11) -> all fit
+        assert_eq!(emit(b"\txxx", LongLines::Trim, 12), "[lbl]   xxx\n");
+        // tighter: width 9 -> after tab col=8, room for 1 x
+        assert_eq!(emit(b"\txxx", LongLines::Trim, 9), "[lbl]   x\n");
+        // width 7 -> tab would push col to 8 > 7, drop tab and rest
+        assert_eq!(emit(b"\txxx", LongLines::Trim, 7), "[lbl] \n");
+    }
+
+    #[test]
+    fn trim_drops_control_chars() {
+        assert_eq!(emit(b"a\x01b\x7fc", LongLines::Trim, 20), "[lbl] abc\n");
+    }
+
+    #[test]
+    fn trim_tab_midline_stop() {
+        // col 6: "ab" -> 8, tab -> col 8 already at stop, expands to next: 8->16 (8 spaces)
+        assert_eq!(
+            emit(b"ab\tcd", LongLines::Trim, 30),
+            "[lbl] ab        cd\n"
+        );
+    }
+
+    #[test]
+    fn wrap_passes_through() {
+        assert_eq!(
+            emit(b"long line here", LongLines::Wrap, 10),
+            "[lbl] long line here\n"
+        );
+    }
+}
