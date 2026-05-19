@@ -5,14 +5,16 @@
 // via a hash of the full path, so the same file always gets the same color.
 
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+const IDLE_CLOSE: Duration = Duration::from_secs(60);
 
 use notify::{EventKind, RecursiveMode, Watcher};
 
@@ -131,33 +133,68 @@ fn use_color(no_color_flag: bool) -> bool {
 }
 
 struct Tracked {
-    file: File,
+    // None when idle-closed; reopened lazily on next drain w/ growth.
+    file: Option<File>,
     inode: u64,
     size: u64,
     partial: Vec<u8>,
     prefix: Vec<u8>,
     // visible width of prefix (`[basename] `), excludes ANSI color escapes.
     prefix_width: usize,
+    last_activity: Instant,
 }
 
-fn open_tracked(path: &Path, glob: &Glob, color: bool, seek_end: bool) -> io::Result<Tracked> {
-    let mut file = File::open(path)?;
-    let meta = file.metadata()?;
-    let size = meta.len();
-    let inode = meta.ino();
-    if seek_end {
-        file.seek(SeekFrom::End(0))?;
-    }
+// stat_tracked: build a Tracked entry w/o opening the file. start_offset=Some(0)
+// means "treat as new, read existing content from start" (notify Create / rescan);
+// None means "start from current EOF" (seed). no fd is held until drain opens one.
+fn stat_tracked(
+    path: &Path,
+    glob: &Glob,
+    color: bool,
+    start_offset: Option<u64>,
+) -> io::Result<Tracked> {
+    let meta = fs::metadata(path)?;
+    let cur_size = meta.len();
+    let size = match start_offset {
+        Some(o) => o.min(cur_size),
+        None => cur_size,
+    };
     let label = glob.label(&path.to_string_lossy());
     let label_width = label.chars().count();
     Ok(Tracked {
-        file,
-        inode,
+        file: None,
+        inode: meta.ino(),
         size,
         partial: Vec::new(),
         prefix: build_prefix(&label, path, color),
         prefix_width: label_width + 3, // `[` + label + `]` + ` `
+        last_activity: Instant::now(),
     })
+}
+
+// raise RLIMIT_NOFILE soft limit toward hard. macOS default soft is small
+// (often 256-2560); funnel may track thousands of files, so bump for headroom
+// even though we now idle-close.
+fn bump_nofile() {
+    // SAFETY: rlimit is plain data; getrlimit fills it, setrlimit reads it.
+    unsafe {
+        let mut rl: libc::rlimit = std::mem::zeroed();
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut rl) != 0 {
+            return;
+        }
+        // macOS reports rlim_max as RLIM_INFINITY but kernel caps at
+        // kern.maxfilesperproc (typically 10240-49152). step down on failure.
+        for target in [rl.rlim_max, 65536, 16384, 8192, 4096] {
+            if target <= rl.rlim_cur {
+                break;
+            }
+            let mut new = rl;
+            new.rlim_cur = target;
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &new) == 0 {
+                break;
+            }
+        }
+    }
 }
 
 fn term_width() -> usize {
@@ -228,29 +265,43 @@ fn emit_line(
     Ok(())
 }
 
-// drain newly-available bytes from t.file, emit complete lines to stdout
-// w/ prefix. returns Err on broken stdout (caller exits).
+// drain newly-available bytes from path, emit complete lines to stdout
+// w/ prefix. stat-first: skips opening when size unchanged + inode same,
+// so closed-idle entries stay closed. returns Err on broken stdout (caller exits).
 fn drain(
     t: &mut Tracked,
+    path: &Path,
     stdout: &mut io::StdoutLock,
     mode: LongLines,
     width: usize,
 ) -> io::Result<()> {
-    let meta = t.file.metadata()?;
+    let meta = fs::metadata(path)?;
     let cur_size = meta.len();
     let cur_inode = meta.ino();
-    if cur_inode != t.inode || cur_size < t.size {
-        // truncation or inode swap detected during read: reset to start.
-        t.file.seek(SeekFrom::Start(0))?;
+    let rotated = cur_inode != t.inode || cur_size < t.size;
+    if !rotated && cur_size == t.size {
+        return Ok(());
+    }
+    if t.file.is_none() {
+        t.file = Some(File::open(path)?);
+    }
+    let f = t.file.as_mut().unwrap();
+    if rotated {
+        f.seek(SeekFrom::Start(0))?;
         t.inode = cur_inode;
+        t.size = 0;
         t.partial.clear();
+    } else {
+        // newly-opened or position may have drifted; align to stored offset.
+        f.seek(SeekFrom::Start(t.size))?;
     }
     let mut buf = Vec::new();
-    t.file.read_to_end(&mut buf)?;
-    t.size = t.file.stream_position().unwrap_or(cur_size);
+    f.read_to_end(&mut buf)?;
+    t.size = f.stream_position().unwrap_or(cur_size);
     if buf.is_empty() {
         return Ok(());
     }
+    t.last_activity = Instant::now();
     t.partial.extend_from_slice(&buf);
     let mut start = 0usize;
     let len = t.partial.len();
@@ -332,6 +383,7 @@ fn spawn_quit_watcher(quit: Arc<AtomicBool>) {
 }
 
 fn run() -> io::Result<()> {
+    bump_nofile();
     let args = parse_args(&std::env::args().collect::<Vec<_>>());
     let color = use_color(args.no_color);
     let long_mode = args.long_lines;
@@ -413,10 +465,11 @@ fn run() -> io::Result<()> {
                 // refresh terminal width each tick (cheap ioctl, handles
                 // SIGWINCH w/out wiring a signal handler).
                 let width = term_width();
-                // poll-drain known files.
+                // poll-drain known files. drain stat-first; closed entries
+                // stay closed unless growth detected.
                 let mut stale = Vec::new();
                 for (path, t) in tracked.iter_mut() {
-                    match drain(t, &mut stdout, long_mode, width) {
+                    match drain(t, path, &mut stdout, long_mode, width) {
                         Ok(()) => {}
                         Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return Ok(()),
                         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -428,6 +481,13 @@ fn run() -> io::Result<()> {
                 for p in stale {
                     tracked.remove(&p);
                 }
+                // idle-close: drop fds for entries quiet > IDLE_CLOSE. state
+                // (inode/size/partial) retained so next growth reopens cleanly.
+                for t in tracked.values_mut() {
+                    if t.file.is_some() && t.last_activity.elapsed() > IDLE_CLOSE {
+                        t.file = None;
+                    }
+                }
                 // rescan dir for newly-appeared files notify may have missed.
                 let mut new_paths: Vec<PathBuf> = Vec::new();
                 walk(&root, recursive, &mut |p| {
@@ -436,7 +496,7 @@ fn run() -> io::Result<()> {
                     }
                 });
                 for p in new_paths {
-                    match open_tracked(&p, &glob, color, false) {
+                    match stat_tracked(&p, &glob, color, Some(0)) {
                         Ok(t) => {
                             tracked.insert(p, t);
                         }
@@ -473,7 +533,7 @@ fn run() -> io::Result<()> {
                     };
                     if needs_open {
                         tracked.remove(&path);
-                        match open_tracked(&path, &glob, color, false) {
+                        match stat_tracked(&path, &glob, color, Some(0)) {
                             Ok(t) => {
                                 tracked.insert(path.clone(), t);
                             }
@@ -485,7 +545,7 @@ fn run() -> io::Result<()> {
                     }
                     let width = term_width();
                     if let Some(t) = tracked.get_mut(&path)
-                        && let Err(e) = drain(t, &mut stdout, long_mode, width)
+                        && let Err(e) = drain(t, &path, &mut stdout, long_mode, width)
                     {
                         if e.kind() == io::ErrorKind::BrokenPipe {
                             return Ok(());
@@ -509,7 +569,8 @@ fn seed_existing(
 ) {
     walk(root, recursive, &mut |p| {
         if glob.is_match_path(p) {
-            match open_tracked(p, glob, color, true) {
+            // seed = start_offset None = start tailing from current EOF.
+            match stat_tracked(p, glob, color, None) {
                 Ok(t) => {
                     tracked.insert(p.to_path_buf(), t);
                 }
