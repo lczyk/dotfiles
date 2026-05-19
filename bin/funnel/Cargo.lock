@@ -187,7 +187,7 @@ dependencies = [
 
 [[package]]
 name = "funnel"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "libc",
@@ -351,9 +351,9 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
 name = "polyflag"
-version = "0.1.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19bcc35d8988df40ec9fe7bd5f1c720912e2c67b9ebb637aae05cabc9eba55bd"
+checksum = "16515ab1d7b68e4d01180fd33db7b101c7c4bb4aff706301c7fc48dfb74a2cef"
 
 [[package]]
 name = "proc-macro2"

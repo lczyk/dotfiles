@@ -34,10 +34,11 @@ Options:
   -h, --help              Print help information
   -v, --version           Print version information
   --no-color              Disable colored prefixes (also honors NO_COLOR env)
-  --long-lines=<mode>     How to handle lines wider than terminal:
+  -m, --mode=<mode>       How to handle lines wider than terminal:
                             wrap         pass through, terminal wraps
-                            wrap-indent  split at width, indent continuation
-                            trim         truncate to terminal width (default)
+                            indent       split at width, indent continuation
+                            trim         truncate to terminal width
+                          Default: trim on tty, wrap otherwise.
   --allow=<tokens>        Opt in to hard-to-reason-about glob shapes.
                           Comma-separated, repeatable. Use `-name` to remove.
                           Tokens:
@@ -53,24 +54,38 @@ Options:
 #[derive(Clone, Copy)]
 enum LongLines {
     Wrap,
-    WrapIndent,
+    Indent,
     Trim,
 }
 
 struct Args {
     pattern: String,
     no_color: bool,
-    long_lines: LongLines,
+    long_lines: Option<LongLines>,
     allow_values: Vec<String>,
 }
 
 fn parse_args(argv: &[String]) -> Args {
     let mut pattern: Option<String> = None;
     let mut no_color = false;
-    let mut long_lines = LongLines::Trim;
+    let mut long_lines: Option<LongLines> = None;
     let mut allow_values: Vec<String> = Vec::new();
-    for arg in argv.iter().skip(1) {
-        match arg.as_str() {
+    let parse_mode = |val: &str| -> LongLines {
+        match val {
+            "wrap" => LongLines::Wrap,
+            "indent" => LongLines::Indent,
+            "trim" => LongLines::Trim,
+            other => {
+                eprintln!("funnel: invalid --mode value: {other}");
+                eprint!("{}", HELP);
+                std::process::exit(2);
+            }
+        }
+    };
+    let mut i = 1;
+    while i < argv.len() {
+        let arg = argv[i].as_str();
+        match arg {
             "-v" | "--version" => {
                 println!("funnel {}", version::version!());
                 std::process::exit(0);
@@ -80,20 +95,23 @@ fn parse_args(argv: &[String]) -> Args {
                 std::process::exit(0);
             }
             "--no-color" => no_color = true,
+            "-m" | "--mode" => {
+                i += 1;
+                let Some(val) = argv.get(i) else {
+                    eprintln!("funnel: {arg} requires a value");
+                    eprint!("{}", HELP);
+                    std::process::exit(2);
+                };
+                long_lines = Some(parse_mode(val));
+            }
+            s if s.starts_with("--mode=") => {
+                long_lines = Some(parse_mode(&s["--mode=".len()..]));
+            }
+            s if s.starts_with("-m=") => {
+                long_lines = Some(parse_mode(&s["-m=".len()..]));
+            }
             s if s.starts_with("--allow=") => {
                 allow_values.push(s["--allow=".len()..].to_string());
-            }
-            s if s.starts_with("--long-lines=") => {
-                long_lines = match &s["--long-lines=".len()..] {
-                    "wrap" => LongLines::Wrap,
-                    "wrap-indent" => LongLines::WrapIndent,
-                    "trim" => LongLines::Trim,
-                    other => {
-                        eprintln!("funnel: invalid --long-lines value: {other}");
-                        eprint!("{}", HELP);
-                        std::process::exit(2);
-                    }
-                };
             }
             s if s.starts_with('-') => {
                 eprintln!("funnel: unknown flag: {s}");
@@ -108,6 +126,7 @@ fn parse_args(argv: &[String]) -> Args {
                 pattern = Some(s.to_string());
             }
         }
+        i += 1;
     }
     let pattern = pattern.unwrap_or_else(|| {
         eprint!("{}", HELP);
@@ -256,7 +275,7 @@ fn emit_line<W: Write>(
             out.write_all(cut.as_bytes())?;
             out.write_all(b"\n")?;
         }
-        LongLines::WrapIndent => {
+        LongLines::Indent => {
             let avail = width.saturating_sub(prefix_width).max(1);
             let s = String::from_utf8_lossy(content);
             let chars: Vec<char> = s.chars().collect();
@@ -408,7 +427,11 @@ fn run() -> io::Result<()> {
     bump_nofile();
     let args = parse_args(&std::env::args().collect::<Vec<_>>());
     let color = use_color(args.no_color);
-    let long_mode = args.long_lines;
+    // SAFETY: isatty on stdout fd is always safe to call.
+    let stdout_tty = unsafe { libc::isatty(libc::STDOUT_FILENO) == 1 };
+    let long_mode = args
+        .long_lines
+        .unwrap_or(if stdout_tty { LongLines::Trim } else { LongLines::Wrap });
 
     let (root, recursive) = watch_root(&args.pattern);
     if !root.exists() {
