@@ -500,6 +500,7 @@ impl Renderer {
         let mut buf: Vec<u8> = Vec::with_capacity(8 * 1024);
         let dashes: Vec<u8> = vec![b'-'; self.width.max(1)];
         // body rows (1..=vs). cursor_to(row, 1) + clear_eol + content.
+        let mut any_overflow = false;
         for i in 0..vs {
             write!(buf, "\x1b[{};1H\x1b[K", i + 1)?;
             if let Some(rec) = entries.get(i) {
@@ -510,6 +511,11 @@ impl Renderer {
                         content,
                         ..
                     } => {
+                        if matches!(self.mode, LongLines::Trim)
+                            && line_overflows(*pw, content, self.width)
+                        {
+                            any_overflow = true;
+                        }
                         emit_line_inner(
                             &mut buf,
                             prefix,
@@ -526,13 +532,21 @@ impl Renderer {
                 }
             }
         }
-        // status row at the very last terminal row
+        // status row at the very last terminal row. last cell shows `>` when
+        // any visible line had content trimmed; same fg/bg as the rest of
+        // the bar (no separate color escape -- whole row is inverse video).
         write!(buf, "\x1b[{};1H\x1b[K\x1b[7m", self.height.max(1))?;
-        let st = truncate_to_width(&status, self.width);
+        let indicator = if any_overflow { b'>' } else { b' ' };
+        // status text capped at width-1 so the indicator always fits
+        let st = truncate_to_width(&status, self.width.saturating_sub(1));
         let st_cols = st.chars().count();
         buf.extend_from_slice(st.as_bytes());
-        for _ in st_cols..self.width {
+        let target = self.width.saturating_sub(1);
+        for _ in st_cols..target {
             buf.push(b' ');
+        }
+        if self.width >= 1 {
+            buf.push(indicator);
         }
         buf.extend_from_slice(b"\x1b[0m");
 
@@ -547,6 +561,34 @@ impl Renderer {
 // compute against an arbitrary height in scope where self isn't available).
 fn view_size_h(h: usize) -> usize {
     h.saturating_sub(1).max(1)
+}
+
+// Returns true iff rendering this content in trim mode at the given width
+// would drop one or more visible cells from the right. Walks the same
+// tab/control-char accounting as `emit_line_inner` so the answer matches
+// what actually gets rendered.
+fn line_overflows(prefix_width: usize, content: &[u8], width: usize) -> bool {
+    if prefix_width >= width {
+        // line entirely skipped at this width -- treat as overflow so the
+        // user knows there's content they're not seeing.
+        return !content.is_empty();
+    }
+    let s = String::from_utf8_lossy(content);
+    let mut col = prefix_width;
+    for c in s.chars() {
+        let w = if c == '\t' {
+            8 - (col % 8)
+        } else if (c as u32) < 0x20 || c == '\x7f' {
+            continue;
+        } else {
+            1
+        };
+        if col + w > width {
+            return true;
+        }
+        col += w;
+    }
+    false
 }
 
 fn truncate_to_width(s: &str, width: usize) -> String {
@@ -1021,7 +1063,7 @@ fn run() -> io::Result<()> {
         spawn_input_watcher(tx.clone());
     }
     drop(tx);
-    const WHEEL_LINES: usize = 3;
+    const WHEEL_LINES: usize = 1;
 
     // main event loop.
     loop {
