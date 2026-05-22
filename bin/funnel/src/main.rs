@@ -1564,6 +1564,176 @@ mod tests {
         assert!(plan.is_empty());
     }
 
+    // ---------- line_overflows ----------
+
+    #[test]
+    fn line_overflows_fits_exactly() {
+        // prefix_width=6, "abcdef" = 6 chars, width=12 -> col reaches 12, no break
+        assert!(!line_overflows(6, b"abcdef", 12));
+    }
+
+    #[test]
+    fn line_overflows_one_over() {
+        assert!(line_overflows(6, b"abcdefg", 12));
+    }
+
+    #[test]
+    fn line_overflows_tab_pushes_past() {
+        // prefix=6, width=10. tab from col 6 -> col 8 (next 8-stop). Then
+        // "ab" fits (col 9,10); "abc" overflows (col 11 > 10).
+        assert!(!line_overflows(6, b"\tab", 10));
+        assert!(line_overflows(6, b"\tabc", 10));
+    }
+
+    #[test]
+    fn line_overflows_control_chars_ignored() {
+        // controls don't count: a,b,c -> 3 visible cells
+        assert!(!line_overflows(6, b"a\x01b\x7fc", 9));
+        assert!(line_overflows(6, b"a\x01b\x7fc", 8));
+    }
+
+    #[test]
+    fn line_overflows_prefix_too_wide_with_content() {
+        assert!(line_overflows(10, b"hello", 8));
+    }
+
+    #[test]
+    fn line_overflows_prefix_too_wide_empty_content() {
+        // empty content: line is the prefix alone -- nothing trimmed off content
+        assert!(!line_overflows(10, b"", 8));
+    }
+
+    // ---------- Renderer state machine ----------
+
+    fn make_renderer(cap: usize) -> Renderer {
+        let mut r = Renderer::new(LongLines::Trim, true, cap);
+        r.width = 80;
+        // small height -> view_size = 4 -> few entries trigger scrolling
+        r.height = 5;
+        r
+    }
+
+    fn push(r: &mut Renderer, content: &[u8]) {
+        let _ = r.emit(&mut std::io::sink(), b"[x] ", 4, content);
+    }
+
+    #[test]
+    fn scroll_up_from_follow_takes_snapshot() {
+        let mut r = make_renderer(100);
+        for i in 0..30 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        assert!(matches!(r.state, ViewState::Follow));
+        r.scroll_up(1);
+        if let ViewState::Paused {
+            snapshot,
+            offset,
+            snapshot_max_seq,
+        } = &r.state
+        {
+            assert_eq!(snapshot.len(), 30);
+            assert_eq!(*offset, 1);
+            assert_eq!(*snapshot_max_seq, 30);
+        } else {
+            panic!("expected paused");
+        }
+    }
+
+    #[test]
+    fn scroll_up_clamps_at_max_offset() {
+        let mut r = make_renderer(100);
+        for i in 0..30 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        // view_size = height-1 = 4; max_offset = 30 - 4 = 26
+        r.scroll_up(1000);
+        if let ViewState::Paused { offset, .. } = &r.state {
+            assert_eq!(*offset, 26);
+        } else {
+            panic!("expected paused");
+        }
+    }
+
+    #[test]
+    fn scroll_up_noop_when_view_covers_ring() {
+        let mut r = make_renderer(100);
+        for i in 0..3 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        // ring(3) <= view_size(4); nothing to scroll up to -> stay in Follow
+        r.scroll_up(10);
+        assert!(matches!(r.state, ViewState::Follow));
+    }
+
+    #[test]
+    fn scroll_down_to_bottom_returns_to_follow() {
+        let mut r = make_renderer(100);
+        for i in 0..30 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        r.scroll_up(5);
+        r.scroll_down(10);
+        assert!(matches!(r.state, ViewState::Follow));
+    }
+
+    #[test]
+    fn scroll_down_no_gap_when_overlap_preserved() {
+        let mut r = make_renderer(100);
+        for i in 0..10 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        r.scroll_up(1);
+        for i in 10..15 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        // ring still holds seq 0..15, snapshot held seq 0..10 -- overlap.
+        r.scroll_down(100);
+        assert!(matches!(r.state, ViewState::Follow));
+        assert!(!r.ring.iter().any(|e| matches!(e, LineRec::Gap)));
+    }
+
+    #[test]
+    fn scroll_down_inserts_gap_when_evicted() {
+        // cap=10, view_size=4. fill the ring, snapshot it, then emit enough
+        // new lines to fully evict the snapshot range from the live ring.
+        let mut r = make_renderer(10);
+        for i in 0..10 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        r.scroll_up(1);
+        // push 15 more -> ring holds last 10 (seq 15..25); snapshot held seq 0..10
+        for i in 10..25 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        r.scroll_down(100);
+        assert!(matches!(r.state, ViewState::Follow));
+        // gap marker should be at the front (oldest position)
+        assert!(matches!(r.ring.front(), Some(LineRec::Gap)));
+    }
+
+    #[test]
+    fn emit_during_paused_grows_ring_only() {
+        let mut r = make_renderer(100);
+        for i in 0..10 {
+            push(&mut r, format!("l{i}").as_bytes());
+        }
+        r.scroll_up(1);
+        let snap_len_before = if let ViewState::Paused { snapshot, .. } = &r.state {
+            snapshot.len()
+        } else {
+            unreachable!()
+        };
+        push(&mut r, b"new1");
+        push(&mut r, b"new2");
+        if let ViewState::Paused { snapshot, .. } = &r.state {
+            // snapshot stays frozen; live ring grew separately
+            assert_eq!(snapshot.len(), snap_len_before);
+        } else {
+            panic!("expected paused");
+        }
+        assert_eq!(r.ring.len(), 12);
+    }
+
     #[test]
     fn wrap_passes_through() {
         assert_eq!(
