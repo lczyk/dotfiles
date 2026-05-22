@@ -266,36 +266,21 @@ fn term_size() -> (usize, usize) {
     }
 }
 
-// LineRec: ring buffer element. `Real` carries an emit record + monotonic seq
-// number (used to detect gaps when resuming from paused scroll). `Gap` is a
-// synthetic marker inserted when transitioning out of paused mode if data
-// was evicted from the ring while paused -- rendered as a horizontal divider.
+// LineRec: ring buffer element. Plain emit record; no gap markers (alacritty-
+// style offset anchoring handles eviction silently, see Renderer).
 #[derive(Clone)]
-enum LineRec {
-    Real {
-        seq: u64,
-        prefix: Vec<u8>,
-        pw: usize,
-        content: Vec<u8>,
-    },
-    Gap,
+struct LineRec {
+    prefix: Vec<u8>,
+    pw: usize,
+    content: Vec<u8>,
 }
 
-// ViewState: Follow = live tail tracks new emits. Paused = view pinned to a
-// snapshot taken at scroll-up time; live ring keeps growing in background.
-#[derive(Clone)]
-enum ViewState {
-    Follow,
-    Paused {
-        snapshot: Vec<LineRec>,
-        offset: usize,         // lines above bottom of snapshot
-        snapshot_max_seq: u64, // next_seq value when snapshot taken
-    },
-}
-
-// Renderer: alt-screen TUI pager when stdout-tty AND mode=Trim. Ring buffer
-// of last `cap` emits; paint draws bottom `view_size` entries (or paused
-// snapshot slice) + status row. Non-alt path: streams emit_line directly.
+// Renderer: alt-screen TUI pager when stdout-tty AND mode=Trim. Ring buffer of
+// last `cap` emits; scroll position is a single `display_offset` -- lines
+// above the live bottom (0 = follow). When an emit arrives while paused
+// (display_offset > 0), the offset auto-bumps so the visible content stays
+// anchored to the same lines as the ring ages. Mirrors alacritty's grid
+// scroll model. Non-alt path: streams emit_line directly.
 struct Renderer {
     mode: LongLines,
     alt: bool,
@@ -303,8 +288,7 @@ struct Renderer {
     height: usize,
     ring: VecDeque<LineRec>,
     cap: usize,
-    next_seq: u64,
-    state: ViewState,
+    display_offset: usize,
     dirty: bool,
 }
 
@@ -318,10 +302,13 @@ impl Renderer {
             height: h,
             ring: VecDeque::new(),
             cap,
-            next_seq: 0,
-            state: ViewState::Follow,
+            display_offset: 0,
             dirty: false,
         }
+    }
+
+    fn max_offset(&self) -> usize {
+        self.ring.len().saturating_sub(self.view_size())
     }
 
     // visible content rows = total height - 1 (status row reserved at bottom).
@@ -342,17 +329,17 @@ impl Renderer {
         while self.ring.len() >= self.cap {
             self.ring.pop_front();
         }
-        let seq = self.next_seq;
-        self.next_seq += 1;
-        self.ring.push_back(LineRec::Real {
-            seq,
+        self.ring.push_back(LineRec {
             prefix: prefix.to_vec(),
             pw,
             content: content.to_vec(),
         });
-        // Follow mode: new emits change the view so mark dirty. Paused: live
-        // ring grows behind the scenes but visible snapshot view unchanged;
-        // still mark dirty so status row line-count updates.
+        // Paused: bump offset so visible window stays anchored on same content
+        // as the ring grows. Saturates at max_offset -- once there, content
+        // silently ages out of the top of the view (matches alacritty).
+        if self.display_offset > 0 {
+            self.display_offset = (self.display_offset + 1).min(self.max_offset());
+        }
         self.dirty = true;
         Ok(())
     }
@@ -362,14 +349,9 @@ impl Renderer {
         if w != self.width || h != self.height {
             self.width = w;
             self.height = h;
-            if let ViewState::Paused {
-                snapshot, offset, ..
-            } = &mut self.state
-            {
-                let max = snapshot.len().saturating_sub(view_size_h(h));
-                if *offset > max {
-                    *offset = max;
-                }
+            let max = self.ring.len().saturating_sub(view_size_h(h));
+            if self.display_offset > max {
+                self.display_offset = max;
             }
             self.dirty = true;
         }
@@ -379,32 +361,11 @@ impl Renderer {
         if !self.alt {
             return;
         }
-        let vs = self.view_size();
-        match &mut self.state {
-            ViewState::Follow => {
-                let snapshot: Vec<LineRec> = self.ring.iter().cloned().collect();
-                let max_offset = snapshot.len().saturating_sub(vs);
-                if max_offset == 0 {
-                    return; // nothing above current view
-                }
-                let offset = lines.min(max_offset);
-                self.state = ViewState::Paused {
-                    snapshot,
-                    offset,
-                    snapshot_max_seq: self.next_seq,
-                };
-                self.dirty = true;
-            }
-            ViewState::Paused {
-                snapshot, offset, ..
-            } => {
-                let max = snapshot.len().saturating_sub(vs);
-                let new_off = (*offset + lines).min(max);
-                if new_off != *offset {
-                    *offset = new_off;
-                    self.dirty = true;
-                }
-            }
+        let max = self.max_offset();
+        let new_off = (self.display_offset + lines).min(max);
+        if new_off != self.display_offset {
+            self.display_offset = new_off;
+            self.dirty = true;
         }
     }
 
@@ -412,53 +373,10 @@ impl Renderer {
         if !self.alt {
             return;
         }
-        match &mut self.state {
-            ViewState::Follow => {}
-            ViewState::Paused {
-                snapshot,
-                offset,
-                snapshot_max_seq,
-            } => {
-                if *offset > lines {
-                    *offset -= lines;
-                    self.dirty = true;
-                    return;
-                }
-                // reaching/passing bottom: transition to Follow. detect gap by
-                // comparing snapshot's last Real seq to live ring's first Real
-                // seq. If live's oldest seq > snapshot's max seq, data was
-                // evicted while paused -> insert a Gap marker at the front of
-                // the live ring so the boundary is visible.
-                let snap_last_seq = snapshot.iter().rev().find_map(|r| {
-                    if let LineRec::Real { seq, .. } = r {
-                        Some(*seq)
-                    } else {
-                        None
-                    }
-                });
-                let ring_first_seq = self.ring.iter().find_map(|r| {
-                    if let LineRec::Real { seq, .. } = r {
-                        Some(*seq)
-                    } else {
-                        None
-                    }
-                });
-                let gap = match (snap_last_seq, ring_first_seq) {
-                    (Some(s), Some(r)) => r > s + 1,
-                    (None, _) | (_, None) => false,
-                };
-                // also gap if snapshot_max_seq < ring_first_seq (live evicted
-                // past snapshot end before any post-snapshot emits)
-                let _ = snapshot_max_seq;
-                if gap {
-                    if self.ring.len() >= self.cap {
-                        self.ring.pop_front();
-                    }
-                    self.ring.push_front(LineRec::Gap);
-                }
-                self.state = ViewState::Follow;
-                self.dirty = true;
-            }
+        let new_off = self.display_offset.saturating_sub(lines);
+        if new_off != self.display_offset {
+            self.display_offset = new_off;
+            self.dirty = true;
         }
     }
 
@@ -471,65 +389,38 @@ impl Renderer {
             return Ok(());
         }
         let vs = self.view_size();
-        let (entries, status): (Vec<LineRec>, String) = match &self.state {
-            ViewState::Follow => {
-                let start = self.ring.len().saturating_sub(vs);
-                let v: Vec<LineRec> = self.ring.range(start..).cloned().collect();
-                (v, "-- following (scroll up to pause) --".to_string())
-            }
-            ViewState::Paused {
-                snapshot,
-                offset,
-                snapshot_max_seq,
-            } => {
-                let end = snapshot.len().saturating_sub(*offset);
-                let start = end.saturating_sub(vs);
-                let v: Vec<LineRec> = snapshot[start..end].to_vec();
-                let below_in_snap = snapshot.len().saturating_sub(end);
-                let arrived = self.next_seq.saturating_sub(*snapshot_max_seq) as usize;
-                (
-                    v,
-                    format!(
-                        "-- paused: {} below | {} new since pause --",
-                        below_in_snap, arrived
-                    ),
-                )
-            }
+        let end = self.ring.len().saturating_sub(self.display_offset);
+        let start = end.saturating_sub(vs);
+        let entries: Vec<LineRec> = self.ring.range(start..end).cloned().collect();
+        let status = if self.display_offset == 0 {
+            "-- following (scroll up to pause) --".to_string()
+        } else {
+            format!(
+                "-- paused: {} below | {} above --",
+                self.display_offset, start
+            )
         };
 
         let mut buf: Vec<u8> = Vec::with_capacity(8 * 1024);
-        let dashes: Vec<u8> = vec![b'-'; self.width.max(1)];
         // body rows (1..=vs). cursor_to(row, 1) + clear_eol + content.
         let mut any_overflow = false;
         for i in 0..vs {
             write!(buf, "\x1b[{};1H\x1b[K", i + 1)?;
             if let Some(rec) = entries.get(i) {
-                match rec {
-                    LineRec::Real {
-                        prefix,
-                        pw,
-                        content,
-                        ..
-                    } => {
-                        if matches!(self.mode, LongLines::Trim)
-                            && line_overflows(*pw, content, self.width)
-                        {
-                            any_overflow = true;
-                        }
-                        emit_line_inner(
-                            &mut buf,
-                            prefix,
-                            *pw,
-                            content,
-                            self.mode,
-                            self.width,
-                            false,
-                        )?;
-                    }
-                    LineRec::Gap => {
-                        buf.extend_from_slice(&dashes);
-                    }
+                if matches!(self.mode, LongLines::Trim)
+                    && line_overflows(rec.pw, &rec.content, self.width)
+                {
+                    any_overflow = true;
                 }
+                emit_line_inner(
+                    &mut buf,
+                    &rec.prefix,
+                    rec.pw,
+                    &rec.content,
+                    self.mode,
+                    self.width,
+                    false,
+                )?;
             }
         }
         // status row at the very last terminal row. last cell shows `>` when
@@ -542,9 +433,7 @@ impl Renderer {
         let st_cols = st.chars().count();
         buf.extend_from_slice(st.as_bytes());
         let target = self.width.saturating_sub(1);
-        for _ in st_cols..target {
-            buf.push(b' ');
-        }
+        buf.extend(std::iter::repeat_n(b' ', target.saturating_sub(st_cols)));
         if self.width >= 1 {
             buf.push(indicator);
         }
@@ -592,16 +481,7 @@ fn line_overflows(prefix_width: usize, content: &[u8], width: usize) -> bool {
 }
 
 fn truncate_to_width(s: &str, width: usize) -> String {
-    let mut out = String::new();
-    let mut col = 0usize;
-    for c in s.chars() {
-        if col >= width {
-            break;
-        }
-        out.push(c);
-        col += 1;
-    }
-    out
+    s.chars().take(width).collect()
 }
 
 // AltScreenGuard: enters alt-screen + hides cursor on construction; restores
@@ -945,20 +825,15 @@ fn spawn_input_watcher(tx: mpsc::Sender<Event>) {
                 Ok(0) => return,
                 Ok(n) => {
                     acc.extend_from_slice(&chunk[..n]);
-                    loop {
-                        match parse_input(&acc) {
-                            Some((evt_opt, consumed)) => {
-                                acc.drain(..consumed);
-                                if let Some(evt) = evt_opt
-                                    && tx.send(Event::Input(evt)).is_err()
-                                {
-                                    return;
-                                }
-                                if acc.is_empty() {
-                                    break;
-                                }
-                            }
-                            None => break, // incomplete; wait for more
+                    while let Some((evt_opt, consumed)) = parse_input(&acc) {
+                        acc.drain(..consumed);
+                        if let Some(evt) = evt_opt
+                            && tx.send(Event::Input(evt)).is_err()
+                        {
+                            return;
+                        }
+                        if acc.is_empty() {
+                            break;
                         }
                     }
                 }
@@ -1080,19 +955,19 @@ fn run() -> io::Result<()> {
             Ok(Event::Input(InputEvent::Quit)) => return Ok(()),
             Ok(Event::Input(InputEvent::ScrollUp)) => {
                 renderer.scroll_up(WHEEL_LINES);
-                if let Err(e) = renderer.paint(&mut stdout) {
-                    if e.kind() == io::ErrorKind::BrokenPipe {
-                        return Ok(());
-                    }
+                if let Err(e) = renderer.paint(&mut stdout)
+                    && e.kind() == io::ErrorKind::BrokenPipe
+                {
+                    return Ok(());
                 }
                 continue;
             }
             Ok(Event::Input(InputEvent::ScrollDown)) => {
                 renderer.scroll_down(WHEEL_LINES);
-                if let Err(e) = renderer.paint(&mut stdout) {
-                    if e.kind() == io::ErrorKind::BrokenPipe {
-                        return Ok(());
-                    }
+                if let Err(e) = renderer.paint(&mut stdout)
+                    && e.kind() == io::ErrorKind::BrokenPipe
+                {
+                    return Ok(());
                 }
                 continue;
             }
@@ -1139,10 +1014,10 @@ fn run() -> io::Result<()> {
                         Err(e) => warn(&p, &e),
                     }
                 }
-                if let Err(e) = renderer.paint(&mut stdout) {
-                    if e.kind() == io::ErrorKind::BrokenPipe {
-                        return Ok(());
-                    }
+                if let Err(e) = renderer.paint(&mut stdout)
+                    && e.kind() == io::ErrorKind::BrokenPipe
+                {
+                    return Ok(());
                 }
                 continue;
             }
@@ -1197,10 +1072,10 @@ fn run() -> io::Result<()> {
                 EventKind::Access(_) => {}
             }
         }
-        if let Err(e) = renderer.paint(&mut stdout) {
-            if e.kind() == io::ErrorKind::BrokenPipe {
-                return Ok(());
-            }
+        if let Err(e) = renderer.paint(&mut stdout)
+            && e.kind() == io::ErrorKind::BrokenPipe
+        {
+            return Ok(());
         }
     }
     Ok(())
@@ -1617,26 +1492,23 @@ mod tests {
         let _ = r.emit(&mut std::io::sink(), b"[x] ", 4, content);
     }
 
+    // top visible content for a given Renderer (first row in view).
+    fn top_visible(r: &Renderer) -> Vec<u8> {
+        let vs = r.view_size();
+        let end = r.ring.len().saturating_sub(r.display_offset);
+        let start = end.saturating_sub(vs);
+        r.ring[start].content.clone()
+    }
+
     #[test]
-    fn scroll_up_from_follow_takes_snapshot() {
+    fn scroll_up_from_follow_sets_offset() {
         let mut r = make_renderer(100);
         for i in 0..30 {
             push(&mut r, format!("l{i}").as_bytes());
         }
-        assert!(matches!(r.state, ViewState::Follow));
+        assert_eq!(r.display_offset, 0);
         r.scroll_up(1);
-        if let ViewState::Paused {
-            snapshot,
-            offset,
-            snapshot_max_seq,
-        } = &r.state
-        {
-            assert_eq!(snapshot.len(), 30);
-            assert_eq!(*offset, 1);
-            assert_eq!(*snapshot_max_seq, 30);
-        } else {
-            panic!("expected paused");
-        }
+        assert_eq!(r.display_offset, 1);
     }
 
     #[test]
@@ -1647,11 +1519,7 @@ mod tests {
         }
         // view_size = height-1 = 4; max_offset = 30 - 4 = 26
         r.scroll_up(1000);
-        if let ViewState::Paused { offset, .. } = &r.state {
-            assert_eq!(*offset, 26);
-        } else {
-            panic!("expected paused");
-        }
+        assert_eq!(r.display_offset, 26);
     }
 
     #[test]
@@ -1662,76 +1530,76 @@ mod tests {
         }
         // ring(3) <= view_size(4); nothing to scroll up to -> stay in Follow
         r.scroll_up(10);
-        assert!(matches!(r.state, ViewState::Follow));
+        assert_eq!(r.display_offset, 0);
     }
 
     #[test]
-    fn scroll_down_to_bottom_returns_to_follow() {
+    fn scroll_down_to_zero_returns_to_follow() {
         let mut r = make_renderer(100);
         for i in 0..30 {
             push(&mut r, format!("l{i}").as_bytes());
         }
         r.scroll_up(5);
+        assert_eq!(r.display_offset, 5);
         r.scroll_down(10);
-        assert!(matches!(r.state, ViewState::Follow));
+        assert_eq!(r.display_offset, 0);
     }
 
     #[test]
-    fn scroll_down_no_gap_when_overlap_preserved() {
+    fn paused_view_anchors_on_emit_within_cap() {
+        // ring has slack: emits bump offset 1:1 so visible content stays put.
         let mut r = make_renderer(100);
         for i in 0..10 {
             push(&mut r, format!("l{i}").as_bytes());
         }
-        r.scroll_up(1);
-        for i in 10..15 {
+        r.scroll_up(3); // offset=3, view shows ring[3..7] = l3..l6, top=l3
+        assert_eq!(top_visible(&r), b"l3");
+        for i in 10..20 {
             push(&mut r, format!("l{i}").as_bytes());
         }
-        // ring still holds seq 0..15, snapshot held seq 0..10 -- overlap.
-        r.scroll_down(100);
-        assert!(matches!(r.state, ViewState::Follow));
-        assert!(!r.ring.iter().any(|e| matches!(e, LineRec::Gap)));
+        // offset bumped 10 times -> 13. ring.len=20, view_size=4, end=20-13=7,
+        // start=3 -> top still l3.
+        assert_eq!(r.display_offset, 13);
+        assert_eq!(top_visible(&r), b"l3");
     }
 
     #[test]
-    fn scroll_down_inserts_gap_when_evicted() {
-        // cap=10, view_size=4. fill the ring, snapshot it, then emit enough
-        // new lines to fully evict the snapshot range from the live ring.
+    fn paused_view_evicts_silently_past_cap() {
+        // cap=10, view_size=4 -> max_offset=6. fill, scroll to top, then emit:
+        // offset is already at max, so further emits silently age content out
+        // of the top of the view (matches alacritty -- no gap marker).
         let mut r = make_renderer(10);
         for i in 0..10 {
             push(&mut r, format!("l{i}").as_bytes());
         }
-        r.scroll_up(1);
-        // push 15 more -> ring holds last 10 (seq 15..25); snapshot held seq 0..10
-        for i in 10..25 {
+        r.scroll_up(100); // clamps to 6 (max_offset)
+        assert_eq!(r.display_offset, 6);
+        assert_eq!(top_visible(&r), b"l0");
+        for i in 10..15 {
             push(&mut r, format!("l{i}").as_bytes());
         }
-        r.scroll_down(100);
-        assert!(matches!(r.state, ViewState::Follow));
-        // gap marker should be at the front (oldest position)
-        assert!(matches!(r.ring.front(), Some(LineRec::Gap)));
+        // ring still holds last 10 (l5..l14). offset stays at max_offset=6.
+        // top of view = ring[0] = l5 -- l0..l4 silently aged out.
+        assert_eq!(r.ring.len(), 10);
+        assert_eq!(r.display_offset, 6);
+        assert_eq!(top_visible(&r), b"l5");
     }
 
     #[test]
-    fn emit_during_paused_grows_ring_only() {
+    fn resize_clamps_offset() {
         let mut r = make_renderer(100);
-        for i in 0..10 {
+        for i in 0..30 {
             push(&mut r, format!("l{i}").as_bytes());
         }
-        r.scroll_up(1);
-        let snap_len_before = if let ViewState::Paused { snapshot, .. } = &r.state {
-            snapshot.len()
-        } else {
-            unreachable!()
-        };
-        push(&mut r, b"new1");
-        push(&mut r, b"new2");
-        if let ViewState::Paused { snapshot, .. } = &r.state {
-            // snapshot stays frozen; live ring grew separately
-            assert_eq!(snapshot.len(), snap_len_before);
-        } else {
-            panic!("expected paused");
+        r.scroll_up(20); // offset=20; max=26 at height=5
+        // shrink terminal: height=10 -> view_size=9 -> max_offset=21 (still ok)
+        // but height=25 -> view_size=24 -> max_offset=6 (clamps)
+        r.height = 25;
+        let max = r.ring.len().saturating_sub(view_size_h(r.height));
+        if r.display_offset > max {
+            r.display_offset = max;
         }
-        assert_eq!(r.ring.len(), 12);
+        assert_eq!(r.display_offset, 6);
     }
 
     #[test]
