@@ -4,13 +4,12 @@
 // truncation / unlink-recreate like `tail -F`. prefix is colorized per-file
 // via a hash of the full path, so the same file always gets the same color.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -39,6 +38,8 @@ Options:
                             indent       split at width, indent continuation
                             trim         truncate to terminal width
                           Default: trim on tty, wrap otherwise.
+  -s, --scrollback=<n>    Number of lines kept in the scrollback ring (alt-
+                          screen mode only). Default: 10000.
   --allow=<tokens>        Opt in to hard-to-reason-about glob shapes.
                           Comma-separated, repeatable. Use `-name` to remove.
                           Tokens:
@@ -63,6 +64,7 @@ struct Args {
     no_color: bool,
     long_lines: Option<LongLines>,
     allow_values: Vec<String>,
+    scrollback: usize,
 }
 
 fn parse_args(argv: &[String]) -> Args {
@@ -70,6 +72,17 @@ fn parse_args(argv: &[String]) -> Args {
     let mut no_color = false;
     let mut long_lines: Option<LongLines> = None;
     let mut allow_values: Vec<String> = Vec::new();
+    let mut scrollback: usize = 10_000;
+    let parse_scrollback = |val: &str| -> usize {
+        match val.parse::<usize>() {
+            Ok(n) if n >= 1 => n,
+            _ => {
+                eprintln!("funnel: invalid --scrollback value: {val}");
+                eprint!("{}", HELP);
+                std::process::exit(2);
+            }
+        }
+    };
     let parse_mode = |val: &str| -> LongLines {
         match val {
             "wrap" => LongLines::Wrap,
@@ -110,6 +123,21 @@ fn parse_args(argv: &[String]) -> Args {
             s if s.starts_with("-m=") => {
                 long_lines = Some(parse_mode(&s["-m=".len()..]));
             }
+            "-s" | "--scrollback" => {
+                i += 1;
+                let Some(val) = argv.get(i) else {
+                    eprintln!("funnel: {arg} requires a value");
+                    eprint!("{}", HELP);
+                    std::process::exit(2);
+                };
+                scrollback = parse_scrollback(val);
+            }
+            s if s.starts_with("--scrollback=") => {
+                scrollback = parse_scrollback(&s["--scrollback=".len()..]);
+            }
+            s if s.starts_with("-s=") => {
+                scrollback = parse_scrollback(&s["-s=".len()..]);
+            }
             s if s.starts_with("--allow=") => {
                 allow_values.push(s["--allow=".len()..].to_string());
             }
@@ -137,6 +165,7 @@ fn parse_args(argv: &[String]) -> Args {
         no_color,
         long_lines,
         allow_values,
+        scrollback,
     }
 }
 
@@ -216,21 +245,377 @@ fn bump_nofile() {
     }
 }
 
-fn term_width() -> usize {
+fn term_size() -> (usize, usize) {
     // SAFETY: ioctl on stdout fd writing into a stack winsize struct.
     let mut ws: libc::winsize = unsafe { std::mem::zeroed() };
-    if unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut ws) } == 0 && ws.ws_col > 0
+    if unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut ws) } == 0
+        && ws.ws_col > 0
+        && ws.ws_row > 0
     {
-        ws.ws_col as usize
+        (ws.ws_col as usize, ws.ws_row as usize)
     } else {
-        std::env::var("COLUMNS")
+        let w = std::env::var("COLUMNS")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or(80)
+            .unwrap_or(80);
+        let h = std::env::var("LINES")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(24);
+        (w, h)
+    }
+}
+
+// LineRec: ring buffer element. `Real` carries an emit record + monotonic seq
+// number (used to detect gaps when resuming from paused scroll). `Gap` is a
+// synthetic marker inserted when transitioning out of paused mode if data
+// was evicted from the ring while paused -- rendered as a horizontal divider.
+#[derive(Clone)]
+enum LineRec {
+    Real {
+        seq: u64,
+        prefix: Vec<u8>,
+        pw: usize,
+        content: Vec<u8>,
+    },
+    Gap,
+}
+
+// ViewState: Follow = live tail tracks new emits. Paused = view pinned to a
+// snapshot taken at scroll-up time; live ring keeps growing in background.
+#[derive(Clone)]
+enum ViewState {
+    Follow,
+    Paused {
+        snapshot: Vec<LineRec>,
+        offset: usize,         // lines above bottom of snapshot
+        snapshot_max_seq: u64, // next_seq value when snapshot taken
+    },
+}
+
+// Renderer: alt-screen TUI pager when stdout-tty AND mode=Trim. Ring buffer
+// of last `cap` emits; paint draws bottom `view_size` entries (or paused
+// snapshot slice) + status row. Non-alt path: streams emit_line directly.
+struct Renderer {
+    mode: LongLines,
+    alt: bool,
+    width: usize,
+    height: usize,
+    ring: VecDeque<LineRec>,
+    cap: usize,
+    next_seq: u64,
+    state: ViewState,
+    dirty: bool,
+}
+
+impl Renderer {
+    fn new(mode: LongLines, alt: bool, cap: usize) -> Self {
+        let (w, h) = term_size();
+        Renderer {
+            mode,
+            alt,
+            width: w,
+            height: h,
+            ring: VecDeque::new(),
+            cap,
+            next_seq: 0,
+            state: ViewState::Follow,
+            dirty: false,
+        }
+    }
+
+    // visible content rows = total height - 1 (status row reserved at bottom).
+    fn view_size(&self) -> usize {
+        self.height.saturating_sub(1).max(1)
+    }
+
+    fn emit<W: Write>(
+        &mut self,
+        out: &mut W,
+        prefix: &[u8],
+        pw: usize,
+        content: &[u8],
+    ) -> io::Result<()> {
+        if !self.alt {
+            return emit_line(out, prefix, pw, content, self.mode, self.width);
+        }
+        while self.ring.len() >= self.cap {
+            self.ring.pop_front();
+        }
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        self.ring.push_back(LineRec::Real {
+            seq,
+            prefix: prefix.to_vec(),
+            pw,
+            content: content.to_vec(),
+        });
+        // Follow mode: new emits change the view so mark dirty. Paused: live
+        // ring grows behind the scenes but visible snapshot view unchanged;
+        // still mark dirty so status row line-count updates.
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn check_resize(&mut self) {
+        let (w, h) = term_size();
+        if w != self.width || h != self.height {
+            self.width = w;
+            self.height = h;
+            if let ViewState::Paused {
+                snapshot, offset, ..
+            } = &mut self.state
+            {
+                let max = snapshot.len().saturating_sub(view_size_h(h));
+                if *offset > max {
+                    *offset = max;
+                }
+            }
+            self.dirty = true;
+        }
+    }
+
+    fn scroll_up(&mut self, lines: usize) {
+        if !self.alt {
+            return;
+        }
+        let vs = self.view_size();
+        match &mut self.state {
+            ViewState::Follow => {
+                let snapshot: Vec<LineRec> = self.ring.iter().cloned().collect();
+                let max_offset = snapshot.len().saturating_sub(vs);
+                if max_offset == 0 {
+                    return; // nothing above current view
+                }
+                let offset = lines.min(max_offset);
+                self.state = ViewState::Paused {
+                    snapshot,
+                    offset,
+                    snapshot_max_seq: self.next_seq,
+                };
+                self.dirty = true;
+            }
+            ViewState::Paused {
+                snapshot, offset, ..
+            } => {
+                let max = snapshot.len().saturating_sub(vs);
+                let new_off = (*offset + lines).min(max);
+                if new_off != *offset {
+                    *offset = new_off;
+                    self.dirty = true;
+                }
+            }
+        }
+    }
+
+    fn scroll_down(&mut self, lines: usize) {
+        if !self.alt {
+            return;
+        }
+        match &mut self.state {
+            ViewState::Follow => {}
+            ViewState::Paused {
+                snapshot,
+                offset,
+                snapshot_max_seq,
+            } => {
+                if *offset > lines {
+                    *offset -= lines;
+                    self.dirty = true;
+                    return;
+                }
+                // reaching/passing bottom: transition to Follow. detect gap by
+                // comparing snapshot's last Real seq to live ring's first Real
+                // seq. If live's oldest seq > snapshot's max seq, data was
+                // evicted while paused -> insert a Gap marker at the front of
+                // the live ring so the boundary is visible.
+                let snap_last_seq = snapshot.iter().rev().find_map(|r| {
+                    if let LineRec::Real { seq, .. } = r {
+                        Some(*seq)
+                    } else {
+                        None
+                    }
+                });
+                let ring_first_seq = self.ring.iter().find_map(|r| {
+                    if let LineRec::Real { seq, .. } = r {
+                        Some(*seq)
+                    } else {
+                        None
+                    }
+                });
+                let gap = match (snap_last_seq, ring_first_seq) {
+                    (Some(s), Some(r)) => r > s + 1,
+                    (None, _) | (_, None) => false,
+                };
+                // also gap if snapshot_max_seq < ring_first_seq (live evicted
+                // past snapshot end before any post-snapshot emits)
+                let _ = snapshot_max_seq;
+                if gap {
+                    if self.ring.len() >= self.cap {
+                        self.ring.pop_front();
+                    }
+                    self.ring.push_front(LineRec::Gap);
+                }
+                self.state = ViewState::Follow;
+                self.dirty = true;
+            }
+        }
+    }
+
+    // Flicker-free paint: render entire frame into an in-memory buffer, then
+    // issue a single write_all to stdout. Per-row positioning via CUP +
+    // `\x1b[K` clear-to-eol instead of `\x1b[2J` full-screen clear -- avoids
+    // the visible blank flash that 2J causes every frame during scrolling.
+    fn paint<W: Write>(&mut self, out: &mut W) -> io::Result<()> {
+        if !self.alt || !self.dirty {
+            return Ok(());
+        }
+        let vs = self.view_size();
+        let (entries, status): (Vec<LineRec>, String) = match &self.state {
+            ViewState::Follow => {
+                let start = self.ring.len().saturating_sub(vs);
+                let v: Vec<LineRec> = self.ring.range(start..).cloned().collect();
+                (v, "-- following (scroll up to pause) --".to_string())
+            }
+            ViewState::Paused {
+                snapshot,
+                offset,
+                snapshot_max_seq,
+            } => {
+                let end = snapshot.len().saturating_sub(*offset);
+                let start = end.saturating_sub(vs);
+                let v: Vec<LineRec> = snapshot[start..end].to_vec();
+                let below_in_snap = snapshot.len().saturating_sub(end);
+                let arrived = self.next_seq.saturating_sub(*snapshot_max_seq) as usize;
+                (
+                    v,
+                    format!(
+                        "-- paused: {} below | {} new since pause --",
+                        below_in_snap, arrived
+                    ),
+                )
+            }
+        };
+
+        let mut buf: Vec<u8> = Vec::with_capacity(8 * 1024);
+        let dashes: Vec<u8> = vec![b'-'; self.width.max(1)];
+        // body rows (1..=vs). cursor_to(row, 1) + clear_eol + content.
+        for i in 0..vs {
+            write!(buf, "\x1b[{};1H\x1b[K", i + 1)?;
+            if let Some(rec) = entries.get(i) {
+                match rec {
+                    LineRec::Real {
+                        prefix,
+                        pw,
+                        content,
+                        ..
+                    } => {
+                        emit_line_inner(
+                            &mut buf,
+                            prefix,
+                            *pw,
+                            content,
+                            self.mode,
+                            self.width,
+                            false,
+                        )?;
+                    }
+                    LineRec::Gap => {
+                        buf.extend_from_slice(&dashes);
+                    }
+                }
+            }
+        }
+        // status row at the very last terminal row
+        write!(buf, "\x1b[{};1H\x1b[K\x1b[7m", self.height.max(1))?;
+        let st = truncate_to_width(&status, self.width);
+        let st_cols = st.chars().count();
+        buf.extend_from_slice(st.as_bytes());
+        for _ in st_cols..self.width {
+            buf.push(b' ');
+        }
+        buf.extend_from_slice(b"\x1b[0m");
+
+        out.write_all(&buf)?;
+        out.flush()?;
+        self.dirty = false;
+        Ok(())
+    }
+}
+
+// helper for resize-time clamp (view_size depends on height; this lets us
+// compute against an arbitrary height in scope where self isn't available).
+fn view_size_h(h: usize) -> usize {
+    h.saturating_sub(1).max(1)
+}
+
+fn truncate_to_width(s: &str, width: usize) -> String {
+    let mut out = String::new();
+    let mut col = 0usize;
+    for c in s.chars() {
+        if col >= width {
+            break;
+        }
+        out.push(c);
+        col += 1;
+    }
+    out
+}
+
+// AltScreenGuard: enters alt-screen + hides cursor on construction; restores
+// on drop. construct BEFORE acquiring the stdout lock in run() so that Drop
+// (which re-locks stdout) doesn't deadlock -- drops run in reverse construction
+// order, so the long-lived stdout lock is released first.
+struct AltScreenGuard;
+
+impl AltScreenGuard {
+    fn new() -> io::Result<Self> {
+        let stdout = io::stdout();
+        let mut lock = stdout.lock();
+        // alt-screen + hide cursor + clear + enable SGR mouse tracking
+        // (1000 = press events, 1006 = SGR encoding for >223 col/row).
+        lock.write_all(b"\x1b[?1049h\x1b[?25l\x1b[H\x1b[2J\x1b[?1000h\x1b[?1006h")?;
+        lock.flush()?;
+        Ok(AltScreenGuard)
+    }
+}
+
+impl Drop for AltScreenGuard {
+    fn drop(&mut self) {
+        let stdout = io::stdout();
+        let mut lock = stdout.lock();
+        let _ = lock.write_all(b"\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l");
+        let _ = lock.flush();
+    }
+}
+
+// signal handling: SIGINT/SIGTERM/SIGHUP bump a counter. main loop polls it
+// and returns Ok(()) so Drop chains run (alt-screen exit, termios restore).
+// second signal forces `_exit` -- terminal stays dirty, cost of impatience.
+static SIGNAL_COUNT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+extern "C" fn on_signal(_sig: libc::c_int) {
+    let prev = SIGNAL_COUNT.fetch_add(1, Ordering::SeqCst);
+    if prev >= 1 {
+        // SAFETY: _exit is async-signal-safe; skips Drop chains by design.
+        unsafe { libc::_exit(130); }
+    }
+}
+
+fn install_signal_handlers() {
+    // SAFETY: installing handler for std termination signals. handler is
+    // async-signal-safe (atomic add + maybe _exit).
+    unsafe {
+        libc::signal(libc::SIGINT, on_signal as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGTERM, on_signal as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGHUP, on_signal as *const () as libc::sighandler_t);
     }
 }
 
 // emit one line (content excludes trailing newline) per long-line mode.
+// When newline=true a trailing `\n` is appended after the line content.
+// When false, no terminator is written -- used by the alt-screen paint path
+// which positions each row via CUP escapes (`\x1b[<row>;1H`).
 fn emit_line<W: Write>(
     out: &mut W,
     prefix: &[u8],
@@ -239,13 +624,33 @@ fn emit_line<W: Write>(
     mode: LongLines,
     width: usize,
 ) -> io::Result<()> {
+    emit_line_inner(out, prefix, prefix_width, content, mode, width, true)
+}
+
+fn emit_line_inner<W: Write>(
+    out: &mut W,
+    prefix: &[u8],
+    prefix_width: usize,
+    content: &[u8],
+    mode: LongLines,
+    width: usize,
+    newline: bool,
+) -> io::Result<()> {
     match mode {
         LongLines::Wrap => {
             out.write_all(prefix)?;
             out.write_all(content)?;
-            out.write_all(b"\n")?;
+            if newline {
+                out.write_all(b"\n")?;
+            }
         }
         LongLines::Trim => {
+            // narrow terminal: label alone wouldn't fit, so skip rendering
+            // this line entirely. ring buffer still holds it; on widening,
+            // check_resize re-emits at the new width.
+            if prefix_width >= width {
+                return Ok(());
+            }
             let s = String::from_utf8_lossy(content);
             let mut cut = String::new();
             let mut col = prefix_width;
@@ -273,7 +678,9 @@ fn emit_line<W: Write>(
             }
             out.write_all(prefix)?;
             out.write_all(cut.as_bytes())?;
-            out.write_all(b"\n")?;
+            if newline {
+                out.write_all(b"\n")?;
+            }
         }
         LongLines::Indent => {
             let avail = width.saturating_sub(prefix_width).max(1);
@@ -282,11 +689,14 @@ fn emit_line<W: Write>(
             if chars.len() <= avail {
                 out.write_all(prefix)?;
                 out.write_all(content)?;
-                out.write_all(b"\n")?;
+                if newline {
+                    out.write_all(b"\n")?;
+                }
             } else {
                 let indent = vec![b' '; prefix_width];
                 let mut i = 0;
                 let mut first = true;
+                let last_idx = chars.len();
                 while i < chars.len() {
                     let end = (i + avail).min(chars.len());
                     let chunk: String = chars[i..end].iter().collect();
@@ -297,7 +707,10 @@ fn emit_line<W: Write>(
                         out.write_all(&indent)?;
                     }
                     out.write_all(chunk.as_bytes())?;
-                    out.write_all(b"\n")?;
+                    let is_last_chunk = end >= last_idx;
+                    if newline || !is_last_chunk {
+                        out.write_all(b"\n")?;
+                    }
                     i = end;
                 }
             }
@@ -313,8 +726,7 @@ fn drain(
     t: &mut Tracked,
     path: &Path,
     stdout: &mut io::StdoutLock,
-    mode: LongLines,
-    width: usize,
+    renderer: &mut Renderer,
 ) -> io::Result<()> {
     let meta = fs::metadata(path)?;
     let cur_size = meta.len();
@@ -349,7 +761,7 @@ fn drain(
     for i in 0..len {
         if t.partial[i] == b'\n' {
             let content = &t.partial[start..i];
-            emit_line(stdout, &t.prefix, t.prefix_width, content, mode, width)?;
+            renderer.emit(stdout, &t.prefix, t.prefix_width, content)?;
             start = i + 1;
         }
     }
@@ -403,18 +815,109 @@ impl Drop for RawGuard {
     }
 }
 
-fn spawn_quit_watcher(quit: Arc<AtomicBool>) {
+#[derive(Clone, Copy, Debug)]
+enum InputEvent {
+    Quit,
+    ScrollUp,
+    ScrollDown,
+}
+
+// unified event for the main loop: file change notifications and input events
+// share the same channel so the loop wakes on either w/out separate polling.
+enum Event {
+    Notify(notify::Result<notify::Event>),
+    Input(InputEvent),
+}
+
+// parse a single input event from the front of `buf`. returns
+// Some((maybe_event, bytes_consumed)) if a complete token was found, else
+// None (need more bytes). bytes_consumed > 0 even when no event of interest
+// (lets us skip unknown sequences).
+fn parse_input(buf: &[u8]) -> Option<(Option<InputEvent>, usize)> {
+    if buf.is_empty() {
+        return None;
+    }
+    match buf[0] {
+        b'q' | 0x03 => Some((Some(InputEvent::Quit), 1)),
+        0x1b => {
+            if buf.len() < 2 {
+                return None;
+            }
+            if buf[1] != b'[' {
+                // bare ESC or non-CSI escape: consume ESC + next byte, ignore
+                return Some((None, 2));
+            }
+            if buf.len() < 3 {
+                return None;
+            }
+            // SGR mouse: ESC [ < button ; x ; y (M|m)
+            if buf[2] == b'<' {
+                let mut i = 3;
+                while i < buf.len() && buf[i] != b'M' && buf[i] != b'm' {
+                    i += 1;
+                }
+                if i >= buf.len() {
+                    return None;
+                }
+                let inner = &buf[3..i];
+                let parts: Vec<&[u8]> = inner.split(|&b| b == b';').collect();
+                if parts.len() < 3 {
+                    return Some((None, i + 1));
+                }
+                let button: u32 = std::str::from_utf8(parts[0])
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0);
+                // wheel: 64 = up, 65 = down. modifier bits (4/8/16) may be set.
+                let basic = button & 0b11_00011;
+                let evt = match basic {
+                    64 => Some(InputEvent::ScrollUp),
+                    65 => Some(InputEvent::ScrollDown),
+                    _ => None,
+                };
+                return Some((evt, i + 1));
+            }
+            // other CSI: consume until alphabetic terminator (or ~)
+            let mut i = 2;
+            while i < buf.len() {
+                let b = buf[i];
+                if b.is_ascii_alphabetic() || b == b'~' {
+                    return Some((None, i + 1));
+                }
+                i += 1;
+            }
+            None
+        }
+        _ => Some((None, 1)),
+    }
+}
+
+fn spawn_input_watcher(tx: mpsc::Sender<Event>) {
     std::thread::spawn(move || {
         use std::io::Read;
-        let mut byte = [0u8; 1];
+        let mut chunk = [0u8; 64];
+        let mut acc: Vec<u8> = Vec::with_capacity(128);
         let mut stdin = io::stdin();
         loop {
-            match stdin.read(&mut byte) {
+            match stdin.read(&mut chunk) {
                 Ok(0) => return,
-                Ok(_) => {
-                    if byte[0] == b'q' || byte[0] == 3 {
-                        quit.store(true, Ordering::SeqCst);
-                        return;
+                Ok(n) => {
+                    acc.extend_from_slice(&chunk[..n]);
+                    loop {
+                        match parse_input(&acc) {
+                            Some((evt_opt, consumed)) => {
+                                acc.drain(..consumed);
+                                if let Some(evt) = evt_opt
+                                    && tx.send(Event::Input(evt)).is_err()
+                                {
+                                    return;
+                                }
+                                if acc.is_empty() {
+                                    break;
+                                }
+                            }
+                            None => break, // incomplete; wait for more
+                        }
                     }
                 }
                 Err(_) => return,
@@ -425,6 +928,7 @@ fn spawn_quit_watcher(quit: Arc<AtomicBool>) {
 
 fn run() -> io::Result<()> {
     bump_nofile();
+    install_signal_handlers();
     let args = parse_args(&std::env::args().collect::<Vec<_>>());
     let color = use_color(args.no_color);
     // SAFETY: isatty on stdout fd is always safe to call.
@@ -432,6 +936,7 @@ fn run() -> io::Result<()> {
     let long_mode = args
         .long_lines
         .unwrap_or(if stdout_tty { LongLines::Trim } else { LongLines::Wrap });
+    let use_alt = stdout_tty && matches!(long_mode, LongLines::Trim);
 
     let (root, recursive) = watch_root(&args.pattern);
     if !root.exists() {
@@ -464,9 +969,12 @@ fn run() -> io::Result<()> {
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("bad glob: {e}")))?;
     let root = canon_root;
 
-    let (tx, rx) = mpsc::channel();
+    // unified event channel: notify file events + stdin input events share
+    // the same receiver so the main loop wakes on either source w/out polling.
+    let (tx, rx) = mpsc::channel::<Event>();
+    let notify_tx = tx.clone();
     let mut watcher = notify::recommended_watcher(move |res| {
-        let _ = tx.send(res);
+        let _ = notify_tx.send(Event::Notify(res));
     })
     .map_err(|e| io::Error::other(format!("watcher init: {e}")))?;
     let mode = if recursive {
@@ -483,38 +991,79 @@ fn run() -> io::Result<()> {
     // seed: existing files matching glob, tail from end.
     seed_existing(&root, recursive, &glob, color, &mut tracked);
 
+    // AltScreenGuard constructed BEFORE acquiring the long-lived stdout lock
+    // so its Drop (which re-locks stdout to emit exit sequences) runs after
+    // the lock is released. drops run in reverse construction order.
+    let _alt = if use_alt { Some(AltScreenGuard::new()?) } else { None };
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
+    let mut renderer = Renderer::new(long_mode, use_alt, args.scrollback);
 
-    // raw stdin so we can detect 'q' (or ctrl-c) w/out a newline. _guard
-    // restores termios on drop. when stdin isn't a tty, no guard, no watcher.
-    let quit = Arc::new(AtomicBool::new(false));
-    let _guard = RawGuard::new();
-    if _guard.is_some() {
-        spawn_quit_watcher(quit.clone());
+    // Prefill ring with tail content from existing files (alt-screen only).
+    // Streaming path leaves stdout untouched -- no historical content shown
+    // there, matching the pre-TUI behaviour of starting from current EOF.
+    if use_alt {
+        prefill_renderer(
+            &mut stdout,
+            &mut renderer,
+            &tracked,
+            &glob,
+            color,
+            args.scrollback,
+        );
     }
 
-    // initial flush of any seed-time content (none, since seek-to-end).
+    // raw stdin so we can detect 'q' / ctrl-c / SGR mouse wheel events w/out
+    // line buffering. when stdin isn't a tty, no guard, no input watcher
+    // (signal handlers still cover SIGINT/SIGTERM/SIGHUP via SIGNAL_COUNT).
+    let _guard = RawGuard::new();
+    if _guard.is_some() {
+        spawn_input_watcher(tx.clone());
+    }
+    drop(tx);
+    const WHEEL_LINES: usize = 3;
+
     // main event loop.
     loop {
-        if quit.load(Ordering::SeqCst) {
+        if SIGNAL_COUNT.load(Ordering::SeqCst) > 0 {
             return Ok(());
         }
         // tick = 100ms. on each tick, poll-drain every tracked file in
         // addition to processing notify events. macOS fsevents can coalesce
         // / delay events server-side; polling makes latency bounded and
         // predictable (matches multitail's snappiness w/out the 1s ceiling).
-        let res = match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(r) => r,
+        // Input events arrive on the same channel so the loop wakes on them
+        // immediately -- no scroll lag.
+        let event = match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(Event::Input(InputEvent::Quit)) => return Ok(()),
+            Ok(Event::Input(InputEvent::ScrollUp)) => {
+                renderer.scroll_up(WHEEL_LINES);
+                if let Err(e) = renderer.paint(&mut stdout) {
+                    if e.kind() == io::ErrorKind::BrokenPipe {
+                        return Ok(());
+                    }
+                }
+                continue;
+            }
+            Ok(Event::Input(InputEvent::ScrollDown)) => {
+                renderer.scroll_down(WHEEL_LINES);
+                if let Err(e) = renderer.paint(&mut stdout) {
+                    if e.kind() == io::ErrorKind::BrokenPipe {
+                        return Ok(());
+                    }
+                }
+                continue;
+            }
+            Ok(Event::Notify(res)) => res,
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                // refresh terminal width each tick (cheap ioctl, handles
+                // refresh terminal size each tick (cheap ioctl, handles
                 // SIGWINCH w/out wiring a signal handler).
-                let width = term_width();
+                renderer.check_resize();
                 // poll-drain known files. drain stat-first; closed entries
                 // stay closed unless growth detected.
                 let mut stale = Vec::new();
                 for (path, t) in tracked.iter_mut() {
-                    match drain(t, path, &mut stdout, long_mode, width) {
+                    match drain(t, path, &mut stdout, &mut renderer) {
                         Ok(()) => {}
                         Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return Ok(()),
                         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -548,11 +1097,16 @@ fn run() -> io::Result<()> {
                         Err(e) => warn(&p, &e),
                     }
                 }
+                if let Err(e) = renderer.paint(&mut stdout) {
+                    if e.kind() == io::ErrorKind::BrokenPipe {
+                        return Ok(());
+                    }
+                }
                 continue;
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         };
-        let event = match res {
+        let event = match event {
             Ok(e) => e,
             Err(e) => {
                 eprintln!("funnel: watch error: {e}");
@@ -588,9 +1142,9 @@ fn run() -> io::Result<()> {
                             }
                         }
                     }
-                    let width = term_width();
+                    renderer.check_resize();
                     if let Some(t) = tracked.get_mut(&path)
-                        && let Err(e) = drain(t, &path, &mut stdout, long_mode, width)
+                        && let Err(e) = drain(t, &path, &mut stdout, &mut renderer)
                     {
                         if e.kind() == io::ErrorKind::BrokenPipe {
                             return Ok(());
@@ -601,8 +1155,143 @@ fn run() -> io::Result<()> {
                 EventKind::Access(_) => {}
             }
         }
+        if let Err(e) = renderer.paint(&mut stdout) {
+            if e.kind() == io::ErrorKind::BrokenPipe {
+                return Ok(());
+            }
+        }
     }
     Ok(())
+}
+
+// Read up to `max_lines` complete lines from the tail of `path`. Reads at
+// most `max_bytes` from the end (skips a leading partial line if the read
+// started mid-line). Used by prefill to populate the ring on startup w/out
+// loading large files in full.
+fn read_tail_lines(path: &Path, max_bytes: u64, max_lines: usize) -> io::Result<Vec<Vec<u8>>> {
+    let mut file = File::open(path)?;
+    let size = file.metadata()?.len();
+    let start = size.saturating_sub(max_bytes);
+    file.seek(SeekFrom::Start(start))?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)?;
+    if buf.last() == Some(&b'\n') {
+        buf.pop();
+    }
+    let mut lines: Vec<Vec<u8>> = if start > 0 {
+        // dropped into middle of a line; discard the leading partial fragment
+        let mut it = buf.split(|&b| b == b'\n');
+        it.next();
+        it.map(|l| l.to_vec()).collect()
+    } else {
+        buf.split(|&b| b == b'\n').map(|l| l.to_vec()).collect()
+    };
+    if lines.len() > max_lines {
+        let drop_n = lines.len() - max_lines;
+        lines.drain(..drop_n);
+    }
+    Ok(lines)
+}
+
+// Pure planner for the prefill: given a set of files (with mtimes), the total
+// line budget, and the current time, decide how many lines to read from each.
+//
+// Algorithm:
+// - sqrt-decay budget per file based on age relative to `now`:
+//     take = clamp(PER_FILE_MAX / sqrt(1 + age_hours), 1, PER_FILE_MAX)
+//   so 30 lines at age 0, ~21 at 1h, ~13 at 4h, ~6 at 24h, ~2 at 1wk.
+//   floor 1 keeps even ancient files in the buffer.
+// - iterate newest-first, deducting from the budget; newest files always get
+//   their share even if the budget runs out before the oldest.
+// - return plan in emit order (oldest-first) so newest content lands at the
+//   bottom of the view.
+//
+// Files with `take == 0` (budget exhausted before reaching them) are omitted.
+const PREFILL_PER_FILE_MAX: usize = 30;
+
+fn plan_prefill(
+    files: &[(PathBuf, std::time::SystemTime)],
+    total_budget: usize,
+    now: std::time::SystemTime,
+) -> Vec<(PathBuf, usize)> {
+    let mut by_age: Vec<&(PathBuf, std::time::SystemTime)> = files.iter().collect();
+    by_age.sort_by(|a, b| b.1.cmp(&a.1)); // newest first
+    let mut taken = 0usize;
+    let mut plan_rev: Vec<(PathBuf, usize)> = Vec::new();
+    for (path, mtime) in by_age {
+        let remaining = total_budget.saturating_sub(taken);
+        if remaining == 0 {
+            break;
+        }
+        let age_secs = now
+            .duration_since(*mtime)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+        let age_hours = age_secs / 3600.0;
+        let weighted = (PREFILL_PER_FILE_MAX as f64 / (1.0 + age_hours).sqrt())
+            .round()
+            .clamp(1.0, PREFILL_PER_FILE_MAX as f64) as usize;
+        let take = weighted.min(remaining);
+        if take == 0 {
+            continue;
+        }
+        taken += take;
+        plan_rev.push((path.clone(), take));
+    }
+    plan_rev.reverse(); // emit order = oldest first
+    plan_rev
+}
+
+// Prefill the renderer ring with tail content from already-existing files,
+// sorted oldest-first (so newest content lands at the bottom of the view).
+// No per-line timestamp interleave -- not generally derivable from log bytes;
+// we just concatenate file tails in mtime order. Each file's tail is capped
+// by per-file budget so a single large file doesn't crowd out the others.
+fn prefill_renderer<W: Write>(
+    out: &mut W,
+    renderer: &mut Renderer,
+    tracked: &HashMap<PathBuf, Tracked>,
+    glob: &Glob,
+    color: bool,
+    cap: usize,
+) {
+    // gather (path, mtime), drop entries w/out mtime metadata
+    let files: Vec<(PathBuf, std::time::SystemTime)> = tracked
+        .keys()
+        .filter_map(|p| {
+            std::fs::metadata(p)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map(|t| (p.clone(), t))
+        })
+        .collect();
+    if files.is_empty() {
+        return;
+    }
+    // Total budget capped at min(scrollback, 10 * terminal_height) -- beyond
+    // that, content is unreachable by scrolling and just delays first paint.
+    let (_, h) = term_size();
+    let total_budget = cap.min(h.saturating_mul(10).max(1));
+    let plan = plan_prefill(&files, total_budget, std::time::SystemTime::now());
+    for (path, take) in &plan {
+        let lines = match read_tail_lines(path, (*take as u64) * 1024, *take) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if lines.is_empty() {
+            continue;
+        }
+        let label = glob.label(&path.to_string_lossy());
+        let label_width = label.chars().count();
+        let prefix = build_prefix(&label, path, color);
+        let pw = label_width + 3;
+        for line in &lines {
+            let _ = renderer.emit(out, &prefix, pw, line);
+        }
+        // Paint per file so the user sees content appearing progressively
+        // rather than a blank screen until all files are read.
+        let _ = renderer.paint(out);
+    }
 }
 
 fn seed_existing(
@@ -714,6 +1403,123 @@ mod tests {
             emit(b"ab\tcd", LongLines::Trim, 30),
             "[lbl] ab        cd\n"
         );
+    }
+
+    #[test]
+    fn trim_skips_when_prefix_too_wide() {
+        // prefix_width=6, width=6 -> prefix alone fills/overflows, skip.
+        assert_eq!(emit(b"hello", LongLines::Trim, 6), "");
+        assert_eq!(emit(b"hello", LongLines::Trim, 5), "");
+        assert_eq!(emit(b"hello", LongLines::Trim, 0), "");
+        // width=7 leaves 1 col for content
+        assert_eq!(emit(b"hello", LongLines::Trim, 7), "[lbl] h\n");
+    }
+
+    #[test]
+    fn parse_input_quit() {
+        assert!(matches!(
+            parse_input(b"q"),
+            Some((Some(InputEvent::Quit), 1))
+        ));
+        assert!(matches!(
+            parse_input(b"\x03"),
+            Some((Some(InputEvent::Quit), 1))
+        ));
+    }
+
+    #[test]
+    fn parse_input_wheel() {
+        // ESC [ < 64 ; 10 ; 5 M  -> wheel up
+        assert!(matches!(
+            parse_input(b"\x1b[<64;10;5M"),
+            Some((Some(InputEvent::ScrollUp), 11))
+        ));
+        // ESC [ < 65 ; 10 ; 5 M  -> wheel down
+        assert!(matches!(
+            parse_input(b"\x1b[<65;10;5M"),
+            Some((Some(InputEvent::ScrollDown), 11))
+        ));
+    }
+
+    #[test]
+    fn parse_input_incomplete() {
+        assert!(parse_input(b"\x1b").is_none());
+        assert!(parse_input(b"\x1b[").is_none());
+        assert!(parse_input(b"\x1b[<64;10;5").is_none());
+    }
+
+    #[test]
+    fn parse_input_other_csi_skipped() {
+        // arrow key (ESC [ A) -- not a wheel event in our scheme but consumed
+        let r = parse_input(b"\x1b[A");
+        assert!(matches!(r, Some((None, 3))));
+    }
+
+    #[test]
+    fn plan_prefill_orders_oldest_first() {
+        let now = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        let old = now - std::time::Duration::from_secs(7 * 24 * 3600);
+        let mid = now - std::time::Duration::from_secs(4 * 3600);
+        let new = now - std::time::Duration::from_secs(60);
+        let files = vec![
+            (PathBuf::from("a-old"), old),
+            (PathBuf::from("c-new"), new),
+            (PathBuf::from("b-mid"), mid),
+        ];
+        let plan = plan_prefill(&files, 1000, now);
+        // emit order = oldest first
+        assert_eq!(plan.len(), 3);
+        assert_eq!(plan[0].0, PathBuf::from("a-old"));
+        assert_eq!(plan[1].0, PathBuf::from("b-mid"));
+        assert_eq!(plan[2].0, PathBuf::from("c-new"));
+        // newest has the largest take; oldest the smallest
+        assert!(plan[2].1 > plan[1].1);
+        assert!(plan[1].1 > plan[0].1);
+        // all takes within [1, 30]
+        for (_, t) in &plan {
+            assert!(*t >= 1 && *t <= 30);
+        }
+    }
+
+    #[test]
+    fn plan_prefill_recent_file_caps_at_30() {
+        let now = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        let files = vec![(PathBuf::from("recent"), now)];
+        let plan = plan_prefill(&files, 1000, now);
+        assert_eq!(plan, vec![(PathBuf::from("recent"), 30)]);
+    }
+
+    #[test]
+    fn plan_prefill_ancient_file_floors_at_1() {
+        let now = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        let ancient = now - std::time::Duration::from_secs(365 * 24 * 3600);
+        let files = vec![(PathBuf::from("ancient"), ancient)];
+        let plan = plan_prefill(&files, 1000, now);
+        assert_eq!(plan, vec![(PathBuf::from("ancient"), 1)]);
+    }
+
+    #[test]
+    fn plan_prefill_respects_total_budget() {
+        let now = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        // many recent files; each would want 30, but budget is 50.
+        let files: Vec<(PathBuf, std::time::SystemTime)> = (0..10)
+            .map(|i| (PathBuf::from(format!("f{i}")), now))
+            .collect();
+        let plan = plan_prefill(&files, 50, now);
+        let total: usize = plan.iter().map(|(_, t)| *t).sum();
+        assert!(total <= 50);
+        // only the newest few files appear (all share `now`; sort stable by path)
+        assert!(plan.len() <= 2); // 30 + 20 fits, 30 + 30 would overshoot
+    }
+
+    #[test]
+    fn plan_prefill_empty() {
+        let plan = plan_prefill(
+            &[],
+            100,
+            std::time::SystemTime::UNIX_EPOCH,
+        );
+        assert!(plan.is_empty());
     }
 
     #[test]
