@@ -484,6 +484,51 @@ fn truncate_to_width(s: &str, width: usize) -> String {
     s.chars().take(width).collect()
 }
 
+// WheelAccel: maps wheel-event cadence to a per-tick line count. Slow / idle
+// scrolls return 1 line; sustained fast spinning ramps to 2 then 3. Streak
+// counts up on FAST_THRESHOLD ticks, decays one per medium tick, and fully
+// resets after RESET_MS of quiet or on direction flip. Frame-time bounded so
+// runaway floods can't push the level absurdly high.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum ScrollDir {
+    Up,
+    Down,
+}
+
+#[derive(Default)]
+struct WheelAccel {
+    last_tick: Option<Instant>,
+    last_dir: Option<ScrollDir>,
+    fast_streak: u32,
+}
+
+const WHEEL_FAST_THRESHOLD_MS: u128 = 60;
+const WHEEL_RESET_MS: u128 = 250;
+const WHEEL_STREAK_MAX: u32 = 12;
+
+impl WheelAccel {
+    fn lines(&mut self, now: Instant, dir: ScrollDir) -> usize {
+        let dt = self
+            .last_tick
+            .map(|t| now.duration_since(t).as_millis())
+            .unwrap_or(u128::MAX);
+        let dir_flipped = self.last_dir.is_some_and(|d| d != dir);
+        self.last_tick = Some(now);
+        self.last_dir = Some(dir);
+        if dir_flipped || dt > WHEEL_RESET_MS {
+            self.fast_streak = 0;
+        } else if dt < WHEEL_FAST_THRESHOLD_MS {
+            self.fast_streak = (self.fast_streak + 1).min(WHEEL_STREAK_MAX);
+        } else {
+            self.fast_streak = self.fast_streak.saturating_sub(1);
+        }
+        match self.fast_streak {
+            0..=3 => 1,
+            _ => 2,
+        }
+    }
+}
+
 // AltScreenGuard: enters alt-screen + hides cursor on construction; restores
 // on drop. construct BEFORE acquiring the stdout lock in run() so that Drop
 // (which re-locks stdout) doesn't deadlock -- drops run in reverse construction
@@ -904,6 +949,7 @@ fn run() -> io::Result<()> {
         .map_err(|e| io::Error::other(format!("watch {}: {e}", root.display())))?;
 
     let mut tracked: HashMap<PathBuf, Tracked> = HashMap::new();
+    let mut wheel_accel = WheelAccel::default();
 
     // seed: existing files matching glob, tail from end.
     seed_existing(&root, recursive, &glob, color, &mut tracked);
@@ -938,7 +984,6 @@ fn run() -> io::Result<()> {
         spawn_input_watcher(tx.clone());
     }
     drop(tx);
-    const WHEEL_LINES: usize = 1;
 
     // main event loop.
     loop {
@@ -954,7 +999,8 @@ fn run() -> io::Result<()> {
         let event = match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(Event::Input(InputEvent::Quit)) => return Ok(()),
             Ok(Event::Input(InputEvent::ScrollUp)) => {
-                renderer.scroll_up(WHEEL_LINES);
+                let n = wheel_accel.lines(Instant::now(), ScrollDir::Up);
+                renderer.scroll_up(n);
                 if let Err(e) = renderer.paint(&mut stdout)
                     && e.kind() == io::ErrorKind::BrokenPipe
                 {
@@ -963,7 +1009,8 @@ fn run() -> io::Result<()> {
                 continue;
             }
             Ok(Event::Input(InputEvent::ScrollDown)) => {
-                renderer.scroll_down(WHEEL_LINES);
+                let n = wheel_accel.lines(Instant::now(), ScrollDir::Down);
+                renderer.scroll_down(n);
                 if let Err(e) = renderer.paint(&mut stdout)
                     && e.kind() == io::ErrorKind::BrokenPipe
                 {
@@ -1600,6 +1647,74 @@ mod tests {
             r.display_offset = max;
         }
         assert_eq!(r.display_offset, 6);
+    }
+
+    // ---------- WheelAccel ----------
+
+    #[test]
+    fn wheel_accel_single_tick_is_1() {
+        let mut a = WheelAccel::default();
+        let t = Instant::now();
+        assert_eq!(a.lines(t, ScrollDir::Up), 1);
+    }
+
+    #[test]
+    fn wheel_accel_fast_streak_ramps_to_2() {
+        let mut a = WheelAccel::default();
+        let mut t = Instant::now();
+        let dt = Duration::from_millis(30); // < FAST_THRESHOLD
+        // first tick: streak=0 -> 1
+        assert_eq!(a.lines(t, ScrollDir::Up), 1);
+        let mut seen = vec![];
+        for _ in 0..10 {
+            t += dt;
+            seen.push(a.lines(t, ScrollDir::Up));
+        }
+        // ramps from 1 to 2 and stays at 2 (capped)
+        assert_eq!(seen.last().copied(), Some(2));
+        assert!(seen.iter().all(|&n| n <= 2));
+        assert!(seen.contains(&1));
+    }
+
+    #[test]
+    fn wheel_accel_resets_after_pause() {
+        let mut a = WheelAccel::default();
+        let mut t = Instant::now();
+        for _ in 0..10 {
+            a.lines(t, ScrollDir::Up);
+            t += Duration::from_millis(30);
+        }
+        // long pause -> next tick resets to 1
+        t += Duration::from_millis(500);
+        assert_eq!(a.lines(t, ScrollDir::Up), 1);
+    }
+
+    #[test]
+    fn wheel_accel_resets_on_direction_flip() {
+        let mut a = WheelAccel::default();
+        let mut t = Instant::now();
+        for _ in 0..10 {
+            a.lines(t, ScrollDir::Up);
+            t += Duration::from_millis(30);
+        }
+        t += Duration::from_millis(30);
+        // direction change collapses streak even at fast cadence
+        assert_eq!(a.lines(t, ScrollDir::Down), 1);
+    }
+
+    #[test]
+    fn wheel_accel_medium_ticks_decay() {
+        let mut a = WheelAccel::default();
+        let mut t = Instant::now();
+        for _ in 0..10 {
+            a.lines(t, ScrollDir::Up);
+            t += Duration::from_millis(30);
+        }
+        // medium-cadence tick (between fast and reset) decays one streak level
+        let before = a.fast_streak;
+        t += Duration::from_millis(150);
+        a.lines(t, ScrollDir::Up);
+        assert_eq!(a.fast_streak, before.saturating_sub(1));
     }
 
     #[test]
