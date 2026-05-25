@@ -47,7 +47,10 @@
   "enabledPlugins": {
     "gopls-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
-    "ralph-loop@claude-plugins-official": true
+    "ralph-loop@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "mason@mason": true
   },
   "extraKnownMarketplaces": {
     "context-mode": {
@@ -60,6 +63,12 @@
       "source": {
         "source": "github",
         "repo": "humanplane/homunculus"
+      }
+    },
+    "mason": {
+      "source": {
+        "source": "github",
+        "repo": "rockcrafters/mason"
       }
     }
   },
