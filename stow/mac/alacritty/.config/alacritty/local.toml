@@ -44,6 +44,13 @@ key = "Key3"
 mods = "Alt"
 chars = "#"
 
+# cmd+s -> kitty CSI-u with Super modifier (param 9 = 1 + bit3-Super).
+# editor parses as genuine Cmd+S and matches its Save chord.
+[[keyboard.bindings]]
+key = "S"
+mods = "Command"
+chars = "\u001B[115;9u"
+
 # cmd+f -> send ctrl+f (0x06) to running program instead of alacritty's
 # built-in SearchForward. lets `edit` receive its find chord on macos.
 [[keyboard.bindings]]
