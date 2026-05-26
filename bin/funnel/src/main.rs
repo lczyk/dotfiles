@@ -273,6 +273,10 @@ struct LineRec {
     prefix: Vec<u8>,
     pw: usize,
     content: Vec<u8>,
+    // cached count of visual rows this rec occupies at the renderer's current
+    // width + mode. recomputed on insert and on resize. lets scroll math
+    // operate in visual-row space w/out re-walking content every frame.
+    visual_rows: usize,
 }
 
 // Renderer: alt-screen TUI pager when stdout-tty AND mode=Trim. Ring buffer of
@@ -308,7 +312,11 @@ impl Renderer {
     }
 
     fn max_offset(&self) -> usize {
-        self.ring.len().saturating_sub(self.view_size())
+        self.total_visual_rows().saturating_sub(self.view_size())
+    }
+
+    fn total_visual_rows(&self) -> usize {
+        self.ring.iter().map(|r| r.visual_rows).sum()
     }
 
     // visible content rows = total height - 1 (status row reserved at bottom).
@@ -329,16 +337,19 @@ impl Renderer {
         while self.ring.len() >= self.cap {
             self.ring.pop_front();
         }
+        let vr = render_rows(prefix, pw, content, self.mode, self.width).len();
         self.ring.push_back(LineRec {
             prefix: prefix.to_vec(),
             pw,
             content: content.to_vec(),
+            visual_rows: vr,
         });
-        // Paused: bump offset so visible window stays anchored on same content
-        // as the ring grows. Saturates at max_offset -- once there, content
-        // silently ages out of the top of the view (matches alacritty).
+        // Paused: bump offset by the new rec's visual-row count so the visible
+        // window stays anchored on the same content as the ring grows.
+        // Saturates at max_offset -- once there, content silently ages out of
+        // the top of the view (matches alacritty).
         if self.display_offset > 0 {
-            self.display_offset = (self.display_offset + 1).min(self.max_offset());
+            self.display_offset = (self.display_offset + vr).min(self.max_offset());
         }
         self.dirty = true;
         Ok(())
@@ -347,9 +358,17 @@ impl Renderer {
     fn check_resize(&mut self) {
         let (w, h) = term_size();
         if w != self.width || h != self.height {
+            let width_changed = w != self.width;
             self.width = w;
             self.height = h;
-            let max = self.ring.len().saturating_sub(view_size_h(h));
+            if width_changed {
+                // visual-row counts depend on width; recompute for every rec.
+                for rec in self.ring.iter_mut() {
+                    rec.visual_rows =
+                        render_rows(&rec.prefix, rec.pw, &rec.content, self.mode, self.width).len();
+                }
+            }
+            let max = self.max_offset();
             if self.display_offset > max {
                 self.display_offset = max;
             }
@@ -389,9 +408,25 @@ impl Renderer {
             return Ok(());
         }
         let vs = self.view_size();
-        let end = self.ring.len().saturating_sub(self.display_offset);
+        // Expand every rec to its visual rows in oldest-first order. Cheap
+        // enough given ring is bounded by `cap` and the same walk that
+        // populated `visual_rows` is done here.
+        let mut visual: Vec<Vec<u8>> = Vec::new();
+        // Track which rec each visual row came from so we can flag overflow
+        // (trim mode only) for the `>` status indicator.
+        let mut row_overflows: Vec<bool> = Vec::new();
+        for rec in &self.ring {
+            let rows = render_rows(&rec.prefix, rec.pw, &rec.content, self.mode, self.width);
+            let overflow = matches!(self.mode, LongLines::Trim)
+                && line_overflows(rec.pw, &rec.content, self.width);
+            for r in rows {
+                visual.push(r);
+                row_overflows.push(overflow);
+            }
+        }
+        let total = visual.len();
+        let end = total.saturating_sub(self.display_offset);
         let start = end.saturating_sub(vs);
-        let entries: Vec<LineRec> = self.ring.range(start..end).cloned().collect();
         let status = if self.display_offset == 0 {
             "-- following (scroll up to pause) --".to_string()
         } else {
@@ -402,25 +437,14 @@ impl Renderer {
         };
 
         let mut buf: Vec<u8> = Vec::with_capacity(8 * 1024);
-        // body rows (1..=vs). cursor_to(row, 1) + clear_eol + content.
         let mut any_overflow = false;
         for i in 0..vs {
             write!(buf, "\x1b[{};1H\x1b[K", i + 1)?;
-            if let Some(rec) = entries.get(i) {
-                if matches!(self.mode, LongLines::Trim)
-                    && line_overflows(rec.pw, &rec.content, self.width)
-                {
+            if let Some(row) = visual.get(start + i) {
+                if row_overflows[start + i] {
                     any_overflow = true;
                 }
-                emit_line_inner(
-                    &mut buf,
-                    &rec.prefix,
-                    rec.pw,
-                    &rec.content,
-                    self.mode,
-                    self.width,
-                    false,
-                )?;
+                buf.extend_from_slice(row);
             }
         }
         // status row at the very last terminal row. last cell shows `>` when
@@ -448,8 +472,117 @@ impl Renderer {
 
 // helper for resize-time clamp (view_size depends on height; this lets us
 // compute against an arbitrary height in scope where self isn't available).
+#[cfg(test)]
 fn view_size_h(h: usize) -> usize {
     h.saturating_sub(1).max(1)
+}
+
+// Splits content into visual rows by walking cells (tab -> next 8-stop, ctrl
+// chars dropped). Each row is the rendered content bytes only (no prefix /
+// indent). `start_col` is the column the first row begins at (i.e.
+// prefix_width on a fresh line). Continuation rows restart at `cont_col`.
+// Returns at least one row (possibly empty).
+fn split_content_into_rows(
+    content: &[u8],
+    width: usize,
+    start_col: usize,
+    cont_col: usize,
+) -> Vec<Vec<u8>> {
+    let s = String::from_utf8_lossy(content);
+    let mut rows: Vec<Vec<u8>> = Vec::new();
+    let mut cur: Vec<u8> = Vec::new();
+    let mut col = start_col;
+    for c in s.chars() {
+        if (c as u32) < 0x20 && c != '\t' || c == '\x7f' {
+            continue;
+        }
+        let w = if c == '\t' { 8 - (col % 8) } else { 1 };
+        if col + w > width {
+            rows.push(std::mem::take(&mut cur));
+            col = cont_col;
+        }
+        let w = if c == '\t' { 8 - (col % 8) } else { 1 };
+        if col + w > width {
+            // tab from cont_col still overflows: skip char to avoid infinite
+            // loop on impossibly narrow terminals.
+            continue;
+        }
+        if c == '\t' {
+            cur.extend(std::iter::repeat_n(b' ', w));
+        } else {
+            // re-encode as utf-8 bytes
+            let mut buf = [0u8; 4];
+            let s = c.encode_utf8(&mut buf);
+            cur.extend_from_slice(s.as_bytes());
+        }
+        col += w;
+    }
+    rows.push(cur);
+    rows
+}
+
+// Returns the bytes for each visual row this (prefix, content) renders to at
+// the given mode + width. Each row has prefix or indent already prepended;
+// callers append a newline as needed. At least one row is returned.
+fn render_rows(
+    prefix: &[u8],
+    prefix_width: usize,
+    content: &[u8],
+    mode: LongLines,
+    width: usize,
+) -> Vec<Vec<u8>> {
+    match mode {
+        LongLines::Wrap => {
+            // raw passthrough: prefix + content as a single "row". terminal
+            // autowraps; we don't pre-split so behaviour matches piped output.
+            let mut row = prefix.to_vec();
+            row.extend_from_slice(content);
+            vec![row]
+        }
+        LongLines::Trim => {
+            if prefix_width >= width {
+                return vec![Vec::new()];
+            }
+            // walk cells, stop at width. tabs expand to spaces; ctrl chars drop.
+            let s = String::from_utf8_lossy(content);
+            let mut row = prefix.to_vec();
+            let mut col = prefix_width;
+            for c in s.chars() {
+                if (c as u32) < 0x20 && c != '\t' || c == '\x7f' {
+                    continue;
+                }
+                let w = if c == '\t' { 8 - (col % 8) } else { 1 };
+                if col + w > width {
+                    break;
+                }
+                if c == '\t' {
+                    row.extend(std::iter::repeat_n(b' ', w));
+                } else {
+                    let mut buf = [0u8; 4];
+                    let s = c.encode_utf8(&mut buf);
+                    row.extend_from_slice(s.as_bytes());
+                }
+                col += w;
+            }
+            vec![row]
+        }
+        LongLines::Indent => {
+            if prefix_width >= width {
+                return vec![prefix.to_vec()];
+            }
+            let chunks = split_content_into_rows(content, width, prefix_width, prefix_width);
+            let indent = vec![b' '; prefix_width];
+            chunks
+                .into_iter()
+                .enumerate()
+                .map(|(i, chunk)| {
+                    let mut row = if i == 0 { prefix.to_vec() } else { indent.clone() };
+                    row.extend_from_slice(&chunk);
+                    row
+                })
+                .collect()
+        }
+    }
 }
 
 // Returns true iff rendering this content in trim mode at the given width
@@ -603,84 +736,18 @@ fn emit_line_inner<W: Write>(
     width: usize,
     newline: bool,
 ) -> io::Result<()> {
-    match mode {
-        LongLines::Wrap => {
-            out.write_all(prefix)?;
-            out.write_all(content)?;
-            if newline {
-                out.write_all(b"\n")?;
-            }
-        }
-        LongLines::Trim => {
-            // narrow terminal: label alone wouldn't fit, so skip rendering
-            // this line entirely. ring buffer still holds it; on widening,
-            // check_resize re-emits at the new width.
-            if prefix_width >= width {
-                return Ok(());
-            }
-            let s = String::from_utf8_lossy(content);
-            let mut cut = String::new();
-            let mut col = prefix_width;
-            for c in s.chars() {
-                // tab expands to next 8-col stop in terminal coords
-                let w = if c == '\t' {
-                    8 - (col % 8)
-                } else if (c as u32) < 0x20 || c == '\x7f' {
-                    // control chars: skip, no width
-                    continue;
-                } else {
-                    1
-                };
-                if col + w > width {
-                    break;
-                }
-                if c == '\t' {
-                    for _ in 0..w {
-                        cut.push(' ');
-                    }
-                } else {
-                    cut.push(c);
-                }
-                col += w;
-            }
-            out.write_all(prefix)?;
-            out.write_all(cut.as_bytes())?;
-            if newline {
-                out.write_all(b"\n")?;
-            }
-        }
-        LongLines::Indent => {
-            let avail = width.saturating_sub(prefix_width).max(1);
-            let s = String::from_utf8_lossy(content);
-            let chars: Vec<char> = s.chars().collect();
-            if chars.len() <= avail {
-                out.write_all(prefix)?;
-                out.write_all(content)?;
-                if newline {
-                    out.write_all(b"\n")?;
-                }
-            } else {
-                let indent = vec![b' '; prefix_width];
-                let mut i = 0;
-                let mut first = true;
-                let last_idx = chars.len();
-                while i < chars.len() {
-                    let end = (i + avail).min(chars.len());
-                    let chunk: String = chars[i..end].iter().collect();
-                    if first {
-                        out.write_all(prefix)?;
-                        first = false;
-                    } else {
-                        out.write_all(&indent)?;
-                    }
-                    out.write_all(chunk.as_bytes())?;
-                    let is_last_chunk = end >= last_idx;
-                    if newline || !is_last_chunk {
-                        out.write_all(b"\n")?;
-                    }
-                    i = end;
-                }
-            }
+    let rows = render_rows(prefix, prefix_width, content, mode, width);
+    // back-compat: trim mode previously emitted nothing (not even prefix) when
+    // the prefix alone wouldn't fit. preserve that for piped streams.
+    if matches!(mode, LongLines::Trim) && prefix_width >= width {
+        return Ok(());
+    }
+    let n = rows.len();
+    for (i, row) in rows.iter().enumerate() {
+        out.write_all(row)?;
+        let is_last = i + 1 == n;
+        if newline || !is_last {
+            out.write_all(b"\n")?;
         }
     }
     Ok(())
@@ -898,7 +965,7 @@ fn run() -> io::Result<()> {
     let long_mode = args
         .long_lines
         .unwrap_or(if stdout_tty { LongLines::Trim } else { LongLines::Wrap });
-    let use_alt = stdout_tty && matches!(long_mode, LongLines::Trim);
+    let use_alt = stdout_tty;
 
     let (root, recursive) = watch_root(&args.pattern);
     if !root.exists() {
@@ -1377,6 +1444,71 @@ mod tests {
         assert_eq!(emit(b"hello", LongLines::Trim, 0), "");
         // width=7 leaves 1 col for content
         assert_eq!(emit(b"hello", LongLines::Trim, 7), "[lbl] h\n");
+    }
+
+    #[test]
+    fn indent_plain_fits() {
+        assert_eq!(emit(b"hello", LongLines::Indent, 20), "[lbl] hello\n");
+    }
+
+    #[test]
+    fn indent_wraps_at_width() {
+        // prefix 6, width 12, avail 6: "abcdefghij" -> "abcdef" + "ghij"
+        assert_eq!(
+            emit(b"abcdefghij", LongLines::Indent, 12),
+            "[lbl] abcdef\n      ghij\n"
+        );
+    }
+
+    #[test]
+    fn indent_tab_no_overflow() {
+        // regression: prior impl counted tab as 1 char. content "\tab" at
+        // width=10 (avail=4 chars) appeared to fit (3 chars <= 4), but tab
+        // renders as 2 cells -> total cells = prefix6 + tab2 + ab2 = 10. fits.
+        // content "\tabc" -> 11 cells > 10 -> must wrap.
+        assert_eq!(emit(b"\tab", LongLines::Indent, 10), "[lbl]   ab\n");
+        assert_eq!(
+            emit(b"\tabc", LongLines::Indent, 10),
+            "[lbl]   ab\n      c\n"
+        );
+    }
+
+    #[test]
+    fn indent_drops_control_chars() {
+        assert_eq!(
+            emit(b"a\x01b\x7fc", LongLines::Indent, 20),
+            "[lbl] abc\n"
+        );
+    }
+
+    #[test]
+    fn indent_regression_tab_pushes_last_char_off() {
+        // regression from screenshot: go-test output uses tabs after `:N:`,
+        // e.g. `evaluator/builtin_string_methods.go:15:\t"match", "scan", "sub",`.
+        // prior impl counted tab as 1 char; rendered cells > terminal width by
+        // (tab_expansion - 1) so terminal autowrapped the trailing comma onto
+        // its own line. ensure every emitted row fits in `width` cells.
+        let content = b"evaluator/builtin_string_methods.go:15:\t\"match\", \"scan\", \"sub\",";
+        let width = 64;
+        let rendered = emit(content, LongLines::Indent, width);
+        for row in rendered.lines() {
+            // each rendered row (including prefix) must fit within width cells.
+            // tabs in the source are expanded to spaces by render_rows so
+            // counting chars here equals counting cells.
+            assert!(
+                row.chars().count() <= width,
+                "row exceeds width {}: {:?} ({} cols)",
+                width,
+                row,
+                row.chars().count()
+            );
+        }
+    }
+
+    #[test]
+    fn indent_skips_when_prefix_too_wide() {
+        // prefix_width=6 >= width=6: emit prefix alone.
+        assert_eq!(emit(b"hello", LongLines::Indent, 6), "[lbl] \n");
     }
 
     #[test]
