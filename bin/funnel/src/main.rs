@@ -19,6 +19,8 @@ use notify::{EventKind, RecursiveMode, Watcher};
 
 use funnel::{ALLOW_TOKENS, Glob, build_prefix, watch_root};
 
+mod wrap;
+
 const HELP: &str = r#"Usage: funnel <glob> [OPTIONS]
 
 Watch files matching <glob> and stream appended lines to stdout, prefixed
@@ -477,50 +479,6 @@ fn view_size_h(h: usize) -> usize {
     h.saturating_sub(1).max(1)
 }
 
-// Splits content into visual rows by walking cells (tab -> next 8-stop, ctrl
-// chars dropped). Each row is the rendered content bytes only (no prefix /
-// indent). `start_col` is the column the first row begins at (i.e.
-// prefix_width on a fresh line). Continuation rows restart at `cont_col`.
-// Returns at least one row (possibly empty).
-fn split_content_into_rows(
-    content: &[u8],
-    width: usize,
-    start_col: usize,
-    cont_col: usize,
-) -> Vec<Vec<u8>> {
-    let s = String::from_utf8_lossy(content);
-    let mut rows: Vec<Vec<u8>> = Vec::new();
-    let mut cur: Vec<u8> = Vec::new();
-    let mut col = start_col;
-    for c in s.chars() {
-        if (c as u32) < 0x20 && c != '\t' || c == '\x7f' {
-            continue;
-        }
-        let w = if c == '\t' { 8 - (col % 8) } else { 1 };
-        if col + w > width {
-            rows.push(std::mem::take(&mut cur));
-            col = cont_col;
-        }
-        let w = if c == '\t' { 8 - (col % 8) } else { 1 };
-        if col + w > width {
-            // tab from cont_col still overflows: skip char to avoid infinite
-            // loop on impossibly narrow terminals.
-            continue;
-        }
-        if c == '\t' {
-            cur.extend(std::iter::repeat_n(b' ', w));
-        } else {
-            // re-encode as utf-8 bytes
-            let mut buf = [0u8; 4];
-            let s = c.encode_utf8(&mut buf);
-            cur.extend_from_slice(s.as_bytes());
-        }
-        col += w;
-    }
-    rows.push(cur);
-    rows
-}
-
 // Returns the bytes for each visual row this (prefix, content) renders to at
 // the given mode + width. Each row has prefix or indent already prepended;
 // callers append a newline as needed. At least one row is returned.
@@ -533,11 +491,18 @@ fn render_rows(
 ) -> Vec<Vec<u8>> {
     match mode {
         LongLines::Wrap => {
-            // raw passthrough: prefix + content as a single "row". terminal
-            // autowraps; we don't pre-split so behaviour matches piped output.
-            let mut row = prefix.to_vec();
-            row.extend_from_slice(content);
-            vec![row]
+            // word-aware wrap (TeX-style badness, see `wrap` module). First
+            // row starts after `prefix`; continuation rows start at col 0.
+            let chunks = wrap::wrap_content(content, width, prefix_width, 0);
+            chunks
+                .into_iter()
+                .enumerate()
+                .map(|(i, chunk)| {
+                    let mut row = if i == 0 { prefix.to_vec() } else { Vec::new() };
+                    row.extend_from_slice(&chunk);
+                    row
+                })
+                .collect()
         }
         LongLines::Trim => {
             if prefix_width >= width {
@@ -570,7 +535,9 @@ fn render_rows(
             if prefix_width >= width {
                 return vec![prefix.to_vec()];
             }
-            let chunks = split_content_into_rows(content, width, prefix_width, prefix_width);
+            // word-aware wrap (see `wrap` module). Continuation rows start at
+            // `prefix_width` to align with the first row's content column.
+            let chunks = wrap::wrap_content(content, width, prefix_width, prefix_width);
             let indent = vec![b' '; prefix_width];
             chunks
                 .into_iter()
@@ -1462,15 +1429,12 @@ mod tests {
 
     #[test]
     fn indent_tab_no_overflow() {
-        // regression: prior impl counted tab as 1 char. content "\tab" at
-        // width=10 (avail=4 chars) appeared to fit (3 chars <= 4), but tab
-        // renders as 2 cells -> total cells = prefix6 + tab2 + ab2 = 10. fits.
-        // content "\tabc" -> 11 cells > 10 -> must wrap.
-        assert_eq!(emit(b"\tab", LongLines::Indent, 10), "[lbl]   ab\n");
-        assert_eq!(
-            emit(b"\tabc", LongLines::Indent, 10),
-            "[lbl]   ab\n      c\n"
-        );
+        // regression: prior char-counting impl spuriously autowrapped tab-
+        // containing content. word-aware wrap drops leading glue (the tab
+        // here is at a line boundary), keeps the word as one token. content
+        // "\tab" -> word "ab", row = "[lbl] ab"; "\tabc" -> "[lbl] abc".
+        assert_eq!(emit(b"\tab", LongLines::Indent, 10), "[lbl] ab\n");
+        assert_eq!(emit(b"\tabc", LongLines::Indent, 10), "[lbl] abc\n");
     }
 
     #[test]
@@ -1850,10 +1814,15 @@ mod tests {
     }
 
     #[test]
-    fn wrap_passes_through() {
+    fn wrap_word_aware_with_no_indent() {
+        // wrap mode: first row begins at prefix_width, continuation rows at
+        // col 0 (no indent). "long line here" width=10 prefix=6:
+        //   first line avail = 4. fits "long" (slack 0).
+        //   cont line avail = 10. "line here" = 9 cells (slack 1, last=free).
+        // best layout: "[lbl] long" / "line here".
         assert_eq!(
             emit(b"long line here", LongLines::Wrap, 10),
-            "[lbl] long line here\n"
+            "[lbl] long\nline here\n"
         );
     }
 }
