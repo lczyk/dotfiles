@@ -761,7 +761,7 @@ fn drain(
     let len = t.partial.len();
     for i in 0..len {
         if t.partial[i] == b'\n' {
-            let content = &t.partial[start..i];
+            let content = t.partial[start..i].trim_ascii();
             renderer.emit(stdout, &t.prefix, t.prefix_width, content)?;
             start = i + 1;
         }
@@ -1284,7 +1284,7 @@ fn prefill_renderer<W: Write>(
         let prefix = build_prefix(&label, path, color);
         let pw = label_width + 3;
         for line in &lines {
-            let _ = renderer.emit(out, &prefix, pw, line);
+            let _ = renderer.emit(out, &prefix, pw, line.trim_ascii());
         }
         // Paint per file so the user sees content appearing progressively
         // rather than a blank screen until all files are read.
