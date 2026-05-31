@@ -1,6 +1,7 @@
 .SUFFIXES:
 
 CARGO_BINS := peek time_fuzzer funnel
+CLC_DIR    := tools/claude-commit
 
 # profile detection: mac (Darwin) / x1 (Linux). override via `PROFILE=...`.
 UNAME_S := $(shell uname -s)
@@ -30,11 +31,17 @@ build-%:
 	cargo build --release --manifest-path ./tools/$*/Cargo.toml
 
 .PHONY: install
-install: build  ## Symlink built rust binaries into ~/.local/bin
+install: build sync  ## Symlink rust binaries + claude-commit launcher into ~/.local/bin
 	mkdir -p $(HOME)/.local/bin
 	@for b in $(CARGO_BINS); do \
 		ln -sfv "$(PWD)/tools/$$b/target/release/$$b" "$(HOME)/.local/bin/$$b"; \
 	done
+	ln -sfv "$(PWD)/$(CLC_DIR)/bin/claude-commit" "$(HOME)/.local/bin/claude-commit"
+	ln -sfv "$(PWD)/$(CLC_DIR)/bin/claude-commit" "$(HOME)/.local/bin/clc"
+
+.PHONY: sync
+sync:  ## Sync the claude-commit uv environment
+	uv sync --project $(CLC_DIR)
 
 .PHONY: stow
 stow:  ## Stow common + $(PROFILE) packages into $$HOME
@@ -93,19 +100,29 @@ test-py:  ## Run pytest for python scripts
 	uvx pytest tests/py/ -q
 
 .PHONY: lint
-lint: $(addprefix lint-,$(CARGO_BINS))  ## cargo clippy + fmt --check
+lint: $(addprefix lint-,$(CARGO_BINS)) lint-py  ## cargo clippy + fmt --check + ruff
 
 .PHONY: lint-%
 lint-%:
 	cargo clippy --manifest-path ./tools/$*/Cargo.toml -- -D warnings
 	cargo fmt --manifest-path ./tools/$*/Cargo.toml -- --check
 
+.PHONY: lint-py
+lint-py:  ## ruff check claude-commit (no writes)
+	uv run --project $(CLC_DIR) ruff check $(CLC_DIR)
+	uv run --project $(CLC_DIR) ruff format --check $(CLC_DIR)
+
 .PHONY: format
-format: $(addprefix format-,$(CARGO_BINS))  ## cargo fmt all rust binaries
+format: $(addprefix format-,$(CARGO_BINS)) format-py  ## cargo fmt + ruff format
 
 .PHONY: format-%
 format-%:
 	cargo fmt --manifest-path ./tools/$*/Cargo.toml
+
+.PHONY: format-py
+format-py:  ## ruff format + fix claude-commit
+	uv run --project $(CLC_DIR) ruff format $(CLC_DIR)
+	uv run --project $(CLC_DIR) ruff check --fix $(CLC_DIR)
 
 .PHONY: clean
 clean:  ## Remove rust build artifacts
