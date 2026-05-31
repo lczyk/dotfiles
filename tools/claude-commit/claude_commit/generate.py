@@ -134,6 +134,11 @@ def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
     ]
     if effort and effort != "none":
         cmd += ["--effort", effort]
+    # NOTE: these flags sandbox the model to a pure json producer: --tools ""
+    # (no tools to run), empty+strict mcp, no slash-commands, no session
+    # persistence. bypassPermissions is safe *because* --tools "" leaves nothing
+    # to escalate into -- it's only here to stop interactive permission prompts
+    # hanging a non-interactive run. re-enabling tools means dropping it.
     cmd += [
         "--system-prompt",
         "you are a json producer. respond only with json matching the provided schema.",
@@ -270,6 +275,34 @@ def _parse_commit(obj: dict) -> tuple[str, str]:
     return tag, message.strip()
 
 
+def _fmt_file(p: str, binary: set[str]) -> str:
+    return f"  {p} (binary)" if p in binary else f"  {p}"
+
+
+def _write_commit(
+    chosen: list[str],
+    diff: str,
+    *,
+    binary: set[str],
+    model: str,
+    effort: str,
+) -> tuple[str, str]:
+    """final step: send the chosen files + their (already-fetched) diff and get
+    back the commit message."""
+    binary_chosen = [p for p in chosen if p in binary]
+    binary_note = (
+        "\nnote: binary files above have no diff content; only filenames were sent.\n" if binary_chosen else ""
+    )
+    commit_prompt = PROMPT_MULTI.format(
+        rules=_RULES,
+        files="\n".join(_fmt_file(f, binary) for f in chosen),
+        binary_note=binary_note,
+        diff=diff or "(no text-file diffs)",
+    )
+    obj = _claude(commit_prompt, COMMIT_SCHEMA, model=model, effort=effort)
+    return _parse_commit(obj)
+
+
 def generate_message(
     files: list[str],
     diff_for: Callable[[list[str]], str],
@@ -285,9 +318,6 @@ def generate_message(
         raise GenerateError("no staged files")
     binary = binary or set()
 
-    def _fmt(p: str) -> str:
-        return f"  {p} (binary)" if p in binary else f"  {p}"
-
     if len(files) == 1:
         # single file: filename alone is enough signal. cheaper, faster.
         _log.info(f"single file -> filename-only mode ({files[0]})")
@@ -295,9 +325,21 @@ def generate_message(
         obj = _claude(prompt, COMMIT_SCHEMA, model=model, effort=effort)
         return _parse_commit(obj)
 
-    # multi-file: 2-step chain. step 1 picks the files, step 2 writes the commit.
-    _log.info(f"{len(files)} files -> picking relevant subset")
-    pick_prompt = PROMPT_PICK_FILES.format(files="\n".join(_fmt(f) for f in files))
+    # fetch the whole diff up front. when it fits under the cap, skip the pick
+    # step and write the message in a single call -- the pick round-trip only
+    # earns its latency when the diff is too big to send whole and needs
+    # trimming. so the cap doubles as the skip/trim boundary.
+    text_files = [p for p in files if p not in binary]
+    full_diff = diff_for(text_files) if text_files else ""
+
+    if len(full_diff) <= MAX_DIFF_CHARS:
+        _log.info(f"{len(files)} files, diff {len(full_diff)} chars <= {MAX_DIFF_CHARS} -> single-call mode")
+        return _write_commit(files, full_diff, binary=binary, model=model, effort=effort)
+
+    # large diff: 2-step chain. step 1 picks the relevant subset, step 2 writes
+    # the commit from just those files' (truncated) diff.
+    _log.info(f"{len(files)} files, diff {len(full_diff)} chars > {MAX_DIFF_CHARS} -> picking relevant subset")
+    pick_prompt = PROMPT_PICK_FILES.format(files="\n".join(_fmt_file(f, binary) for f in files))
     picked = _claude(pick_prompt, FILES_SCHEMA, model=model, effort=effort)
 
     requested = picked.get("files") or []
@@ -318,15 +360,5 @@ def generate_message(
     if binary_chosen:
         _log.info(f"skipping diff content for {len(binary_chosen)} binary file(s)")
 
-    diff = _truncate(diff_for(text_chosen)) if text_chosen else "(no text-file diffs)"
-    binary_note = (
-        "\nnote: binary files above have no diff content; only filenames were sent.\n" if binary_chosen else ""
-    )
-    commit_prompt = PROMPT_MULTI.format(
-        rules=_RULES,
-        files="\n".join(_fmt(f) for f in chosen),
-        binary_note=binary_note,
-        diff=diff,
-    )
-    obj = _claude(commit_prompt, COMMIT_SCHEMA, model=model, effort=effort)
-    return _parse_commit(obj)
+    diff = _truncate(diff_for(text_chosen)) if text_chosen else ""
+    return _write_commit(chosen, diff, binary=binary, model=model, effort=effort)
