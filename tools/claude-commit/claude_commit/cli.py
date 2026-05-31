@@ -8,7 +8,17 @@ from . import __version__, _log
 from .completions import SHELLS as COMPLETION_SHELLS
 from .completions import render as render_completion
 from .generate import DEFAULT_EFFORT, DEFAULT_MODEL, GenerateError, generate_message
-from .git import GitError, add_all, commit, has_any_remote, push, staged_binary_files, staged_diff_for, staged_files
+from .git import (
+    GitError,
+    add_all,
+    commit,
+    has_any_remote,
+    push,
+    staged_binary_files,
+    staged_diff_for,
+    staged_files,
+    staged_name_status,
+)
 
 ENV_OPTS = "CLC_DEFAULT_OPTS"
 ENV_MODEL = "CLC_MODEL"
@@ -154,6 +164,7 @@ def main() -> None:
     try:
         files = staged_files()
         binary = staged_binary_files()
+        status = staged_name_status()
     except GitError as e:
         _log.error(str(e))
         raise SystemExit(2) from e
@@ -177,6 +188,7 @@ def main() -> None:
             files,
             staged_diff_for,
             binary=binary,
+            status=status,
             model=args.model,
             effort=args.effort,
         )

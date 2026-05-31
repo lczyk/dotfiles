@@ -59,13 +59,6 @@ _RULES = (
     "body (optional) explains *why*, wrapped ~72 chars."
 )
 
-PROMPT_SINGLE = """\
-write a conventional-commit message for a single staged file.
-{rules}
-
-file: {file}
-"""
-
 PROMPT_PICK_FILES = """\
 the following files are staged. pick the subset whose diffs you need to read
 to write a meaningful commit message. return them as json
@@ -275,8 +268,20 @@ def _parse_commit(obj: dict) -> tuple[str, str]:
     return tag, message.strip()
 
 
-def _fmt_file(p: str, binary: set[str]) -> str:
-    return f"  {p} (binary)" if p in binary else f"  {p}"
+_STATUS_WORD = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed", "C": "copied", "T": "type changed"}
+
+
+def _fmt_file(p: str, binary: set[str], status: dict[str, str]) -> str:
+    """`  <path> (<kind>, binary)` -- annotate with the change kind (added /
+    modified / ...) so the model doesn't assume an edit is a fresh add, and flag
+    binary files whose diff content is withheld."""
+    tags = []
+    word = _STATUS_WORD.get(status.get(p, ""))
+    if word:
+        tags.append(word)
+    if p in binary:
+        tags.append("binary")
+    return f"  {p} ({', '.join(tags)})" if tags else f"  {p}"
 
 
 def _write_commit(
@@ -284,6 +289,7 @@ def _write_commit(
     diff: str,
     *,
     binary: set[str],
+    status: dict[str, str],
     model: str,
     effort: str,
 ) -> tuple[str, str]:
@@ -295,7 +301,7 @@ def _write_commit(
     )
     commit_prompt = PROMPT_MULTI.format(
         rules=_RULES,
-        files="\n".join(_fmt_file(f, binary) for f in chosen),
+        files="\n".join(_fmt_file(f, binary, status) for f in chosen),
         binary_note=binary_note,
         diff=diff or "(no text-file diffs)",
     )
@@ -308,22 +314,26 @@ def generate_message(
     diff_for: Callable[[list[str]], str],
     *,
     binary: set[str] | None = None,
+    status: dict[str, str] | None = None,
     model: str = DEFAULT_MODEL,
     effort: str = DEFAULT_EFFORT,
 ) -> tuple[str, str]:
     """returns (tag, message). `diff_for(paths)` is a callback to fetch the
     staged diff for a given list of paths. `binary` lists paths whose diff
-    content should not be sent (filename only)."""
+    content should not be sent (filename only). `status` maps path -> change
+    kind letter (A/M/D/...) for the file annotations."""
     if not files:
         raise GenerateError("no staged files")
     binary = binary or set()
+    status = status or {}
 
     if len(files) == 1:
-        # single file: filename alone is enough signal. cheaper, faster.
-        _log.info(f"single file -> filename-only mode ({files[0]})")
-        prompt = PROMPT_SINGLE.format(rules=_RULES, file=files[0])
-        obj = _claude(prompt, COMMIT_SCHEMA, model=model, effort=effort)
-        return _parse_commit(obj)
+        # single file: still send its diff so an edit isn't mistaken for a fresh
+        # add. one call; binary -> filename + status only.
+        f = files[0]
+        diff = "" if f in binary else _truncate(diff_for([f]))
+        _log.info(f"single file -> {f}")
+        return _write_commit(files, diff, binary=binary, status=status, model=model, effort=effort)
 
     # fetch the whole diff up front. when it fits under the cap, skip the pick
     # step and write the message in a single call -- the pick round-trip only
@@ -334,12 +344,12 @@ def generate_message(
 
     if len(full_diff) <= MAX_DIFF_CHARS:
         _log.info(f"{len(files)} files, diff {len(full_diff)} chars <= {MAX_DIFF_CHARS} -> single-call mode")
-        return _write_commit(files, full_diff, binary=binary, model=model, effort=effort)
+        return _write_commit(files, full_diff, binary=binary, status=status, model=model, effort=effort)
 
     # large diff: 2-step chain. step 1 picks the relevant subset, step 2 writes
     # the commit from just those files' (truncated) diff.
     _log.info(f"{len(files)} files, diff {len(full_diff)} chars > {MAX_DIFF_CHARS} -> picking relevant subset")
-    pick_prompt = PROMPT_PICK_FILES.format(files="\n".join(_fmt_file(f, binary) for f in files))
+    pick_prompt = PROMPT_PICK_FILES.format(files="\n".join(_fmt_file(f, binary, status) for f in files))
     picked = _claude(pick_prompt, FILES_SCHEMA, model=model, effort=effort)
 
     requested = picked.get("files") or []
@@ -361,4 +371,4 @@ def generate_message(
         _log.info(f"skipping diff content for {len(binary_chosen)} binary file(s)")
 
     diff = _truncate(diff_for(text_chosen)) if text_chosen else ""
-    return _write_commit(chosen, diff, binary=binary, model=model, effort=effort)
+    return _write_commit(chosen, diff, binary=binary, status=status, model=model, effort=effort)

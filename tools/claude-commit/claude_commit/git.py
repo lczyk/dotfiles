@@ -59,6 +59,20 @@ def staged_binary_files() -> set[str]:
     return out
 
 
+def staged_name_status() -> dict[str, str]:
+    """path -> single-letter change kind (A/M/D/R/C/T). for renames/copies the
+    line is `R100\told\tnew`, so the new path keys the entry (matches what
+    --name-only reports)."""
+    raw = _run(["diff", "--cached", "--name-status"])
+    out: dict[str, str] = {}
+    for line in raw.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2 or not parts[0]:
+            continue
+        out[parts[-1]] = parts[0][0]
+    return out
+
+
 def commit(message: str) -> None:
     _run(["commit", "-m", message])
 
