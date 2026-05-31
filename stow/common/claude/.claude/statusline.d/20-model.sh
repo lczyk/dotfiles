@@ -9,6 +9,8 @@
 # doesn't have associative arrays, and the script needs to work under it.
 alias_for() {
     case "$1" in
+        "Opus 4.8")                echo "O48" ;;
+        "Opus 4.8 (1M context)")   echo "O48-1M" ;;
         "Opus 4.7")                echo "O47" ;;
         "Opus 4.7 (1M context)")   echo "O47-1M" ;;
         "Opus 4.6")                echo "O46" ;;
