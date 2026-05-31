@@ -27,13 +27,13 @@ build: $(addprefix build-,$(CARGO_BINS))  ## Build all rust binaries (release)
 
 .PHONY: build-%
 build-%:
-	cargo build --release --manifest-path ./bin/$*/Cargo.toml
+	cargo build --release --manifest-path ./tools/$*/Cargo.toml
 
 .PHONY: install
 install: build  ## Symlink built rust binaries into ~/.local/bin
 	mkdir -p $(HOME)/.local/bin
 	@for b in $(CARGO_BINS); do \
-		ln -sfv "$(PWD)/bin/$$b/target/release/$$b" "$(HOME)/.local/bin/$$b"; \
+		ln -sfv "$(PWD)/tools/$$b/target/release/$$b" "$(HOME)/.local/bin/$$b"; \
 	done
 
 .PHONY: stow
@@ -78,7 +78,7 @@ test-cargo: $(addprefix test-cargo-,$(CARGO_BINS))  ## cargo test all rust binar
 
 .PHONY: test-cargo-%
 test-cargo-%:
-	cargo test --manifest-path ./bin/$*/Cargo.toml
+	cargo test --manifest-path ./tools/$*/Cargo.toml
 
 .PHONY: test-hooks
 test-hooks:  ## Run bats tests for shell hooks
@@ -97,18 +97,18 @@ lint: $(addprefix lint-,$(CARGO_BINS))  ## cargo clippy + fmt --check
 
 .PHONY: lint-%
 lint-%:
-	cargo clippy --manifest-path ./bin/$*/Cargo.toml -- -D warnings
-	cargo fmt --manifest-path ./bin/$*/Cargo.toml -- --check
+	cargo clippy --manifest-path ./tools/$*/Cargo.toml -- -D warnings
+	cargo fmt --manifest-path ./tools/$*/Cargo.toml -- --check
 
 .PHONY: format
 format: $(addprefix format-,$(CARGO_BINS))  ## cargo fmt all rust binaries
 
 .PHONY: format-%
 format-%:
-	cargo fmt --manifest-path ./bin/$*/Cargo.toml
+	cargo fmt --manifest-path ./tools/$*/Cargo.toml
 
 .PHONY: clean
 clean:  ## Remove rust build artifacts
 	@for b in $(CARGO_BINS); do \
-		cargo clean --manifest-path ./bin/$$b/Cargo.toml; \
+		cargo clean --manifest-path ./tools/$$b/Cargo.toml; \
 	done
