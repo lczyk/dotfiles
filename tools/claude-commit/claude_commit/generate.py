@@ -52,12 +52,25 @@ FILES_SCHEMA = {
     "additionalProperties": False,
 }
 
-_RULES = (
+# general conventional-commit rules -- sensible for anyone.
+_RULES_COMMON = (
     "tag: one of " + "|".join(VALID_TAGS) + ". "
     "message: `<subject>` or `<subject>\\n\\n<body>`. "
-    "subject is lowercase, imperative, no trailing period, <= 72 chars. "
-    "body (optional) explains *why*, wrapped ~72 chars."
+    "subject: imperative, no trailing period, <= 72 chars. a terse reminder of what the "
+    "change is about, not a description -- don't name specific functions/classes/variables, "
+    "and don't pad with framing verbs (add, implement, introduce, support for) the tag "
+    "already implies. "
+    "body: include only when the why isn't obvious from the diff; explain why, not what; "
+    "wrap ~72 chars. "
+    "avoid filler/marketing words (robust, seamless, leverage, crucial) and tacked-on "
+    "'-ing' clauses (ensuring..., highlighting..., reflecting...). no emoji. "
+    "ascii only (write -- not an em-dash, -> not an arrow)."
 )
+
+# personal voice/locale -- edit (or empty) to taste; concatenated onto the common rules.
+_RULES_STYLE = "write lowercase and casual, in british english."
+
+_RULES = _RULES_COMMON + " " + _RULES_STYLE
 
 PROMPT_PICK_FILES = """\
 the following files are staged. pick the subset whose diffs you need to read
