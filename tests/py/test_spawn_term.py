@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SCRIPT = REPO / "stow" / "x1" / "sway" / ".config" / "sway" / "scripts" / "spawn-term.py"
+SCRIPT = REPO / "stow" / "x1" / "sway" / ".local" / "share" / "sway" / "scripts" / "spawn-term.py"
 
 spec = importlib.util.spec_from_file_location("spawn_term", SCRIPT)
 assert spec and spec.loader
