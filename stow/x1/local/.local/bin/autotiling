@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-exec uv run "$HOME/.local/share/sway/scripts/autotiling" "$@"
+exec uv run "$HOME/.local/share/sway/autotiling" "$@"
