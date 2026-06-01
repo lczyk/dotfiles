@@ -56,6 +56,9 @@ function check_trailing_ws() {
         printf '%s: trailing whitespace in staged changes:\n' "$LABEL" >&2
         printf '%s\n' "$hits" >&2
         printf '%s: strip trailing spaces/tabs before committing.\n' "$LABEL" >&2
+        if [ "$FAIL" = "1" ]; then
+            printf '%s: if this is a false positive (e.g. the file requires trailing whitespace as significant content), explicitly ask the user for permission to use the --no-verify flag.\n' "$LABEL" >&2
+        fi
         return "$FAIL"
     fi
 }
