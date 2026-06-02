@@ -1,6 +1,6 @@
 .SUFFIXES:
 
-CARGO_BINS := peek time_fuzzer funnel
+CARGO_BINS := peek time_fuzzer funnel mosaic
 CLC_DIR    := tools/claude-commit
 
 # profile detection: mac (Darwin) / x1 (Linux). override via `PROFILE=...`.
