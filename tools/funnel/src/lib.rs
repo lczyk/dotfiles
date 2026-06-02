@@ -341,6 +341,38 @@ fn match_parts(parts: &[Part], s: &str) -> bool {
     }
 }
 
+// walk: recursively visit regular files under `dir`, calling `cb` with each
+// file path. recurses into subdirs only when `recursive`. `on_err` is called
+// with (path, err) for dirs that can't be read; pass a no-op closure to ignore.
+pub fn walk(
+    dir: &Path,
+    recursive: bool,
+    cb: &mut dyn FnMut(&Path),
+    on_err: &mut dyn FnMut(&Path, &dyn std::fmt::Display),
+) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(e) => {
+            on_err(dir, &e);
+            return;
+        }
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let ft = match entry.file_type() {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        if ft.is_dir() {
+            if recursive {
+                walk(&path, recursive, cb, on_err);
+            }
+        } else if ft.is_file() {
+            cb(&path);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

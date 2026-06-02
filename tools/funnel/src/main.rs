@@ -17,7 +17,7 @@ const IDLE_CLOSE: Duration = Duration::from_secs(60);
 
 use notify::{EventKind, RecursiveMode, Watcher};
 
-use funnel::{ALLOW_TOKENS, Glob, build_prefix, watch_root};
+use funnel::{ALLOW_TOKENS, Glob, build_prefix, walk, watch_root};
 
 mod wrap;
 
@@ -1082,11 +1082,16 @@ fn run() -> io::Result<()> {
                 }
                 // rescan dir for newly-appeared files notify may have missed.
                 let mut new_paths: Vec<PathBuf> = Vec::new();
-                walk(&root, recursive, &mut |p| {
-                    if glob.is_match_path(p) && !tracked.contains_key(p) {
-                        new_paths.push(p.to_path_buf());
-                    }
-                });
+                walk(
+                    &root,
+                    recursive,
+                    &mut |p| {
+                        if glob.is_match_path(p) && !tracked.contains_key(p) {
+                            new_paths.push(p.to_path_buf());
+                        }
+                    },
+                    &mut |d, e| warn(d, e),
+                );
                 for p in new_paths {
                     match stat_tracked(&p, &glob, color, Some(0)) {
                         Ok(t) => {
@@ -1299,41 +1304,22 @@ fn seed_existing(
     color: bool,
     tracked: &mut HashMap<PathBuf, Tracked>,
 ) {
-    walk(root, recursive, &mut |p| {
-        if glob.is_match_path(p) {
-            // seed = start_offset None = start tailing from current EOF.
-            match stat_tracked(p, glob, color, None) {
-                Ok(t) => {
-                    tracked.insert(p.to_path_buf(), t);
+    walk(
+        root,
+        recursive,
+        &mut |p| {
+            if glob.is_match_path(p) {
+                // seed = start_offset None = start tailing from current EOF.
+                match stat_tracked(p, glob, color, None) {
+                    Ok(t) => {
+                        tracked.insert(p.to_path_buf(), t);
+                    }
+                    Err(e) => warn(p, &e),
                 }
-                Err(e) => warn(p, &e),
             }
-        }
-    });
-}
-
-fn walk(dir: &Path, recursive: bool, cb: &mut dyn FnMut(&Path)) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(e) => {
-            warn(dir, &e);
-            return;
-        }
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let ft = match entry.file_type() {
-            Ok(f) => f,
-            Err(_) => continue,
-        };
-        if ft.is_dir() {
-            if recursive {
-                walk(&path, recursive, cb);
-            }
-        } else if ft.is_file() {
-            cb(&path);
-        }
-    }
+        },
+        &mut |p, e| warn(p, e),
+    );
 }
 
 fn main() {
