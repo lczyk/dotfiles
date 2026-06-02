@@ -180,16 +180,21 @@ fn expand_tilde(pat: &str) -> String {
 // downscales to a THUMB_PX box, and ships the cpu-side rgba back to the ui
 // thread (only the ui thread may touch the egui context to upload textures).
 
-// a unit of work for a decode worker.
+// a unit of work for a decode worker. the SystemTime is the source file's mtime
+// at dispatch -- a generation token echoed back in the result so a decode of a
+// since-overwritten file can be dropped instead of clobbering the live version.
 enum Job {
     // decode just the first frame (fast) + detect whether it's a gif.
-    Thumb(PathBuf),
+    Thumb(PathBuf, SystemTime),
     // decode every frame of a gif (on demand, when a gif is hovered).
-    Frames(PathBuf),
+    Frames(PathBuf, SystemTime),
 }
 
 struct DecodeResult {
     path: PathBuf,
+    // the mtime the job was dispatched against; matched against the thumb's
+    // current mtime to reject results for a stale version of the file.
+    mtime: SystemTime,
     payload: Payload,
 }
 
@@ -418,13 +423,13 @@ fn spawn_workers(ctx: egui::Context) -> (Sender<Job>, Receiver<DecodeResult>) {
                     }
                 };
                 let result = match job {
-                    Job::Thumb(path) => {
+                    Job::Thumb(path, mtime) => {
                         let payload = Payload::Thumb(decode_thumb(&path));
-                        DecodeResult { path, payload }
+                        DecodeResult { path, mtime, payload }
                     }
-                    Job::Frames(path) => {
+                    Job::Frames(path, mtime) => {
                         let payload = Payload::Frames(decode_gif_frames(&path));
-                        DecodeResult { path, payload }
+                        DecodeResult { path, mtime, payload }
                     }
                 };
                 if res_tx.send(result).is_err() {
@@ -445,6 +450,9 @@ enum State {
     Requested,
     Ready,
     Failed,
+    // file overwritten after a successful decode: needs re-decode, but the old
+    // frames stay on screen until the new ones land (no placeholder flash).
+    Stale,
 }
 
 // loading state for a gif's full frame set (separate from the fast first-frame
@@ -548,13 +556,12 @@ impl Mosaic {
         for p in &found {
             let m = mtime_of(p);
             match self.thumbs.get_mut(p) {
+                // overwritten: re-decode, but keep the old frames/swatch on
+                // screen until the new decode lands so the tile updates in place
+                // instead of flashing back to a placeholder like a new image.
                 Some(t) if t.mtime != m => {
-                    t.state = State::New;
-                    t.frames.clear();
-                    t.delays.clear();
-                    t.is_gif = false;
+                    t.state = State::Stale;
                     t.gif_load = GifLoad::Unloaded;
-                    t.swatch = None;
                     t.mtime = m;
                 }
                 Some(_) => {}
@@ -1195,6 +1202,10 @@ impl eframe::App for Mosaic {
             let Some(t) = self.thumbs.get_mut(&res.path) else {
                 continue;
             };
+            // drop results for a version that's since been overwritten.
+            if res.mtime != t.mtime {
+                continue;
+            }
             let name = res.path.to_string_lossy().into_owned();
             match res.payload {
                 Payload::Thumb(Some(d)) => {
@@ -1368,7 +1379,7 @@ impl eframe::App for Mosaic {
                             && t.gif_load == GifLoad::Unloaded
                         {
                             t.gif_load = GifLoad::Loading;
-                            let _ = job_tx.send(Job::Frames(hp.clone()));
+                            let _ = job_tx.send(Job::Frames(hp.clone(), t.mtime));
                         }
 
                         // advance the playing gif's clock.
@@ -1422,13 +1433,20 @@ impl eframe::App for Mosaic {
                                 }
 
                                 match thumbs.get_mut(path) {
-                                    Some(t) if t.state == State::New => {
-                                        // first time visible -> queue decode.
-                                        t.state = State::Requested;
-                                        let _ = job_tx.send(Job::Thumb(path.to_path_buf()));
-                                        paint_placeholder(ui.painter(), cell_rect);
-                                    }
-                                    Some(t) if t.state == State::Ready && !t.frames.is_empty() => {
+                                    Some(t) => {
+                                        // queue a decode when first visible (New)
+                                        // or after an overwrite (Stale). a Stale
+                                        // tile keeps its old frames on screen
+                                        // (drawn below) until the new ones land.
+                                        if t.state == State::New || t.state == State::Stale {
+                                            t.state = State::Requested;
+                                            let _ = job_tx
+                                                .send(Job::Thumb(path.to_path_buf(), t.mtime));
+                                        }
+                                        if t.frames.is_empty() {
+                                            paint_placeholder(ui.painter(), cell_rect);
+                                            continue;
+                                        }
                                         // play the clicked gif; otherwise show
                                         // the first frame.
                                         let playing_this = matches!(
@@ -1478,7 +1496,6 @@ impl eframe::App for Mosaic {
                                             },
                                         ));
                                     }
-                                    Some(_) => paint_placeholder(ui.painter(), cell_rect),
                                     None => paint_placeholder(ui.painter(), cell_rect),
                                 }
                             }
