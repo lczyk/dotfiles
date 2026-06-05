@@ -14,5 +14,5 @@ end
 # Move recently downloaded item here
 function mrd
     set P (/usr/bin/env ls -td ~/Downloads/* | head -n1)
-    cp -v "$P" . && rm -rf "$P"
+    mv -v "$P" .
 end
