@@ -17,6 +17,13 @@ use notify::{RecursiveMode, Watcher};
 // thumbnails are decoded to a fixed pixel box and displayed scaled, so zoom
 // only re-lays-out -- it never re-decodes.
 const THUMB_PX: u32 = 256;
+// single mode decodes its one image to the window's physical pixel size so it
+// isn't upscaled. clamp that to a sane ceiling to bound texture size / decode
+// cost on huge windows or hidpi displays.
+const SINGLE_MAX_PX: u32 = 8192;
+// quantise the single-mode decode box to this step so a slow drag-resize doesn't
+// re-decode on every pixel -- only when it crosses a step boundary.
+const SINGLE_STEP_PX: u32 = 256;
 const N_WORKERS: usize = 4;
 
 const HELP: &str = r#"Usage: mosaic <glob> [OPTIONS]
@@ -35,6 +42,10 @@ Options:
   -c, --cols=<n>          Fixed number of columns (default: auto-fit to width)
   -s, --size=<px>         Thumbnail display size in px (default: 192).
                           Also adjustable live with +/- / scroll.
+  -m, --mode=<mode>       View mode: grid (default), single. `single` shows
+                          only the newest matching image, maximised to the
+                          window (aspect-fit), and updates live as new
+                          matches land.
       --sort=<key>        Sort order: name (default), mtime, size
       --allow=<tokens>    Opt in to hard-to-reason-about glob shapes.
                           Comma-separated, repeatable. Use `-name` to remove.
@@ -55,11 +66,20 @@ enum Sort {
     Size,
 }
 
+// grid: the scrollable thumbnail grid. single: just the newest matching image,
+// blown up to fill the window (aspect-fit), refreshed live as matches change.
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Grid,
+    Single,
+}
+
 struct Args {
     pattern: String,
     cols: Option<usize>,
     size: f32,
     sort: Sort,
+    mode: Mode,
     allow_values: Vec<String>,
 }
 
@@ -74,6 +94,7 @@ fn parse_args(argv: &[String]) -> Args {
     let mut cols: Option<usize> = None;
     let mut size: f32 = 192.0;
     let mut sort = Sort::Name;
+    let mut mode = Mode::Grid;
     let mut allow_values: Vec<String> = Vec::new();
 
     let mut i = 1;
@@ -115,6 +136,10 @@ fn parse_args(argv: &[String]) -> Args {
                 sort = parse_sort(&split_value("--sort").unwrap())
             }
             "--sort" => sort = parse_sort(&take_next(&mut i)),
+            "-m" | "--mode" => mode = parse_mode(&take_next(&mut i)),
+            _ if split_value("--mode").is_some() => {
+                mode = parse_mode(&split_value("--mode").unwrap())
+            }
             _ if split_value("--allow").is_some() => {
                 allow_values.push(split_value("--allow").unwrap())
             }
@@ -138,6 +163,7 @@ fn parse_args(argv: &[String]) -> Args {
         cols,
         size,
         sort,
+        mode,
         allow_values,
     }
 }
@@ -165,6 +191,14 @@ fn parse_sort(v: &str) -> Sort {
     }
 }
 
+fn parse_mode(v: &str) -> Mode {
+    match v {
+        "grid" => Mode::Grid,
+        "single" => Mode::Single,
+        other => die(&format!("invalid --mode value: {other}")),
+    }
+}
+
 // expand a leading `~` to the home dir; leaves everything else untouched.
 fn expand_tilde(pat: &str) -> String {
     if let Some(rest) = pat.strip_prefix("~/")
@@ -184,8 +218,10 @@ fn expand_tilde(pat: &str) -> String {
 // at dispatch -- a generation token echoed back in the result so a decode of a
 // since-overwritten file can be dropped instead of clobbering the live version.
 enum Job {
-    // decode just the first frame (fast) + detect whether it's a gif.
-    Thumb(PathBuf, SystemTime),
+    // decode just the first frame (fast) + detect whether it's a gif. the u32 is
+    // the decode box: THUMB_PX for grid cells, the window's physical pixel size
+    // for single mode (so the maximised image isn't upscaled / blurred).
+    Thumb(PathBuf, SystemTime, u32),
     // decode every frame of a gif (on demand, when a gif is hovered).
     Frames(PathBuf, SystemTime),
 }
@@ -195,6 +231,10 @@ struct DecodeResult {
     // the mtime the job was dispatched against; matched against the thumb's
     // current mtime to reject results for a stale version of the file.
     mtime: SystemTime,
+    // the decode box this job was dispatched at (the `Thumb` job's u32). single
+    // mode reads it back to know whether the result is already as detailed as
+    // the source can give, vs capped and worth re-decoding bigger.
+    box_px: u32,
     payload: Payload,
 }
 
@@ -227,9 +267,9 @@ struct Swatch {
 // only ever downscale. upscaling a small image here (thumbnail fits it to the
 // box) would bake in interpolation blur that no sampler can undo; keep it at
 // native res and let the grid pass upscale it crisply (nearest).
-fn downscale_only(img: image::DynamicImage) -> image::DynamicImage {
-    if img.width() > THUMB_PX || img.height() > THUMB_PX {
-        img.thumbnail(THUMB_PX, THUMB_PX)
+fn downscale_only(img: image::DynamicImage, max_px: u32) -> image::DynamicImage {
+    if img.width() > max_px || img.height() > max_px {
+        img.thumbnail(max_px, max_px)
     } else {
         img
     }
@@ -242,13 +282,13 @@ fn to_color_image(rgba: &image::RgbaImage) -> egui::ColorImage {
 
 // fast path: decode only the first frame + the colour swatch, and flag whether
 // the file is a gif (so the grid can show a play badge / preload on hover).
-fn decode_thumb(path: &Path) -> Option<ThumbData> {
+fn decode_thumb(path: &Path, max_px: u32) -> Option<ThumbData> {
     let reader = image::ImageReader::open(path)
         .ok()?
         .with_guessed_format()
         .ok()?;
     let is_gif = reader.format() == Some(image::ImageFormat::Gif);
-    let img = downscale_only(reader.decode().ok()?);
+    let img = downscale_only(reader.decode().ok()?, max_px);
     let rgba = img.to_rgba8();
     let swatch = dominant_colors(&rgba);
     Some(ThumbData {
@@ -279,7 +319,8 @@ fn decode_gif_frames(path: &Path) -> Option<FramesData> {
         };
         // clamp absurdly fast / zero delays to keep playback sane.
         delays.push(ms.max(20.0) / 1000.0);
-        let rgba = downscale_only(image::DynamicImage::ImageRgba8(f.into_buffer())).to_rgba8();
+        let rgba =
+            downscale_only(image::DynamicImage::ImageRgba8(f.into_buffer()), THUMB_PX).to_rgba8();
         imgs.push(to_color_image(&rgba));
     }
     Some(FramesData {
@@ -423,13 +464,13 @@ fn spawn_workers(ctx: egui::Context) -> (Sender<Job>, Receiver<DecodeResult>) {
                     }
                 };
                 let result = match job {
-                    Job::Thumb(path, mtime) => {
-                        let payload = Payload::Thumb(decode_thumb(&path));
-                        DecodeResult { path, mtime, payload }
+                    Job::Thumb(path, mtime, max_px) => {
+                        let payload = Payload::Thumb(decode_thumb(&path, max_px));
+                        DecodeResult { path, mtime, box_px: max_px, payload }
                     }
                     Job::Frames(path, mtime) => {
                         let payload = Payload::Frames(decode_gif_frames(&path));
-                        DecodeResult { path, mtime, payload }
+                        DecodeResult { path, mtime, box_px: 0, payload }
                     }
                 };
                 if res_tx.send(result).is_err() {
@@ -476,6 +517,10 @@ struct Thumb {
     is_gif: bool,
     gif_load: GifLoad,
     mtime: SystemTime,
+    // the decode box the current frames came back at (0 until first decode).
+    // single mode compares it against the window size to decide whether a
+    // bigger re-decode would actually buy more detail. unused by the grid.
+    decoded_px: u32,
     // dominant fg/bg colours, set once the image decodes. drives the window
     // tint (avg bg) + the hover glow colour.
     swatch: Option<Swatch>,
@@ -486,6 +531,7 @@ struct Mosaic {
     root: PathBuf,
     recursive: bool,
     sort: Sort,
+    mode: Mode,
     user_cols: Option<usize>,
     thumb_size: f32,
 
@@ -575,6 +621,7 @@ impl Mosaic {
                             is_gif: false,
                             gif_load: GifLoad::Unloaded,
                             mtime: m,
+                            decoded_px: 0,
                             swatch: None,
                         },
                     );
@@ -607,6 +654,98 @@ impl Mosaic {
         } else {
             egui::Color32::from_rgb((r / n) as u8, (g / n) as u8, (b / n) as u8)
         }
+    }
+
+    // single-image view: blow the newest matching image up to fill the window,
+    // aspect-fit (letterboxed, never cropped). decoded to the window's physical
+    // pixel size so it isn't upscaled / blurred, and re-decoded bigger (only
+    // bigger) as the window grows. the newest match is re-picked every frame, so
+    // a freshly written file takes over the view as soon as the watcher reports.
+    fn render_single(&mut self, ui: &mut egui::Ui) {
+        // newest by mtime, independent of --sort.
+        let Some(path) = self.paths.iter().max_by_key(|p| mtime_of(p)).cloned() else {
+            return;
+        };
+
+        let area = ui.max_rect();
+        // the box we want: the window's longer side in *physical* pixels (points
+        // x dpi scale), quantised + clamped. that's the most detail the display
+        // can show, so decoding to it avoids upscaling without overshooting.
+        let phys = area.width().max(area.height()) * ui.ctx().pixels_per_point();
+        let want = ((phys.ceil() as u32).div_ceil(SINGLE_STEP_PX) * SINGLE_STEP_PX)
+            .clamp(SINGLE_STEP_PX, SINGLE_MAX_PX);
+
+        // decide whether to (re)decode. cases:
+        //  - New / Stale: first sight or overwritten -> decode (keep any old
+        //    frame up meanwhile so the view updates in place, no placeholder).
+        //  - upgrade: the window now wants more pixels than we have, and the
+        //    source wasn't the limiting factor last time (decoded long side hit
+        //    the box we asked for -> it was capped, so a bigger box buys detail).
+        let info = self.thumbs.get(&path).map(|t| {
+            let have = t
+                .frames
+                .first()
+                .map(|f| f.size().into_iter().max().unwrap_or(0) as u32)
+                .unwrap_or(0);
+            (matches!(t.state, State::New | State::Stale), t.mtime, have, t.decoded_px)
+        });
+        if let Some((fresh, mtime, have, decoded)) = info {
+            let upgrade = have > 0 && want > have && have >= decoded;
+            if fresh || upgrade {
+                if let Some(t) = self.thumbs.get_mut(&path) {
+                    t.state = State::Requested;
+                }
+                let _ = self.job_tx.send(Job::Thumb(path.clone(), mtime, want));
+            }
+        }
+
+        let Some(t) = self.thumbs.get(&path) else {
+            return;
+        };
+        let Some(tex) = t.frames.first() else {
+            paint_placeholder(ui.painter(), area);
+            return;
+        };
+        let [tw, th] = tex.size();
+        let rect = fit_rect(area, tw as f32, th as f32);
+        let fg = t
+            .swatch
+            .map(|s| {
+                [
+                    s.fg[0] as f32 / 255.0,
+                    s.fg[1] as f32 / 255.0,
+                    s.fg[2] as f32 / 255.0,
+                ]
+            })
+            .unwrap_or([1.0, 1.0, 1.0]);
+        let quad = Quad {
+            tex: tex.id(),
+            rect,
+            fg,
+            glow: 0.0,
+            nearest: tw.max(th) <= NEAREST_MAX_PX,
+        };
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let status = format!("{name}   {tw}x{th}   q/esc quit");
+
+        // same two-pass gl callback as the grid, just with a single quad.
+        let renderers = self.gl.clone();
+        let clip = ui.clip_rect();
+        ui.painter().add(egui::PaintCallback {
+            rect: clip,
+            callback: std::sync::Arc::new(egui_glow::CallbackFn::new(move |info, painter| {
+                let mut r = renderers.lock().unwrap();
+                if r.is_none() {
+                    *r = Some(Renderers::new(painter.gl()));
+                }
+                let r = r.as_ref().unwrap();
+                r.grid.paint(painter, &info, std::slice::from_ref(&quad));
+                r.text.paint(painter, &info, &status, 8.0, 6.0, 22.5);
+            })),
+        });
     }
 }
 
@@ -1212,6 +1351,7 @@ impl eframe::App for Mosaic {
                     t.frames = vec![ctx.load_texture(name, d.image, egui::TextureOptions::LINEAR)];
                     t.swatch = Some(d.swatch);
                     t.is_gif = d.is_gif;
+                    t.decoded_px = res.box_px;
                     t.state = State::Ready;
                 }
                 Payload::Thumb(None) => t.state = State::Failed,
@@ -1276,6 +1416,11 @@ impl eframe::App for Mosaic {
                     ui.centered_and_justified(|ui| {
                         ui.label("no images match the glob (yet)");
                     });
+                    return;
+                }
+
+                if self.mode == Mode::Single {
+                    self.render_single(ui);
                     return;
                 }
 
@@ -1440,8 +1585,11 @@ impl eframe::App for Mosaic {
                                         // (drawn below) until the new ones land.
                                         if t.state == State::New || t.state == State::Stale {
                                             t.state = State::Requested;
-                                            let _ = job_tx
-                                                .send(Job::Thumb(path.to_path_buf(), t.mtime));
+                                            let _ = job_tx.send(Job::Thumb(
+                                                path.to_path_buf(),
+                                                t.mtime,
+                                                THUMB_PX,
+                                            ));
                                         }
                                         if t.frames.is_empty() {
                                             paint_placeholder(ui.painter(), cell_rect);
@@ -1663,6 +1811,7 @@ fn main() -> eframe::Result<()> {
                 root,
                 recursive,
                 sort: args.sort,
+                mode: args.mode,
                 user_cols: args.cols,
                 thumb_size: args.size,
                 paths: Vec::new(),
