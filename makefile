@@ -3,10 +3,12 @@
 CARGO_BINS := peek time_fuzzer funnel mosaic
 CLC_DIR    := tools/claude-commit
 
-# profile detection: mac (Darwin) / x1 (Linux). override via `PROFILE=...`.
+# profile detection: mac (Darwin) / armstrong (headless) / x1 (Linux). override via `PROFILE=...`.
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 PROFILE ?= mac
+else ifeq ($(shell uname -n),armstrong)
+PROFILE ?= armstrong
 else
 PROFILE ?= x1
 endif
@@ -19,7 +21,7 @@ COMMON_DIRS  := $(shell find $(STOW_COMMON) -mindepth 1 -maxdepth 1 -type d | se
 PROFILE_DIRS := $(shell [ -d $(STOW_PROFILE) ] && find $(STOW_PROFILE) -mindepth 1 -maxdepth 1 -type d | sed 's|^$(STOW_PROFILE)/||' | sort)
 
 help:  ## Show this help
-	@echo "Profile: $(PROFILE) (override with PROFILE=mac|x1)"
+	@echo "Profile: $(PROFILE) (override with PROFILE=mac|x1|armstrong)"
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
