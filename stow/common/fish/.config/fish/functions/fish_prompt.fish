@@ -49,8 +49,12 @@ function fish_prompt
         end
     end
 
+    # Private session indicator (fish -P / --private). ascii-safe, no unicode guard needed.
+    set -l prompt_private
+    test -n "$fish_private_mode"; and set prompt_private (set_color brmagenta)"[priv]"$normal" "
+
     # Shorten pwd if prompt is too long
     set -l pwd (prompt_pwd)
 
-    echo -n -s $prompt_host $cwd $pwd $normal $prompt_status $delim
+    echo -n -s $prompt_private $prompt_host $cwd $pwd $normal $prompt_status $delim
 end
