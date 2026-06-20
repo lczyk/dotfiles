@@ -20,6 +20,9 @@ claude-commit = "claude_commit:cli.main"
 module-name = "claude_commit"
 module-root = ""
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
 [tool.ruff]
 line-length = 120
 target-version = "py313"
@@ -38,5 +41,6 @@ select = [
 [dependency-groups]
 dev = [
     "ruff>=0.11.2",
+    "pytest>=8",
     #
 ]
