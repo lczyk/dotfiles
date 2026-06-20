@@ -9,6 +9,12 @@
             "command": "node \"$HOME/.claude/hooks/caveman-activate.js\"",
             "timeout": 5,
             "statusMessage": "Loading caveman mode..."
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/ponytail-activate.js\"",
+            "timeout": 5,
+            "statusMessage": "Loading ponytail mode..."
           }
         ]
       }
@@ -21,6 +27,12 @@
             "command": "node \"$HOME/.claude/hooks/caveman-mode-tracker.js\"",
             "timeout": 5,
             "statusMessage": "Tracking caveman mode..."
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/ponytail-mode-tracker.js\"",
+            "timeout": 5,
+            "statusMessage": "Tracking ponytail mode..."
           }
         ]
       }
