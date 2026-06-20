@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ponytail — shared configuration resolver
+// ponytail -- shared configuration resolver
 //
 // Resolution order for default mode:
 //   1. PONYTAIL_DEFAULT_MODE environment variable
@@ -35,7 +35,7 @@ function normalizePersistedMode(mode) {
 
 // "stop ponytail" / "normal mode" turn ponytail off, but only as a standalone
 // command. Matching the phrase anywhere in the message turned it off mid-task
-// for ordinary requests like "add a normal mode toggle" — so require the whole
+// for ordinary requests like "add a normal mode toggle" -- so require the whole
 // message to be the command, ignoring case and trailing punctuation.
 function isDeactivationCommand(text) {
   const t = String(text || '').trim().toLowerCase().replace(/[.!?\s]+$/, '');
@@ -79,7 +79,7 @@ function getDefaultMode() {
       return config.defaultMode.toLowerCase();
     }
   } catch (e) {
-    // Config file doesn't exist or is invalid — fall through
+    // Config file doesn't exist or is invalid -- fall through
   }
 
   // 3. Default

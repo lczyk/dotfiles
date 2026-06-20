@@ -24,13 +24,13 @@ Render plain ASCII bars. The bar length shows the measured range; the label
 carries the exact figure:
 
 ```
-  ponytail gain                     benchmark median · 5 tasks · 3 models
+  ponytail gain                     benchmark median . 5 tasks . 3 models
 
-  Lines of code   no-skill  ████████████████████  100%
-                  ponytail  ██▌·················    6–20%   ▼ 80–94%
-  Cost            no-skill  ████████████████████  100%
-                  ponytail  █████▌··············   23–53%  ▼ 47–77%
-  Speed           ponytail  ▸ 3–6× faster
+  Lines of code   no-skill  ####################  100%
+                  ponytail  ###.................    6-20%   v 80-94%
+  Cost            no-skill  ####################  100%
+                  ponytail  ######..............   23-53%  v 47-77%
+  Speed           ponytail  > 3-6x faster
 
   This repo:  /ponytail-debt  (shortcuts you deferred)
               /ponytail-audit (what's still cuttable)

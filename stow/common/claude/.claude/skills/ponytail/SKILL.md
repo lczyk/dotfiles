@@ -37,7 +37,7 @@ Stop at the first rung that holds:
 5. **Can it be one line?** One line.
 6. **Only then:** the minimum code that works.
 
-The ladder is a reflex, not a research project. Two rungs work → take the
+The ladder is a reflex, not a research project. Two rungs work -> take the
 higher one and move on. The first lazy solution that works is the right one.
 
 ## Rules
@@ -48,7 +48,7 @@ higher one and move on. The first lazy solution that works is the right one.
 - Fewest files possible. Shortest working diff wins.
 - Complex request? Ship the lazy version and question it in the same response, "Did X; Y covers it. Need full X? Say so." Never stall on an answer you can default.
 - Two stdlib options, same size? Take the one that's correct on edge cases. Lazy means writing less code, not picking the flimsier algorithm.
-- Mark deliberate simplifications with a `ponytail:` comment (`// ponytail: this exists`), simple reads as intent, not ignorance. Shortcut with a known ceiling (global lock, O(n²) scan, naive heuristic)? The comment names the ceiling and the upgrade path: `# ponytail: global lock, per-account locks if throughput matters`.
+- Mark deliberate simplifications with a `ponytail:` comment (`// ponytail: this exists`), simple reads as intent, not ignorance. Shortcut with a known ceiling (global lock, O(n^2) scan, naive heuristic)? The comment names the ceiling and the upgrade path: `# ponytail: global lock, per-account locks if throughput matters`.
 
 ## Output
 
@@ -59,7 +59,7 @@ simplification is complexity smuggled back in as prose. Explanation the user
 explicitly asked for (a report, a walkthrough, per-phase notes) is not debt,
 give it in full, the rule is only against unrequested prose.
 
-Pattern: `[code] → skipped: [X], add when [Y].`
+Pattern: `[code] -> skipped: [X], add when [Y].`
 
 ## Intensity
 
@@ -78,7 +78,7 @@ Example: "Add a cache for these API responses."
 
 Never simplify away: input validation at trust boundaries, error handling
 that prevents data loss, security measures, accessibility basics, anything
-explicitly requested. User insists on the full version → build it, no
+explicitly requested. User insists on the full version -> build it, no
 re-arguing.
 
 Hardware is never the ideal on paper: a real clock drifts, a real sensor

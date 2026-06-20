@@ -13,3 +13,6 @@ vendored files:
 - `hooks/ponytail-config.js` -- shared config resolver
 - `hooks/ponytail-instructions.js` -- skill-text loader
 - `hooks/ponytail-runtime.js` -- flag-file state read/write
+
+local modifications:
+- asciified non-ascii glyphs
