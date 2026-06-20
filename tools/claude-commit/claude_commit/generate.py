@@ -7,8 +7,9 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 from . import _log
 from .git import staged_blob
@@ -18,6 +19,9 @@ DEFAULT_EFFORT = "none"
 
 # cap any single diff payload sent to the model.
 MAX_DIFF_CHARS = 50_000
+
+# kill the cli if a single invocation runs longer than this.
+CLAUDE_TIMEOUT = 120
 
 VALID_TAGS = (
     "feat",
@@ -128,6 +132,61 @@ def _clear_status(is_tty: bool) -> None:
         sys.stderr.flush()
 
 
+def _consume(
+    lines: Iterable[str],
+    on_phase: Callable[[str, int], None] | None = None,
+) -> tuple[dict | None, int]:
+    """parse the cli's stream-json event lines. returns (result_event, chars).
+    `on_phase(phase, chars)` fires once per parsed line for live status. pure
+    apart from the callback -- feed it canned lines to test the state machine."""
+    phase = "connecting"
+    chars = 0
+    final: dict | None = None
+    for raw in lines:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            ev = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        t = ev.get("type")
+        if t == "system" and ev.get("subtype") == "status":
+            if ev.get("status") == "requesting":
+                phase = "waiting for first token"
+        elif t == "stream_event":
+            evt = ev.get("event") or {}
+            et = evt.get("type")
+            if et == "message_start":
+                phase = "thinking"
+            elif et == "content_block_start":
+                cb = evt.get("content_block") or {}
+                cbt = cb.get("type")
+                if cbt == "thinking":
+                    phase = "thinking"
+                elif cbt == "text":
+                    phase = "responding"
+                elif cbt == "tool_use":
+                    phase = f"calling {cb.get('name', 'tool')}"
+            elif et == "content_block_delta":
+                delta = evt.get("delta") or {}
+                dt = delta.get("type")
+                if dt == "thinking_delta":
+                    chars += len(delta.get("thinking", ""))
+                elif dt == "text_delta":
+                    chars += len(delta.get("text", ""))
+                elif dt == "input_json_delta":
+                    chars += len(delta.get("partial_json", ""))
+        elif t == "result":
+            final = ev
+            phase = "done"
+
+        if on_phase:
+            on_phase(phase, chars)
+    return final, chars
+
+
 def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
     if shutil.which("claude") is None:
         raise GenerateError("`claude` cli not found on PATH")
@@ -175,10 +234,6 @@ def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
 
     is_tty = sys.stderr.isatty()
     started = time.time()
-    phase = "connecting"
-    last_phase_logged: str | None = None
-    chars = 0
-    final: dict | None = None
 
     proc = subprocess.Popen(
         cmd,
@@ -187,61 +242,40 @@ def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
         text=True,
         bufsize=1,
     )
-    assert proc.stdout is not None
-    _render_status(phase, chars, started, is_tty)
+    assert proc.stdout is not None and proc.stderr is not None
+    _render_status("connecting", 0, started, is_tty)
+
+    # drain stderr on a thread so a full pipe buffer can't deadlock the stdout
+    # read loop. timer kills a hung cli.
+    stderr_buf: list[str] = []
+    drain = threading.Thread(target=stderr_buf.extend, args=(proc.stderr,), daemon=True)
+    drain.start()
+    timed_out = threading.Event()
+    watchdog = threading.Timer(CLAUDE_TIMEOUT, lambda: (timed_out.set(), proc.kill()))
+    watchdog.start()
+
+    last_phase_logged: str | None = None
+
+    def _on_phase(phase: str, chars: int) -> None:
+        nonlocal last_phase_logged
+        if not is_tty and phase != last_phase_logged:
+            _log.info(f"[claude] {phase}")
+            last_phase_logged = phase
+        _render_status(phase, chars, started, is_tty)
 
     try:
-        for raw in proc.stdout:
-            raw = raw.strip()
-            if not raw:
-                continue
-            try:
-                ev = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-
-            t = ev.get("type")
-            if t == "system" and ev.get("subtype") == "status":
-                status = ev.get("status")
-                if status == "requesting":
-                    phase = "waiting for first token"
-            elif t == "stream_event":
-                evt = ev.get("event") or {}
-                et = evt.get("type")
-                if et == "message_start":
-                    phase = "thinking"
-                elif et == "content_block_start":
-                    cb = evt.get("content_block") or {}
-                    cbt = cb.get("type")
-                    if cbt == "thinking":
-                        phase = "thinking"
-                    elif cbt == "text":
-                        phase = "responding"
-                    elif cbt == "tool_use":
-                        phase = f"calling {cb.get('name', 'tool')}"
-                elif et == "content_block_delta":
-                    delta = evt.get("delta") or {}
-                    dt = delta.get("type")
-                    if dt == "thinking_delta":
-                        chars += len(delta.get("thinking", ""))
-                    elif dt == "text_delta":
-                        chars += len(delta.get("text", ""))
-                    elif dt == "input_json_delta":
-                        chars += len(delta.get("partial_json", ""))
-            elif t == "result":
-                final = ev
-                phase = "done"
-
-            if not is_tty and phase != last_phase_logged:
-                _log.info(f"[claude] {phase}")
-                last_phase_logged = phase
-            _render_status(phase, chars, started, is_tty)
+        final, _ = _consume(proc.stdout, _on_phase)
     finally:
+        watchdog.cancel()
         proc.wait()
+        drain.join(timeout=1)
         _clear_status(is_tty)
 
+    if timed_out.is_set():
+        raise GenerateError(f"claude cli timed out after {CLAUDE_TIMEOUT}s")
+
     if proc.returncode != 0:
-        stderr = (proc.stderr.read() if proc.stderr else "") or ""
+        stderr = "".join(stderr_buf)
         raise GenerateError(f"claude cli failed (rc={proc.returncode}): {stderr.strip()}")
 
     if final is None:
