@@ -116,3 +116,21 @@ fire() {
     RE_ENGINE=awk run fire "tail <(cmd)"
     [ "$status" -eq 2 ]
 }
+
+# -- known gaps (xfail) -------------------------------------------------
+# documented TODOs in the hook header -- both need real shell parsing the
+# regex approach can't do, so they currently over-/under-match. each test
+# asserts the IDEAL verdict and is skipped; drop the skip once the hook
+# handles the case and it becomes a live regression guard.
+
+@test "xfail: \$LOG-expanded tee path should be allowed" {
+    skip "hook can't expand \$LOG -- over-blocks (currently exits 2)"
+    run fire 'LOG=/tmp/claude/log/x.log; cmd | tee $LOG | tail'
+    [ "$status" -eq 0 ]
+}
+
+@test "xfail: literal '| tail' inside a quoted string should be allowed" {
+    skip "hook can't tell a quoted literal from a real pipe -- over-blocks (currently exits 2)"
+    run fire 'git commit -m "fix | tail crash"'
+    [ "$status" -eq 0 ]
+}
