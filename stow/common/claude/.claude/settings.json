@@ -52,6 +52,19 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/enforce-log-suffix.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/enforce-tmp-claude.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/enforce-tmp-claude.sh\""
           }
         ]
       }
