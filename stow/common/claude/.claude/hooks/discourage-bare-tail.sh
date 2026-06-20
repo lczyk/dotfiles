@@ -19,27 +19,10 @@
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 
-# regex engine cascade: rg > grep > awk. pick once. patterns below are
-# POSIX ERE (no \s / \b) so all three engines accept them unchanged.
-# RE_ENGINE may be pre-set (e.g. by tests) to force a specific engine.
-if [[ -z "${RE_ENGINE:-}" ]]; then
-    if command -v rg >/dev/null 2>&1; then
-        RE_ENGINE=rg
-    elif command -v grep >/dev/null 2>&1; then
-        RE_ENGINE=grep
-    else
-        RE_ENGINE=awk
-    fi
-fi
-
-re_match() {
-    local pat="$1" text="$2"
-    case "$RE_ENGINE" in
-        rg)   printf '%s' "$text" | rg -q "$pat" ;;
-        grep) printf '%s' "$text" | grep -qE "$pat" ;;
-        awk)  printf '%s' "$text" | awk -v p="$pat" '$0 ~ p { found=1; exit } END { exit !found }' ;;
-    esac
-}
+# regex-engine cascade (rg > grep > awk) + re_match, shared with the
+# sibling hooks. patterns below are POSIX ERE so all three engines accept
+# them unchanged.
+source "$(dirname "$0")/re-engine.sh"
 
 # bad pattern 1: piped to tail/head. word boundary via [^[:alnum:]_] / EOL.
 # `[|]` (char class) not `\|` -- awk treats `\|` as alternation w/ empty.

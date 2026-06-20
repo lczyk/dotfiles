@@ -48,6 +48,10 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/discourage-bare-tail.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/enforce-log-suffix.sh\""
           }
         ]
       }
