@@ -269,6 +269,7 @@ find the right commands in this order:
     cmd 2>&1 | tee /tmp/claude/log/<name>.log | tail -50
     ```
     the `tee` keeps output streaming inline _and_ writes the full log. if you need more context later (earlier lines, full output), read `/tmp/claude/log/<name>.log` directly -- no rerun needed. bare `| tail` w/out `tee` is blocked by a hook b/c it discards the log.
+- **keep all scratch under `/tmp/claude/`** any temp file you create in `/tmp` -- scratch scripts, test fixtures, patches, intermediate output -- goes under `/tmp/claude/` (logs in `/tmp/claude/log/`, the rest directly under `/tmp/claude/`). don't scatter files in `/tmp` itself. use `mktemp -p /tmp/claude` rather than bare `mktemp`. a hook blocks writes (redirects, `tee`, `mktemp`, Write/Edit) to `/tmp` outside `/tmp/claude/`; reads of existing `/tmp` files are fine.
 
 ## environment boundaries
 
