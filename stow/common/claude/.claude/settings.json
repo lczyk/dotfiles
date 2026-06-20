@@ -77,12 +77,6 @@
         "repo": "mksglu/context-mode"
       }
     },
-    "homunculus": {
-      "source": {
-        "source": "github",
-        "repo": "humanplane/homunculus"
-      }
-    },
     "mason": {
       "source": {
         "source": "github",
