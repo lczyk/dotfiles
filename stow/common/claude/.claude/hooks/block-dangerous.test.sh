@@ -47,6 +47,43 @@ CASES=(
     "2|git filter-repo --path foo"
     "2|gh pr merge 123"
 
+    # --- blocked: discarding named-file worktree changes ---
+    "2|git checkout -- src/foo.rs"
+    "2|git checkout HEAD -- src/foo.rs"
+    "2|git checkout abc123 -- file.txt other.txt"
+    "2|git restore src/foo.rs"
+    "2|git restore --worktree src/foo.rs"
+    "2|git restore --staged --worktree src/foo.rs"
+    "2|git rm src/foo.rs"
+    "2|git rm -r src/dir"
+    "2|git rm -f src/foo.rs"
+
+    # --- allowed: non-destructive restore / rm ---
+    "0|git restore --staged src/foo.rs"
+    "0|git restore --staged path/a path/b"
+    "0|git rm --cached src/foo.rs"
+    "0|git rm -n src/foo.rs"
+    "0|git rm --dry-run src/foo.rs"
+
+    # --- blocked: any branch switch / create -- agent stays on current branch ---
+    "2|git checkout main"
+    "2|git checkout feature-branch"
+    "2|git checkout -"
+    "2|git checkout -b newfeat"
+    "2|git checkout -B existing"
+    "2|git switch main"
+    "2|git switch -"
+    "2|git switch -c newbranch"
+    "2|git switch -C existing"
+    "2|git switch --create foo"
+
+    # --- allowed: reading other branches (no switch) ---
+    "0|git log main..feature"
+    "0|git log other-branch"
+    "0|git diff main feature"
+    "0|git show main:src/foo.rs"
+    "0|git branch --contains HEAD"
+
     # --- blocked: write git ops ---
     "2|git P_USH origin main"
     "2|git tag v1.0.0"
