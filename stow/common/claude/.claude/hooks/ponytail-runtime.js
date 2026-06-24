@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const { getClaudeDir } = require('./ponytail-config');
+const { getClaudeDir, normalizeMode } = require('./ponytail-config');
+const { safeWriteFlag, readFlagRaw } = require('./flag-io');
 
 const STATE_FILE = '.ponytail-active';
 const isCopilot = Boolean(process.env.COPILOT_PLUGIN_DATA);
@@ -13,12 +14,15 @@ if (isCopilot) stateDir = process.env.COPILOT_PLUGIN_DATA;
 const statePath = path.join(stateDir, STATE_FILE);
 
 function setMode(mode) {
-  fs.mkdirSync(path.dirname(statePath), { recursive: true });
-  fs.writeFileSync(statePath, mode);
+  safeWriteFlag(statePath, mode);
 }
 
 function clearMode() {
   try { fs.unlinkSync(statePath); } catch (e) {}
+}
+
+function readMode() {
+  return normalizeMode(readFlagRaw(statePath));
 }
 
 function writeHookOutput(event, mode, context = '') {
@@ -46,6 +50,7 @@ module.exports = {
   clearMode,
   isCodex,
   isCopilot,
+  readMode,
   setMode,
   writeHookOutput,
 };

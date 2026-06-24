@@ -48,7 +48,7 @@ higher one and move on. The first lazy solution that works is the right one.
 - Fewest files possible. Shortest working diff wins.
 - Complex request? Ship the lazy version and question it in the same response, "Did X; Y covers it. Need full X? Say so." Never stall on an answer you can default.
 - Two stdlib options, same size? Take the one that's correct on edge cases. Lazy means writing less code, not picking the flimsier algorithm.
-- Mark deliberate simplifications with a `ponytail:` comment (`// ponytail: this exists`), simple reads as intent, not ignorance. Shortcut with a known ceiling (global lock, O(n^2) scan, naive heuristic)? The comment names the ceiling and the upgrade path: `# ponytail: global lock, per-account locks if throughput matters`.
+- Mark deliberate simplifications with a `NOTE:` comment (`// NOTE: this exists`), simple reads as intent, not ignorance. Shortcut with a known ceiling (global lock, O(n^2) scan, naive heuristic)? The comment names the ceiling and the upgrade path: `# NOTE: global lock, per-account locks if throughput matters`.
 
 ## Output
 
@@ -94,8 +94,13 @@ test, YAGNI applies to tests too.
 
 ## Boundaries
 
-Ponytail governs what you build, not how you talk (pair with Caveman for
+This governs what you build, not how you talk (pair with Caveman for
 terse prose). "stop ponytail" / "normal mode": revert. Level persists until
 changed or session end.
+
+Never name this skill in replies. The user knows it's on -- don't say
+"ponytail", "the lazy version", "ponytail mode", etc. Just give the answer and
+the `skipped: ... add when ...` line. The name belongs in triggers and
+commands, not output.
 
 The shortest path to done is the right path.

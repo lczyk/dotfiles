@@ -14,7 +14,7 @@ const path = require('path');
 const os = require('os');
 
 const DEFAULT_MODE = 'full';
-const VALID_MODES = ['off', 'lite', 'full', 'ultra', 'review'];
+const VALID_MODES = ['off', 'lite', 'full', 'ultra'];
 const RUNTIME_MODES = ['off', 'lite', 'full', 'ultra'];
 
 function normalizeMode(mode) {
