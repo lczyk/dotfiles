@@ -75,9 +75,25 @@ GH_WRITE_PATTERNS=(
     "(^|[ ;|&])gh secret (set|delete)"
     "(^|[ ;|&])gh variable (set|delete)"
     "(^|[ ;|&])gh ruleset (create|edit|delete)"
+    "(^|[ ;|&])gh auth (login|logout|refresh|setup-git|token)"
+    "(^|[ ;|&])gh codespace (create|delete|edit|stop|cp)"
+    "(^|[ ;|&])gh project (create|edit|delete|close|copy|link|unlink|mark-template|item-create|item-edit|item-delete|item-add|item-archive|field-create|field-delete)"
+    "(^|[ ;|&])gh (ssh-key|gpg-key) (add|delete)"
+    "(^|[ ;|&])gh alias (set|delete)"
+    "(^|[ ;|&])gh config set"
+    "(^|[ ;|&])gh cache delete"
+    "(^|[ ;|&])gh extension (install|remove|upgrade)"
     "gh api .*(-X|--method)[ =](POST|PUT|PATCH|DELETE)"
 )
 GH_WRITE_REASON="agent is fenced to read-only gh -- run write ops yourself or disable the hook"
+
+# `gh api` with a field flag (-f / -F / --field / --raw-field / --input)
+# forces a POST even w/out an explicit -X, so it's a write. exception: an
+# explicit -X GET / --method GET keeps it a read (fields become query params).
+GH_API_FIELD_PATTERNS=(
+    "(^|[ ;|&])gh api .*(-f |-F |--field |--raw-field |--input )"
+)
+GH_API_FIELD_REASON="agent is fenced to read-only gh -- \`gh api\` with field flags writes; run it yourself or disable the hook"
 
 # bypassing commit signing.
 GPG_PATTERNS=(
@@ -127,6 +143,11 @@ check "$GIT_REASON"       "${GIT_PATTERNS[@]}"
 check "$GIT_WRITE_REASON" "${GIT_WRITE_PATTERNS[@]}"
 check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
+
+# field-flag writes, unless an explicit GET method is present.
+if ! echo "$COMMAND" | grep -qE -- "(-X|--method)[ =]GET"; then
+    check "$GH_API_FIELD_REASON" "${GH_API_FIELD_PATTERNS[@]}"
+fi
 check "$GPG_REASON"       "${GPG_PATTERNS[@]}"
 check "$INSTALL_REASON"   "${INSTALL_PATTERNS[@]}"
 check "$REMOTE_REASON"    "${REMOTE_PATTERNS[@]}"
