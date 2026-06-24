@@ -94,10 +94,20 @@ strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
     [ "$out" = "[repo/mybranch(1)]" ]
 }
 
-@test "uses basename of cwd as pwd label" {
+@test "shows repo-root-relative path for nested cwd" {
     nested="$REPO/sub"
     mkdir -p "$nested"
     run bash -c "echo '{\"cwd\":\"$nested\"}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[sub/mybranch]" ]
+    [ "$out" = "[repo/sub/mybranch]" ]
+}
+
+# COVER: fish-style abbreviation -- root + leaf full, middles to first char,
+# only kicks in when the joined path exceeds 40 chars.
+@test "abbreviates middle path components when path is long" {
+    deep="$REPO/onedir/twodir/threedir/fourdir/fivedir/leaf"
+    mkdir -p "$deep"
+    run bash -c "echo '{\"cwd\":\"$deep\"}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[repo/o/t/t/f/f/leaf/mybranch]" ]
 }
