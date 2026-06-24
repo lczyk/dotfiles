@@ -32,17 +32,17 @@ Z=0000000000000000000000000000000000000000
 }
 
 @test "passes when CLAUDECODE unset and no input" {
-    run "$HOOK"
+    run "$HOOK" </dev/null
     [ "$status" -eq 0 ]
 }
 
 @test "passes when CLAUDECODE is empty" {
-    CLAUDECODE="" run "$HOOK"
+    CLAUDECODE="" run "$HOOK" </dev/null
     [ "$status" -eq 0 ]
 }
 
 @test "passes when CLAUDECODE is some other value" {
-    CLAUDECODE=0 run "$HOOK"
+    CLAUDECODE=0 run "$HOOK" </dev/null
     [ "$status" -eq 0 ]
 }
 
