@@ -11,9 +11,9 @@
 # (e.g. tests run the matrix this way).
 
 # refuse direct execution -- this is a library. portable sourced-check
-# (avoids the non-portable `env -S` shebang trick). `--test` is the one
-# exception: it runs the embedded self-test (see the bottom of the file).
-if [[ "${BASH_SOURCE[0]}" == "${0}" && "${1:-}" != "--test" ]]; then
+# (avoids the non-portable `env -S` shebang trick). `--test` / `--perf` are
+# the exceptions: they run the embedded self-test / benchmark (bottom of file).
+if [[ "${BASH_SOURCE[0]}" == "${0}" && "${1:-}" != "--test" && "${1:-}" != "--perf" ]]; then
     printf 'this file should be sourced, not executed\n' >&2
     exit 1
 fi
@@ -150,4 +150,32 @@ if [[ "${#BASH_SOURCE[@]}" -eq 1 && "${BASH_SOURCE[0]}" == "$0" && "${1:-}" == "
         printf '%sSelf-test failed%s\n' "$c_red" "$c_reset"
     fi
     exit $status
+fi
+
+############################################################################
+# benchmark. run as `bash re-engine.sh --perf`. measures per-call re_match
+# latency for each engine on a realistic hook input (short command string),
+# so the dominant cost is process spawn -- the actual workload -- not regex
+# throughput on a big haystack. INFORMATIONAL: timings are machine-dependent,
+# no pass/fail. confirms whether the rg > grep > awk cascade order holds here
+# (it may not -- rg's startup can lose to grep on tiny inputs).
+if [[ "${#BASH_SOURCE[@]}" -eq 1 && "${BASH_SOURCE[0]}" == "$0" && "${1:-}" == "--perf" ]]; then
+
+    text='foo && git push origin main; gh pr create --title x'
+    pat='(^|[ ;|&])git (push|tag|cherry-pick)'
+    iters=300
+
+    printf 'perf: %d re_match calls per engine, input %d chars\n' "$iters" "${#text}"
+
+    # bash `time` builtin (not `date +%N` -- unsupported on BSD/macOS date).
+    TIMEFORMAT='%R'
+    for engine in rg grep awk; do
+        command -v "$engine" >/dev/null 2>&1 || { printf 'skip: %s not installed\n' "$engine"; continue; }
+        RE_ENGINE="$engine"
+        re_match "$pat" "$text"  # warmup -- discard cold-cache first hit
+        secs=$( { time for ((i = 0; i < iters; i++)); do re_match "$pat" "$text"; done; } 2>&1 )
+        awk -v s="$secs" -v n="$iters" -v eng="$engine" \
+            'BEGIN { ms = s * 1000; printf "[%-4s] %8.1f ms total  %7.3f ms/call\n", eng, ms, ms / n }'
+    done
+    exit 0
 fi
