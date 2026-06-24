@@ -77,30 +77,6 @@ write_flag() {
     [ "$out" = "[C!]" ]
 }
 
-@test "[w] when flag is wenyan-lite" {
-    write_settings <<<'{"enabledPlugins":{"caveman@caveman":true}}'
-    write_flag "wenyan-lite"
-    run bash -c "echo '{}' | '$BADGE'"
-    out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[w]" ]
-}
-
-@test "[W] when flag is wenyan" {
-    write_settings <<<'{"enabledPlugins":{"caveman@caveman":true}}'
-    write_flag "wenyan"
-    run bash -c "echo '{}' | '$BADGE'"
-    out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[W]" ]
-}
-
-@test "[W!] when flag is wenyan-ultra" {
-    write_settings <<<'{"enabledPlugins":{"caveman@caveman":true}}'
-    write_flag "wenyan-ultra"
-    run bash -c "echo '{}' | '$BADGE'"
-    out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[W!]" ]
-}
-
 @test "[x] when flag is off" {
     write_settings <<<'{"enabledPlugins":{"caveman@caveman":true}}'
     write_flag "off"
@@ -115,14 +91,6 @@ write_flag() {
     run bash -c "echo '{}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
     [ "$out" = "[Cc]" ]
-}
-
-@test "[Cr] when flag is review" {
-    write_settings <<<'{"enabledPlugins":{"caveman@caveman":true}}'
-    write_flag "review"
-    run bash -c "echo '{}' | '$BADGE'"
-    out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[Cr]" ]
 }
 
 @test "[Cp] when flag is compress" {

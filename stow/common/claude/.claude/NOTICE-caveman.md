@@ -7,4 +7,3 @@ vendored files:
 - `hooks/caveman-activate.js` -- session start activation hook
 - `hooks/caveman-mode-tracker.js` -- per-turn mode tracking hook
 - `hooks/caveman-config.js` -- shared config resolver
-- `hooks/caveman-stats.js` -- token usage stats

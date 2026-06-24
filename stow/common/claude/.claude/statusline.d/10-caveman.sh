@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # caveman badge. reads mode flag file, renders short badge.
-# [C] full, [c] lite, [C!] ultra, [W]/[w]/[W!] wenyan, [x] off/missing.
+# [C] full, [c] lite, [C!] ultra, [Cc] commit, [Cp] compress, [x] off/missing.
 #
 # detection: plugin (caveman@caveman in enabledPlugins) OR vendored
 # (hooks referencing caveman-activate / caveman-mode-tracker).
@@ -51,11 +51,7 @@ case "$mode" in
     ""|full)           badge "C"    ;;
     lite)              badge "c"    ;;
     ultra)             badge "C!"   ;;
-    wenyan-lite)       badge "w"    ;;
-    wenyan|wenyan-full) badge "W"   ;;
-    wenyan-ultra)      badge "W!"   ;;
     commit)            badge "Cc"   ;;
-    review)            badge "Cr"   ;;
     compress)          badge "Cp"   ;;
     off)               badge "x"    ;;
     *)                 badge "C"    ;;  # unknown mode, assume full

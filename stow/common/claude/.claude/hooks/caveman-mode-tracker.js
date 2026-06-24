@@ -9,12 +9,11 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execFileSync } = require('child_process');
 const { getDefaultMode, safeWriteFlag, readFlag, VALID_MODES } = require('./caveman-config');
 
 // Modes handled by their own slash commands (/caveman-commit, etc.) -- not
 // selectable via /caveman <arg>.
-const INDEPENDENT_MODES = new Set(['commit', 'review', 'compress']);
+const INDEPENDENT_MODES = new Set(['commit', 'compress']);
 
 const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 const flagPath = path.join(claudeDir, '.caveman-active');
@@ -26,42 +25,6 @@ process.stdin.on('end', () => {
     const data = JSON.parse(input);
     const prompt = (data.prompt || '').trim().toLowerCase();
 
-    // Natural language activation
-    if (/\b(activate|enable|turn on|start|talk like)\b.*\bcaveman\b/i.test(prompt) ||
-        /\bcaveman\b.*\b(mode|activate|enable|turn on|start)\b/i.test(prompt)) {
-      if (!/\b(stop|disable|turn off|deactivate)\b/i.test(prompt)) {
-        const mode = getDefaultMode();
-        if (mode !== 'off') {
-          safeWriteFlag(flagPath, mode);
-        }
-      }
-    }
-
-    // /caveman-stats -- block the prompt and inject stats output
-    const statsMatch = /^\/caveman(?::caveman)?-stats(?:\s+(.*))?$/.exec(prompt);
-    if (statsMatch) {
-      const tailArgs = (statsMatch[1] || '').trim().split(/\s+/).filter(Boolean);
-      try {
-        const statsPath = path.join(__dirname, 'caveman-stats.js');
-        const argv = [statsPath];
-        if (data.transcript_path) argv.push('--session-file', data.transcript_path);
-        if (tailArgs.includes('--share')) argv.push('--share');
-        if (tailArgs.includes('--all')) argv.push('--all');
-        const sinceIdx = tailArgs.indexOf('--since');
-        if (sinceIdx !== -1 && tailArgs[sinceIdx + 1]) {
-          argv.push('--since', tailArgs[sinceIdx + 1]);
-        }
-        const out = execFileSync(process.execPath, argv, { encoding: 'utf8', timeout: 5000 });
-        process.stdout.write(JSON.stringify({ decision: 'block', reason: out.trim() }));
-      } catch (e) {
-        process.stdout.write(JSON.stringify({
-          decision: 'block',
-          reason: 'caveman-stats: could not run stats script.\nTry manually: node hooks/caveman-stats.js'
-        }));
-      }
-      return;
-    }
-
     // Match /caveman commands
     if (prompt.startsWith('/caveman')) {
       const parts = prompt.split(/\s+/);
@@ -72,8 +35,6 @@ process.stdin.on('end', () => {
 
       if (cmd === '/caveman-commit') {
         mode = 'commit';
-      } else if (cmd === '/caveman-review') {
-        mode = 'review';
       } else if (cmd === '/caveman-compress' || cmd === '/caveman:caveman-compress') {
         mode = 'compress';
       } else if (cmd === '/caveman' || cmd === '/caveman:caveman') {
@@ -81,8 +42,6 @@ process.stdin.on('end', () => {
           mode = getDefaultMode();
         } else if (arg === 'off' || arg === 'stop' || arg === 'disable') {
           mode = 'off';
-        } else if (arg === 'wenyan-full') {
-          mode = 'wenyan';
         } else if (VALID_MODES.includes(arg) && !INDEPENDENT_MODES.has(arg)) {
           mode = arg;
         }
@@ -95,10 +54,11 @@ process.stdin.on('end', () => {
       }
     }
 
-    // Detect deactivation
-    if (/\b(stop|disable|deactivate|turn off)\b.*\bcaveman\b/i.test(prompt) ||
-        /\bcaveman\b.*\b(stop|disable|deactivate|turn off)\b/i.test(prompt) ||
-        /\bnormal mode\b/i.test(prompt)) {
+    // Detect deactivation -- strict whole-message match only, so an ordinary
+    // request that happens to mention "stop caveman" / "normal mode" mid-task
+    // doesn't silently turn the mode off. toggling is `/caveman <mode>`.
+    const deact = prompt.replace(/[.!?\s]+$/, '');
+    if (deact === 'stop caveman' || deact === 'normal mode') {
       try { fs.unlinkSync(flagPath); } catch (e) {}
     }
 

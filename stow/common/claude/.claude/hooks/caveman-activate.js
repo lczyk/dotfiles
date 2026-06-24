@@ -32,15 +32,12 @@ if (mode === 'off') {
 safeWriteFlag(flagPath, mode);
 
 // 2. Emit full caveman ruleset, filtered to the active intensity level.
-const INDEPENDENT_MODES = new Set(['commit', 'review', 'compress']);
+const INDEPENDENT_MODES = new Set(['commit', 'compress']);
 
 if (INDEPENDENT_MODES.has(mode)) {
-  process.stdout.write('CAVEMAN MODE ACTIVE — level: ' + mode + '. Behavior defined by /caveman-' + mode + ' skill.');
+  process.stdout.write('CAVEMAN MODE ACTIVE -- level: ' + mode + '. Behavior defined by /caveman-' + mode + ' skill.');
   process.exit(0);
 }
-
-// Resolve the canonical label for wenyan alias
-const modeLabel = mode === 'wenyan' ? 'wenyan-full' : mode;
 
 // Read SKILL.md -- the single source of truth for caveman behavior.
 // __dirname = ~/.claude/hooks/, SKILL.md at ~/.claude/skills/caveman/SKILL.md
@@ -61,7 +58,7 @@ if (skillContent) {
   const filtered = body.split('\n').reduce((acc, line) => {
     const tableRowMatch = line.match(/^\|\s*\*\*(\S+?)\*\*\s*\|/);
     if (tableRowMatch) {
-      if (tableRowMatch[1] === modeLabel) {
+      if (tableRowMatch[1] === mode) {
         acc.push(line);
       }
       return acc;
@@ -69,7 +66,7 @@ if (skillContent) {
 
     const exampleMatch = line.match(/^- (\S+?):\s/);
     if (exampleMatch) {
-      if (exampleMatch[1] === modeLabel) {
+      if (exampleMatch[1] === mode) {
         acc.push(line);
       }
       return acc;
@@ -79,15 +76,15 @@ if (skillContent) {
     return acc;
   }, []);
 
-  output = 'CAVEMAN MODE ACTIVE — level: ' + modeLabel + '\n\n' + filtered.join('\n');
+  output = 'CAVEMAN MODE ACTIVE -- level: ' + mode + '\n\n' + filtered.join('\n');
 } else {
   // Fallback when SKILL.md is not found
   output =
-    'CAVEMAN MODE ACTIVE — level: ' + modeLabel + '\n\n' +
+    'CAVEMAN MODE ACTIVE -- level: ' + mode + '\n\n' +
     'Respond terse like smart caveman. All technical substance stay. Only fluff die.\n\n' +
     '## Persistence\n\n' +
     'ACTIVE EVERY RESPONSE. No revert after many turns. No filler drift. Still active if unsure. Off only: "stop caveman" / "normal mode".\n\n' +
-    'Current level: **' + modeLabel + '**. Switch: `/caveman lite|full|ultra`.\n\n' +
+    'Current level: **' + mode + '**. Switch: `/caveman lite|full|ultra`.\n\n' +
     '## Rules\n\n' +
     'Drop: articles (a/an/the), filler (just/really/basically/actually/simply), pleasantries (sure/certainly/of course/happy to), hedging. ' +
     'Fragments OK. Short synonyms (big not extensive, fix not "implement a solution for"). Technical terms exact. Code blocks unchanged. Errors quoted exact.\n\n' +
