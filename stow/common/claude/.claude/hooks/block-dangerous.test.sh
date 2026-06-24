@@ -84,6 +84,60 @@ CASES=(
     "2|gh api -X PATCH_ /x"
     "2|gh api repos/x/y --method P_UT"
 
+    # --- blocked: gh api field flags force a write w/out explicit -X ---
+    "2|gh api repos/x/y/issues -f title=bug"
+    "2|gh api repos/x/y/issues -F body=@file"
+    "2|gh api /gists --field public=true"
+    "2|gh api /x --raw-field name=foo"
+    "2|gh api /x --input payload.json"
+
+    # --- blocked: gh auth (mutates local creds) ---
+    "2|gh auth login"
+    "2|gh auth logout"
+    "2|gh auth refresh"
+    "2|gh auth setup-git"
+    "2|gh auth token"
+
+    # --- blocked: gh codespace writes ---
+    "2|gh codespace create"
+    "2|gh codespace delete -c name"
+    "2|gh codespace edit -c name"
+    "2|gh codespace stop -c name"
+    "2|gh codespace ssh -c name"
+    "2|gh codespace cp local remote"
+
+    # --- blocked: gh project writes ---
+    "2|gh project create --title foo"
+    "2|gh project edit 1"
+    "2|gh project delete 1"
+    "2|gh project close 1"
+    "2|gh project copy 1"
+    "2|gh project item-create 1"
+    "2|gh project item-edit"
+    "2|gh project item-delete"
+    "2|gh project item-add 1"
+    "2|gh project item-archive"
+    "2|gh project field-create 1"
+    "2|gh project field-delete"
+    "2|gh project link 1"
+    "2|gh project unlink 1"
+    "2|gh project mark-template 1"
+
+    # --- blocked: gh key writes ---
+    "2|gh ssh-key add key.pub"
+    "2|gh ssh-key delete 1"
+    "2|gh gpg-key add key.asc"
+    "2|gh gpg-key delete 1"
+
+    # --- blocked: gh alias / config / cache / extension ---
+    "2|gh alias set co 'pr checkout'"
+    "2|gh alias delete co"
+    "2|gh config set editor vim"
+    "2|gh cache delete 1"
+    "2|gh extension install owner/repo"
+    "2|gh extension remove foo"
+    "2|gh extension upgrade --all"
+
     # --- blocked: wide git add ---
     "2|git add -A"
     "2|git add --all"
@@ -148,6 +202,20 @@ CASES=(
     "0|gh api -X GET /user"
     "0|gh workflow list"
     "0|gh workflow view ci.yml"
+    "0|gh api repos/x/y/issues"
+    "0|gh api -X GET /user -f per_page=10"
+    "0|gh auth status"
+    "0|gh codespace list"
+    "0|gh codespace view"
+    "0|gh project view 1"
+    "0|gh project list"
+    "0|gh project item-list 1"
+    "0|gh ssh-key list"
+    "0|gh gpg-key list"
+    "0|gh alias list"
+    "0|gh config get editor"
+    "0|gh cache list"
+    "0|gh extension list"
 
     # --- allowed: misc ---
     "0|ls -la"
