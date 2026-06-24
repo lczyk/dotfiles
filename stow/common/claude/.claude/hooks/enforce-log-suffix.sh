@@ -14,11 +14,6 @@
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 
-# regex-engine cascade (rg > grep > awk) + re_extract, shared with the
-# sibling hooks. the pattern below is POSIX ERE so all three engines
-# accept it unchanged.
-source "$(dirname "$0")/re-engine.sh"
-
 PAT_LOGPATH='/tmp/claude/log/[A-Za-z0-9._/-]*'
 
 # pull out every /tmp/claude/log/<path> token, flag any non-.log file.
@@ -30,7 +25,7 @@ while IFS= read -r tok; do
     [[ -z "$final" ]] && continue   # dir reference, not a file write
     [[ "$final" == *.log ]] && continue
     bad+=("$tok")
-done < <(re_extract "$PAT_LOGPATH" "$COMMAND")
+done < <(printf '%s' "$COMMAND" | grep -oE -- "$PAT_LOGPATH")
 
 if ((${#bad[@]})); then
     {

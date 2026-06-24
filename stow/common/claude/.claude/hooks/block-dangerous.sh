@@ -14,10 +14,6 @@
 # wants a commit / push / PR, they run it themselves or temporarily
 # disable this hook.
 
-# regex-engine cascade (rg > grep > awk) + re_match, shared with the other
-# Bash PreToolUse hooks. patterns below must be POSIX ERE (no \s / \b).
-source "$(dirname "$0")/re-engine.sh"
-
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 
@@ -139,7 +135,7 @@ check() {
     local reason="$1"
     shift
     for pat in "$@"; do
-        if re_match "$pat" "$COMMAND"; then
+        if echo "$COMMAND" | grep -qE -- "$pat"; then
             echo "BLOCKED: '$COMMAND' matches '$pat'. $reason" >&2
             exit 2
         fi
@@ -152,14 +148,14 @@ check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 
 # field-flag writes, unless an explicit GET method is present.
-if ! re_match "(-X|--method)[ =]GET" "$COMMAND"; then
+if ! echo "$COMMAND" | grep -qE -- "(-X|--method)[ =]GET"; then
     check "$GH_API_FIELD_REASON" "${GH_API_FIELD_PATTERNS[@]}"
 fi
 # `git restore <path>` discards worktree changes. allow `--restore --staged`
 # alone (index-only, worktree untouched); block once `--worktree` appears or
 # `--staged` is absent.
-if re_match "(^|[ ;|&])git restore " "$COMMAND"; then
-    if re_match "--worktree" "$COMMAND" || ! re_match "--staged" "$COMMAND"; then
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git restore "; then
+    if echo "$COMMAND" | grep -qE -- "--worktree" || ! echo "$COMMAND" | grep -qE -- "--staged"; then
         echo "BLOCKED: '$COMMAND' discards worktree changes. $GIT_REASON" >&2
         exit 2
     fi
@@ -167,8 +163,8 @@ fi
 
 # `git rm <path>` deletes the worktree copy. allow `--cached` (index-only) and
 # `-n` / `--dry-run` (preview).
-if re_match "(^|[ ;|&])git rm " "$COMMAND"; then
-    if ! re_match "(--cached|-n |--dry-run)" "$COMMAND"; then
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git rm "; then
+    if ! echo "$COMMAND" | grep -qE -- "(--cached|-n |--dry-run)"; then
         echo "BLOCKED: '$COMMAND' deletes worktree files. $GIT_REASON" >&2
         exit 2
     fi

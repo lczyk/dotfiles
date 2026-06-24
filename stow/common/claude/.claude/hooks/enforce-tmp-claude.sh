@@ -16,10 +16,6 @@
 
 INPUT=$(cat)
 
-# regex-engine cascade (rg > grep > awk) + re_match / re_extract, shared with
-# the sibling hooks. patterns below are POSIX ERE so all three accept them.
-source "$(dirname "$0")/re-engine.sh"
-
 CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty')
 
@@ -42,17 +38,17 @@ fi
 # -- channel: Bash ------------------------------------------------------
 if [[ -n "$CMD" ]]; then
     # redirect / tee write targets in /tmp. while-read (not mapfile) for
-    # bash 3.2 / macos. `[(]`-free pattern -- POSIX ERE across all engines.
+    # bash 3.2 / macos.
     while IFS= read -r tok; do
         [[ -z "$tok" ]] && continue
         path="${tok##*[[:space:]]}"   # last field (handles `> /tmp/x`)
         path="${path##*>}"            # strip a glued `>`/`>>` (handles `>/tmp/x`)
         under_claude "$path" || bad+=("$path")
-    done < <(re_extract '(>>?|tee)[[:space:]]*/tmp/[A-Za-z0-9._/-]*' "$CMD")
+    done < <(printf '%s' "$CMD" | grep -oE -- '(>>?|tee)[[:space:]]*/tmp/[A-Za-z0-9._/-]*')
 
     # mktemp defaults to /tmp/tmp.XXXX -- require it to target /tmp/claude.
-    if re_match '(^|[^[:alnum:]_])mktemp([^[:alnum:]_]|$)' "$CMD"; then
-        re_match '/tmp/claude' "$CMD" || bad+=("mktemp (must use -p /tmp/claude)")
+    if printf '%s' "$CMD" | grep -qE -- '(^|[^[:alnum:]_])mktemp([^[:alnum:]_]|$)'; then
+        printf '%s' "$CMD" | grep -qE -- '/tmp/claude' || bad+=("mktemp (must use -p /tmp/claude)")
     fi
 fi
 

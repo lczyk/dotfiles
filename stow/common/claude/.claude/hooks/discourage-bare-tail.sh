@@ -19,13 +19,8 @@
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 
-# regex-engine cascade (rg > grep > awk) + re_match, shared with the
-# sibling hooks. patterns below are POSIX ERE so all three engines accept
-# them unchanged.
-source "$(dirname "$0")/re-engine.sh"
-
 # bad pattern 1: piped to tail/head. word boundary via [^[:alnum:]_] / EOL.
-# `[|]` (char class) not `\|` -- awk treats `\|` as alternation w/ empty.
+# `[|]` (char class) for a literal pipe.
 PAT_PIPED='[|][[:space:]]*(tail|head)([^[:alnum:]_]|$)'
 
 # bad pattern 2: tail/head reading process substitution `<(cmd)`.
@@ -36,8 +31,9 @@ PAT_PROCSUB='(^|[^[:alnum:]_])(tail|head)[[:space:]][^|]*<[(]'
 # and multi-file tee where log dir is not the first arg.
 PAT_TEE_OK='tee[[:space:]]+[^|]*/tmp/claude/log/'
 
-if re_match "$PAT_PIPED" "$COMMAND" || re_match "$PAT_PROCSUB" "$COMMAND"; then
-    if re_match "$PAT_TEE_OK" "$COMMAND"; then
+if printf '%s' "$COMMAND" | grep -qE -- "$PAT_PIPED" ||
+   printf '%s' "$COMMAND" | grep -qE -- "$PAT_PROCSUB"; then
+    if printf '%s' "$COMMAND" | grep -qE -- "$PAT_TEE_OK"; then
         exit 0
     fi
     cat >&2 <<'EOF'
