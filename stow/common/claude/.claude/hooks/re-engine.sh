@@ -31,12 +31,14 @@ if [[ -z "${__RE_ENGINE_SH__:-}" ]]; then
 
     # re_match PATTERN TEXT -- exit 0 iff PATTERN matches somewhere in TEXT.
     # `[|]` (char class) not `\|` -- awk treats `\|` as alternation w/ empty.
+    # `-e` (rg) / `--` (grep) keep a leading-dash PATTERN from being parsed as
+    # an option. awk takes the pattern via -v, so it's dash-safe already.
     re_match() {
         local pat="$1" text="$2"
         case "$RE_ENGINE" in
-            rg)   printf '%s' "$text" | rg -q "$pat" ;;
-            grep) printf '%s' "$text" | grep -qE "$pat" ;;
-            awk)  printf '%s' "$text" | awk -v p="$pat" '$0 ~ p { found=1; exit } END { exit !found }' ;;
+            rg)   printf '%s' "$text" | rg -q -e "$pat" ;;
+            grep) printf '%s' "$text" | grep -qE -- "$pat" ;;
+            awk)  printf '%s' "$text" | p="$pat" awk '$0 ~ ENVIRON["p"] { found=1; exit } END { exit !found }' ;;
         esac
     }
 
@@ -45,9 +47,10 @@ if [[ -z "${__RE_ENGINE_SH__:-}" ]]; then
     re_extract() {
         local pat="$1" text="$2"
         case "$RE_ENGINE" in
-            rg)   printf '%s' "$text" | rg -oN "$pat" ;;
-            grep) printf '%s' "$text" | grep -oE "$pat" ;;
-            awk)  printf '%s' "$text" | awk -v p="$pat" '
+            rg)   printf '%s' "$text" | rg -oN -e "$pat" ;;
+            grep) printf '%s' "$text" | grep -oE -- "$pat" ;;
+            awk)  printf '%s' "$text" | p="$pat" awk '
+                      BEGIN { p=ENVIRON["p"] }
                       { s=$0; while (match(s, p)) {
                           print substr(s, RSTART, RLENGTH); s=substr(s, RSTART+RLENGTH) } }' ;;
         esac
