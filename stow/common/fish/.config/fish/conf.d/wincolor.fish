@@ -70,11 +70,49 @@ function __wincolor_match --argument p
     echo $best
 end
 
-# record this window's pwd in the registry.
+# record this window's pwd in the registry. tty-less shells (scripts) noop --
+# only a real window/shell can hold a tint.
 function __wincolor_register
     set -q ALACRITTY_WINDOW_ID; or return
+    isatty stdout; or return
     mkdir -p $__wincolor_win
     pwd -P >$__wincolor_win/$ALACRITTY_WINDOW_ID
+end
+
+# garbage-collect stale state. order matters: reap dead windows first so the
+# window-less-dir purge sees an accurate live set, then drop enabled dirs no
+# live window sits under, then drop dirs that no longer exist on disk.
+function __wincolor_gc
+    # reap registry files for dead windows. alacritty has no window-list cmd,
+    # so derive liveness from process env: a live window has procs carrying
+    # ALACRITTY_WINDOW_ID=<id>.
+    set -g __wincolor_reaped 0
+    if test -d $__wincolor_win
+        set -l live (ps eww -o command= 2>/dev/null \
+            | string match -gr 'ALACRITTY_WINDOW_ID=(\d+)' | sort -u)
+        for f in $__wincolor_win/*
+            test -f $f; or continue
+            if not contains -- (basename $f) $live
+                rm -f $f
+                set __wincolor_reaped (math $__wincolor_reaped + 1)
+            end
+        end
+    end
+
+    test -f $__wincolor_state; or return
+    set -l live_pwds (cat $__wincolor_win/* 2>/dev/null)
+    set -l keep
+    for d in (cat $__wincolor_state)
+        test -n "$d"; or continue
+        test -d "$d"; or continue          # dir gone -> drop
+        for p in $live_pwds                 # keep iff some live window is under it
+            test "$p" = "$d"; or string match -q -- "$d/*" "$p"; or continue
+            set keep $keep $d
+            break
+        end
+    end
+    printf '%s\n' $keep >$__wincolor_state
+    set -g __wincolor_kept (count $keep)
 end
 
 # push the right tint to *every* registered window: each gets the colour of its
@@ -108,7 +146,7 @@ function wincolor --description 'toggle/list/prune alacritty background tints'
             echo 'usage:'
             echo '  wincolor          toggle tinting for the current dir on/off'
             echo '  wincolor list     list enabled dirs with their colour'
-            echo '  wincolor prune    drop entries whose dir no longer exists'
+            echo '  wincolor prune    gc stale state (same gc every call runs)'
             echo '  wincolor --help   show this help'
             echo
             echo 'enabling a dir tints its whole subtree; the closest enabled'
@@ -124,32 +162,14 @@ function wincolor --description 'toggle/list/prune alacritty background tints'
             end
             return
         case prune
-            test -f $__wincolor_state; or return
-            set -l keep
-            for d in (cat $__wincolor_state)
-                test -d "$d"; and set keep $keep $d
-            end
-            printf '%s\n' $keep >$__wincolor_state
-            # reap registry files for windows no longer alive. alacritty has no
-            # window-list cmd, so derive liveness from process env: a live window
-            # has procs carrying ALACRITTY_WINDOW_ID=<id>.
-            set -l gone 0
-            if test -d $__wincolor_win
-                set -l live (ps eww -o command= 2>/dev/null \
-                    | string match -gr 'ALACRITTY_WINDOW_ID=(\d+)' | sort -u)
-                for f in $__wincolor_win/*
-                    test -f $f; or continue
-                    if not contains -- (basename $f) $live
-                        rm -f $f
-                        set gone (math $gone + 1)
-                    end
-                end
-            end
+            __wincolor_gc
             __wincolor_apply
-            echo "wincolor: kept "(count $keep)" dir(s), reaped $gone window(s)"
+            echo "wincolor: kept $__wincolor_kept dir(s), reaped $__wincolor_reaped window(s)"
             return
     end
 
+    # every invocation gc's stale windows + window-less dirs before toggling.
+    __wincolor_gc
     set -l dir (pwd -P)
     if __wincolor_on
         # drop the dir from state
@@ -166,6 +186,7 @@ end
 
 if status is-interactive
     and set -q ALACRITTY_WINDOW_ID
+    and isatty stdout
     and command -sq alacritty
     __wincolor_register
     __wincolor_apply
@@ -177,8 +198,11 @@ if status is-interactive
         __wincolor_apply
     end
 
-    # drop this window's registry entry on exit so stale ids don't accumulate.
+    # drop this window's registry entry on exit, then gc + retint the rest: a
+    # closed window may have been the last one under an enabled dir.
     function __wincolor_on_exit --on-event fish_exit
         rm -f $__wincolor_win/$ALACRITTY_WINDOW_ID
+        __wincolor_gc
+        __wincolor_apply
     end
 end
