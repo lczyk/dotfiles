@@ -58,6 +58,7 @@ gaps outer 1
 
 # Remove all borders from applications
 default_border none
+focus_follows_mouse yes
 
 ### Idle configuration
 
