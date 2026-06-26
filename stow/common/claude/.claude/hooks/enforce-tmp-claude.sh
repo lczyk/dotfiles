@@ -20,10 +20,13 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty')
 
 # a path is allowed iff it isn't under /tmp at all, or it's /tmp/claude[/...].
+# /tmp is a symlink to /private/tmp on macos; the harness hands out an
+# already-resolved /private/tmp scratchpad, so gate both prefixes.
 under_claude() {
     case "$1" in
         /tmp/claude | /tmp/claude/*) return 0 ;;
-        /tmp/*) return 1 ;;
+        /private/tmp/claude | /private/tmp/claude/*) return 0 ;;
+        /tmp/* | /private/tmp/*) return 1 ;;
         *) return 0 ;;
     esac
 }
@@ -44,7 +47,7 @@ if [[ -n "$CMD" ]]; then
         path="${tok##*[[:space:]]}"   # last field (handles `> /tmp/x`)
         path="${path##*>}"            # strip a glued `>`/`>>` (handles `>/tmp/x`)
         under_claude "$path" || bad+=("$path")
-    done < <(printf '%s' "$CMD" | grep -oE -- '(>>?|tee)[[:space:]]*/tmp/[A-Za-z0-9._/-]*')
+    done < <(printf '%s' "$CMD" | grep -oE -- '(>>?|tee)[[:space:]]*(/private)?/tmp/[A-Za-z0-9._/-]*')
 
     # mktemp defaults to /tmp/tmp.XXXX -- require it to target /tmp/claude.
     if printf '%s' "$CMD" | grep -qE -- '(^|[^[:alnum:]_])mktemp([^[:alnum:]_]|$)'; then
