@@ -1,9 +1,13 @@
 # per-directory alacritty window background tinting.
 #
 # `wincolor` toggles tinting on/off for the *current directory*. the choice is
-# persisted per-dir in a state file, so any window sitting in that dir -- now or
-# later, including a cmd+N child in the same cwd -- gets the same tint. nothing
-# is passed between windows; the dir is the key.
+# stored per-dir in a state file, so any *live* window sitting in that dir --
+# including a cmd+N child in the same cwd -- gets the same tint. nothing is
+# passed between windows; the dir is the key.
+#
+# tints are ephemeral, not durable opt-in: gc drops an enabled dir once no live
+# window sits under it (see __wincolor_gc), so closing the last window in a
+# tinted subtree forgets the tint. re-enable when you come back.
 #
 # hierarchical: enabling a dir tints the whole subtree below it, all sharing the
 # *same* colour (hashed from the enabled dir, not the cwd). when several enabled
@@ -28,6 +32,11 @@ set -g __wincolor_state $__wincolor_root/dirs
 # so a window blocked in a fullscreen app still gets retinted by whoever toggled.
 set -g __wincolor_win $__wincolor_root/win
 
+# abbreviate $HOME -> ~ for display only (state file keeps absolute paths).
+function __wincolor_tilde --argument p
+    string replace -- $HOME '~' $p
+end
+
 # dark bg hex for a given dir, sharing that dir's prompt hue.
 function __wincolor_hex --argument dir
     set -l shas (echo $dir | cksum | string split -f1 ' ' | math --base=hex \
@@ -38,10 +47,23 @@ function __wincolor_hex --argument dir
     end
     # min-brightness floor: keep tints clearly above the default 0x1c1c1c bg
     # (luminance ~28) so even near-black hashes read as a distinct colour.
-    while test (math "0.2126 x $col[1] + 0.7152 x $col[2] + 0.0722 x $col[3]") -lt 34
+    # floor sits well above default so low hashes don't blend into the bg.
+    while test (math "0.2126 x $col[1] + 0.7152 x $col[2] + 0.0722 x $col[3]") -lt 50
         for i in 1 2 3
             set col[$i] (math "min(255, $col[$i] + 6)")
         end
+    end
+    # hue floor: base bg is neutral grey, so a near-grey tint (channels ~equal)
+    # reads as the same hue, just brighter. force a channel gap by pushing the
+    # largest channel up until max-min spread is clear. scaled vals top out ~76
+    # (0.30 x 255), so plenty of headroom -- no 255 clamp loop risk.
+    set -l mn (math "min($col[1],$col[2],$col[3])")
+    set -l mx (math "max($col[1],$col[2],$col[3])")
+    while test (math "$mx - $mn") -lt 24
+        for i in 1 2 3
+            test $col[$i] -eq $mx; and set col[$i] (math "$col[$i] + 4"); and break
+        end
+        set mx (math "$mx + 4")
     end
     set -l hex
     for c in $col
@@ -125,10 +147,12 @@ function __wincolor_apply
         test -f $f; or continue
         set -l id (basename $f)
         set -l d (__wincolor_match (cat $f))
+        # dead windows make `alacritty msg` write BrokenPipe to stderr; swallow it
+        # (fish_exit prunes stale ids, but cd can race a just-closed window).
         if test -n "$d"
-            alacritty msg config -w $id "colors.primary.background='#"(__wincolor_hex $d)"'"
+            alacritty msg config -w $id "colors.primary.background='#"(__wincolor_hex $d)"'" 2>/dev/null
         else
-            alacritty msg config -w $id --reset
+            alacritty msg config -w $id --reset 2>/dev/null
         end
     end
 end
@@ -145,6 +169,9 @@ function wincolor --description 'toggle/list/prune alacritty background tints'
             echo
             echo 'usage:'
             echo '  wincolor          toggle tinting for the current dir on/off'
+            echo '  wincolor on       turn on (noop if already on)'
+            echo '  wincolor off      turn off the current dir'
+            echo '  wincolor off -f   turn off the closest enabled ancestor too'
             echo '  wincolor list     list enabled dirs with their colour'
             echo '  wincolor prune    gc stale state (same gc every call runs)'
             echo '  wincolor --help   show this help'
@@ -158,7 +185,7 @@ function wincolor --description 'toggle/list/prune alacritty background tints'
                 test -n "$d"; or continue
                 set -l mark ''
                 test -d "$d"; or set mark ' (missing)'
-                echo "#"(__wincolor_hex $d)" $d$mark"
+                echo "#"(__wincolor_hex $d)" "(__wincolor_tilde $d)"$mark"
             end
             return
         case prune
@@ -168,18 +195,51 @@ function wincolor --description 'toggle/list/prune alacritty background tints'
             return
     end
 
-    # every invocation gc's stale windows + window-less dirs before toggling.
+    # resolve action: bare toggles, `on`/`off` force a direction (idempotent).
+    set -l action toggle
+    set -l force
+    switch "$argv[1]"
+        case on
+            set action on
+        case off
+            set action off
+            contains -- "$argv[2]" -f --force; and set force 1
+    end
+
+    # every invocation gc's stale windows + window-less dirs first.
     __wincolor_gc
     set -l dir (pwd -P)
-    if __wincolor_on
-        # drop the dir from state
-        set -l keep (grep -Fxv -- $dir $__wincolor_state)
+
+    test "$action" = toggle; and begin
+        __wincolor_on; and set action off; or set action on
+    end
+
+    if test "$action" = off
+        # -f/--force drops the closest enabled ancestor too (works from a subdir);
+        # plain off only removes an exact entry for the current dir.
+        set -l target $dir
+        test -n "$force"; and set target (__wincolor_match $dir)
+        if test -z "$target"; or not grep -Fxq -- $target $__wincolor_state 2>/dev/null
+            echo "wincolor: nothing to turn off here"
+            return
+        end
+        set -l keep (grep -Fxv -- $target $__wincolor_state)
         printf '%s\n' $keep >$__wincolor_state
-        echo "wincolor off -> $dir"
+        echo "wincolor off -> "(__wincolor_tilde $target)
     else
+        if __wincolor_on
+            echo "wincolor already on -> "(__wincolor_tilde $dir)
+            return
+        end
+        # already tinted by an enabled ancestor -> noop, the subtree shares its colour
+        set -l parent (__wincolor_match $dir)
+        if test -n "$parent"
+            echo "wincolor already on in parent: "(__wincolor_tilde $parent)
+            return
+        end
         mkdir -p (dirname $__wincolor_state)
         echo $dir >>$__wincolor_state
-        echo "wincolor on  -> $dir #"(__wincolor_hex $dir)
+        echo "wincolor on  -> "(__wincolor_tilde $dir)" #"(__wincolor_hex $dir)
     end
     __wincolor_apply
 end
