@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "theme": "term-bg",
   "plugin": [
     "/Users/marcin/git/meridian/plugin/meridian.ts",
     "/Users/marcin/.config/opencode/plugin/safety.ts"
