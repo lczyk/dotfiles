@@ -28,7 +28,7 @@ with `[label] ` (label = path portion filled in by wildcards). Tracks
 rotation/truncation like `tail -F`.
 
 Examples:
-  funnel '/tmp/claude/log/*.log'
+  funnel '/tmp/ai/log/*.log'
   funnel '~/logs/**/*.log'
 
 Options:
@@ -543,7 +543,11 @@ fn render_rows(
                 .into_iter()
                 .enumerate()
                 .map(|(i, chunk)| {
-                    let mut row = if i == 0 { prefix.to_vec() } else { indent.clone() };
+                    let mut row = if i == 0 {
+                        prefix.to_vec()
+                    } else {
+                        indent.clone()
+                    };
                     row.extend_from_slice(&chunk);
                     row
                 })
@@ -665,7 +669,9 @@ extern "C" fn on_signal(_sig: libc::c_int) {
     let prev = SIGNAL_COUNT.fetch_add(1, Ordering::SeqCst);
     if prev >= 1 {
         // SAFETY: _exit is async-signal-safe; skips Drop chains by design.
-        unsafe { libc::_exit(130); }
+        unsafe {
+            libc::_exit(130);
+        }
     }
 }
 
@@ -929,9 +935,11 @@ fn run() -> io::Result<()> {
     let color = use_color(args.no_color);
     // SAFETY: isatty on stdout fd is always safe to call.
     let stdout_tty = unsafe { libc::isatty(libc::STDOUT_FILENO) == 1 };
-    let long_mode = args
-        .long_lines
-        .unwrap_or(if stdout_tty { LongLines::Trim } else { LongLines::Wrap });
+    let long_mode = args.long_lines.unwrap_or(if stdout_tty {
+        LongLines::Trim
+    } else {
+        LongLines::Wrap
+    });
     let use_alt = stdout_tty;
 
     let (root, recursive) = watch_root(&args.pattern);
@@ -991,7 +999,11 @@ fn run() -> io::Result<()> {
     // AltScreenGuard constructed BEFORE acquiring the long-lived stdout lock
     // so its Drop (which re-locks stdout to emit exit sequences) runs after
     // the lock is released. drops run in reverse construction order.
-    let _alt = if use_alt { Some(AltScreenGuard::new()?) } else { None };
+    let _alt = if use_alt {
+        Some(AltScreenGuard::new()?)
+    } else {
+        None
+    };
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
     let mut renderer = Renderer::new(long_mode, use_alt, args.scrollback);
@@ -1383,10 +1395,7 @@ mod tests {
     #[test]
     fn trim_tab_midline_stop() {
         // col 6: "ab" -> 8, tab -> col 8 already at stop, expands to next: 8->16 (8 spaces)
-        assert_eq!(
-            emit(b"ab\tcd", LongLines::Trim, 30),
-            "[lbl] ab        cd\n"
-        );
+        assert_eq!(emit(b"ab\tcd", LongLines::Trim, 30), "[lbl] ab        cd\n");
     }
 
     #[test]
@@ -1425,10 +1434,7 @@ mod tests {
 
     #[test]
     fn indent_drops_control_chars() {
-        assert_eq!(
-            emit(b"a\x01b\x7fc", LongLines::Indent, 20),
-            "[lbl] abc\n"
-        );
+        assert_eq!(emit(b"a\x01b\x7fc", LongLines::Indent, 20), "[lbl] abc\n");
     }
 
     #[test]
@@ -1560,11 +1566,7 @@ mod tests {
 
     #[test]
     fn plan_prefill_empty() {
-        let plan = plan_prefill(
-            &[],
-            100,
-            std::time::SystemTime::UNIX_EPOCH,
-        );
+        let plan = plan_prefill(&[], 100, std::time::SystemTime::UNIX_EPOCH);
         assert!(plan.is_empty());
     }
 

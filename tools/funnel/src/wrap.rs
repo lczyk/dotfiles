@@ -162,7 +162,9 @@ fn hard_split(tokens: Tokens, max_cells: usize) -> Tokens {
                 new_glues.push(Glue { bytes: Vec::new() });
             }
         }
-        if i < last_idx && let Some(g) = glues_iter.next() {
+        if i < last_idx
+            && let Some(g) = glues_iter.next()
+        {
             new_glues.push(g);
         }
     }
@@ -338,7 +340,10 @@ mod tests {
 
     #[test]
     fn fits_in_one_row() {
-        assert_eq!(s(wrap_content(b"hello world", 20, 0, 0)), vec!["hello world"]);
+        assert_eq!(
+            s(wrap_content(b"hello world", 20, 0, 0)),
+            vec!["hello world"]
+        );
     }
 
     #[test]

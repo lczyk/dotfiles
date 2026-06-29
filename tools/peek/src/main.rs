@@ -12,7 +12,6 @@ Options:
 
 const BUFFER_SIZE: usize = 8192;
 
-
 fn parse_args(args: &[String]) -> bool {
     let mut line_buffered = true;
     for arg in args.iter().skip(1) {

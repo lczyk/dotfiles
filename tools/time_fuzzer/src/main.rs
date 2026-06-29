@@ -46,16 +46,17 @@ fn parse_args(args: &[String]) -> Args {
 }
 
 fn main() {
-
     let _args: Vec<String> = std::env::args().collect();
-    
+
     let args = parse_args(&_args);
 
     let input_time = match args.input {
         Some(t) => t,
         None => {
             let mut buffer = String::new();
-            io::stdin().read_to_string(&mut buffer).expect("Failed to read from stdin");
+            io::stdin()
+                .read_to_string(&mut buffer)
+                .expect("Failed to read from stdin");
             buffer.trim().to_string()
         }
     };
@@ -94,8 +95,8 @@ fn parse_input_time(input: &str) -> Result<(u32, u32), String> {
 
 fn convert_to_fuzzy_time(hour: u32, minute: u32, just: bool) -> Result<String, String> {
     let hours = [
-        "twelve", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-        "ten", "eleven",
+        "twelve", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven",
     ];
 
     let current_hour_24 = hour;
@@ -136,26 +137,15 @@ fn convert_to_fuzzy_time(hour: u32, minute: u32, just: bool) -> Result<String, S
         18..=22 => Some(format!("twenty past {}", hour_label(current_hour_24))),
         23..=27 => Some(format!("twenty-five past {}", hour_label(current_hour_24))),
         28..=32 => Some(format!("half past {}", hour_label(current_hour_24))),
-        33..=37 => {
-            Some(format!("twenty-five to {}", hour_label(next_hour_24)))
-        }
-        38..=42 => {
-            Some(format!("twenty to {}", hour_label(next_hour_24)))
-        }
-        43..=47 => {
-            Some(format!("quarter to {}", hour_label(next_hour_24)))
-        }
-        48..=52 => {
-            Some(format!("ten to {}", hour_label(next_hour_24)))
-        }
-        53..=57 => {
-            Some(format!("five to {}", hour_label(next_hour_24)))
-        }
+        33..=37 => Some(format!("twenty-five to {}", hour_label(next_hour_24))),
+        38..=42 => Some(format!("twenty to {}", hour_label(next_hour_24))),
+        43..=47 => Some(format!("quarter to {}", hour_label(next_hour_24))),
+        48..=52 => Some(format!("ten to {}", hour_label(next_hour_24))),
+        53..=57 => Some(format!("five to {}", hour_label(next_hour_24))),
         _ => None,
     };
     result.ok_or_else(|| "Failed to convert to fuzzy time".to_string())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -213,9 +203,18 @@ mod tests {
             ("00:00", Ok((0, 0))),
             ("23:59", Ok((23, 59))),
             ("12:15", Ok((12, 15))),
-            ("24:00", Err("Hour must be between 0-23 and minute between 0-59".to_string())),
-            ("12:60", Err("Hour must be between 0-23 and minute between 0-59".to_string())),
-            ("invalid", Err("Input time must be in HH:MM format".to_string())),
+            (
+                "24:00",
+                Err("Hour must be between 0-23 and minute between 0-59".to_string()),
+            ),
+            (
+                "12:60",
+                Err("Hour must be between 0-23 and minute between 0-59".to_string()),
+            ),
+            (
+                "invalid",
+                Err("Input time must be in HH:MM format".to_string()),
+            ),
         ];
         for (input, expected) in tests {
             let result = parse_input_time(input);

@@ -466,11 +466,21 @@ fn spawn_workers(ctx: egui::Context) -> (Sender<Job>, Receiver<DecodeResult>) {
                 let result = match job {
                     Job::Thumb(path, mtime, max_px) => {
                         let payload = Payload::Thumb(decode_thumb(&path, max_px));
-                        DecodeResult { path, mtime, box_px: max_px, payload }
+                        DecodeResult {
+                            path,
+                            mtime,
+                            box_px: max_px,
+                            payload,
+                        }
                     }
                     Job::Frames(path, mtime) => {
                         let payload = Payload::Frames(decode_gif_frames(&path));
-                        DecodeResult { path, mtime, box_px: 0, payload }
+                        DecodeResult {
+                            path,
+                            mtime,
+                            box_px: 0,
+                            payload,
+                        }
                     }
                 };
                 if res_tx.send(result).is_err() {
@@ -687,7 +697,12 @@ impl Mosaic {
                 .first()
                 .map(|f| f.size().into_iter().max().unwrap_or(0) as u32)
                 .unwrap_or(0);
-            (matches!(t.state, State::New | State::Stale), t.mtime, have, t.decoded_px)
+            (
+                matches!(t.state, State::New | State::Stale),
+                t.mtime,
+                have,
+                t.decoded_px,
+            )
         });
         if let Some((fresh, mtime, have, decoded)) = info {
             let upgrade = have > 0 && want > have && have >= decoded;

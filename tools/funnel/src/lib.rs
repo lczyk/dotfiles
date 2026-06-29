@@ -118,10 +118,7 @@ impl Glob {
         Self::compile_with(pattern, &HashSet::new())
     }
 
-    pub fn compile_with(
-        pattern: &str,
-        allow: &HashSet<&'static str>,
-    ) -> Result<Self, String> {
+    pub fn compile_with(pattern: &str, allow: &HashSet<&'static str>) -> Result<Self, String> {
         // char classes / brace alternation: not implemented in the matcher
         // and `literal_prefix_len` treats `[`/`{` as wildcards, so a quiet
         // mismatch would silently misbehave. reject unless opted in.
@@ -152,8 +149,7 @@ impl Glob {
                 }
                 if seg.contains(['*', '?']) {
                     return Err(
-                        "wildcard in first path segment; pass --allow=bare-wild to enable"
-                            .into(),
+                        "wildcard in first path segment; pass --allow=bare-wild to enable".into(),
                     );
                 }
                 break;
@@ -167,23 +163,17 @@ impl Glob {
         if !allow.contains("multi-doublestar") {
             let n = segs.iter().filter(|s| matches!(s, Seg::DoubleStar)).count();
             if n > 1 {
-                return Err(
-                    "multiple `**` segments make labels ambiguous; \
+                return Err("multiple `**` segments make labels ambiguous; \
                      pass --allow=multi-doublestar to enable"
-                        .into(),
-                );
+                    .into());
             }
         }
         // trailing-doublestar: pattern ends in `**`. matches everything
         // recursively w/ no filename constraint; very spammy.
-        if !allow.contains("trailing-doublestar")
-            && matches!(segs.last(), Some(Seg::DoubleStar))
-        {
-            return Err(
-                "trailing `**` matches anything recursively; \
+        if !allow.contains("trailing-doublestar") && matches!(segs.last(), Some(Seg::DoubleStar)) {
+            return Err("trailing `**` matches anything recursively; \
                  pass --allow=trailing-doublestar to enable"
-                    .into(),
-            );
+                .into());
         }
         // interleaved: a single segment has more than one wildcard part
         // (e.g. `log-*-prod-*.txt`). label contains the middle literal,
@@ -437,18 +427,18 @@ mod tests {
 
     #[test]
     fn glob_match_star_segment() {
-        let g = Glob::compile("/tmp/claude/log/*.log").unwrap();
-        assert!(g.is_match("/tmp/claude/log/mylog.log"));
-        assert!(g.is_match("/tmp/claude/log/a.log"));
-        assert!(!g.is_match("/tmp/claude/log/nested/x.log"));
-        assert!(!g.is_match("/tmp/claude/log/mylog.txt"));
-        assert!(!g.is_match("/tmp/claude/other/mylog.log"));
+        let g = Glob::compile("/tmp/ai/log/*.log").unwrap();
+        assert!(g.is_match("/tmp/ai/log/mylog.log"));
+        assert!(g.is_match("/tmp/ai/log/a.log"));
+        assert!(!g.is_match("/tmp/ai/log/nested/x.log"));
+        assert!(!g.is_match("/tmp/ai/log/mylog.txt"));
+        assert!(!g.is_match("/tmp/ai/other/mylog.log"));
     }
 
     #[test]
     fn glob_match_double_star() {
         let g = Glob::compile("/tmp/**/*.log").unwrap();
-        assert!(g.is_match("/tmp/claude/log/mylog.log"));
+        assert!(g.is_match("/tmp/ai/log/mylog.log"));
         assert!(g.is_match("/tmp/foo/other_log.log"));
         assert!(g.is_match("/tmp/a/b/c/d.log"));
         // `**` matches zero segments too, so this also matches.
@@ -473,14 +463,14 @@ mod tests {
 
     #[test]
     fn glob_label_single_star() {
-        let g = Glob::compile("/tmp/claude/log/*.log").unwrap();
-        assert_eq!(g.label("/tmp/claude/log/mylog.log"), "mylog");
+        let g = Glob::compile("/tmp/ai/log/*.log").unwrap();
+        assert_eq!(g.label("/tmp/ai/log/mylog.log"), "mylog");
     }
 
     #[test]
     fn glob_label_double_star() {
         let g = Glob::compile("/tmp/**/*.log").unwrap();
-        assert_eq!(g.label("/tmp/claude/log/mylog.log"), "claude/log/mylog");
+        assert_eq!(g.label("/tmp/ai/log/mylog.log"), "ai/log/mylog");
         assert_eq!(g.label("/tmp/foo/other_log.log"), "foo/other_log");
     }
 
@@ -506,17 +496,18 @@ mod tests {
     #[test]
     fn reject_multi_doublestar() {
         assert!(Glob::compile("/tmp/**/foo/**/*.log").is_err());
-        assert!(
-            Glob::compile_with("/tmp/**/foo/**/*.log", &allow(&["multi-doublestar"])).is_ok()
-        );
+        assert!(Glob::compile_with("/tmp/**/foo/**/*.log", &allow(&["multi-doublestar"])).is_ok());
     }
 
     #[test]
     fn reject_mixed_doublestar() {
         assert!(Glob::compile("/tmp/a**b/x.log").is_err());
         assert!(
-            Glob::compile_with("/tmp/a**b/x.log", &allow(&["mixed-doublestar", "interleaved"]))
-                .is_ok()
+            Glob::compile_with(
+                "/tmp/a**b/x.log",
+                &allow(&["mixed-doublestar", "interleaved"])
+            )
+            .is_ok()
         );
     }
 
@@ -543,9 +534,7 @@ mod tests {
     #[test]
     fn reject_interleaved() {
         assert!(Glob::compile("/tmp/log-*-prod-*.txt").is_err());
-        assert!(
-            Glob::compile_with("/tmp/log-*-prod-*.txt", &allow(&["interleaved"])).is_ok()
-        );
+        assert!(Glob::compile_with("/tmp/log-*-prod-*.txt", &allow(&["interleaved"])).is_ok());
     }
 
     #[test]
