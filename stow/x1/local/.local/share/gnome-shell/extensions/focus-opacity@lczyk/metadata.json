@@ -1,0 +1,7 @@
+{
+  "uuid": "focus-opacity@lczyk",
+  "name": "Focus Opacity",
+  "description": "Dim unfocused windows (active 0.95 / inactive 0.85), mirroring sway's opacity.py on gnome.",
+  "shell-version": ["48", "49", "50"],
+  "version": 1
+}

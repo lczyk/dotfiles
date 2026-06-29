@@ -66,7 +66,15 @@ if gnome-extensions list 2>/dev/null | grep -q forge@jmmaranan.com; then
   # sway: gaps inner 5
   GSETTINGS_SCHEMA_DIR=$forge_schemas \
     gsettings set org.gnome.shell.extensions.forge window-gap-size 5
+  # drop forge's focus border (sway uses none; focus-opacity marks the active window)
+  GSETTINGS_SCHEMA_DIR=$forge_schemas \
+    gsettings set org.gnome.shell.extensions.forge focus-border-toggle false
 fi
+
+# focus opacity: our own ~40-line extension (stowed via this repo) mirroring
+# sway's opacity.py -- active 0.95 / inactive 0.85, switching on focus change.
+# replaces the unmaintained transparent-inactive-windows ext, broken on shell 50.
+gnome-extensions enable focus-opacity@lczyk 2>/dev/null || true
 
 # sway: focus_follows_mouse yes. focus-change-on-pointer-rest=false kills mutter's
 # wait-for-pointer-to-stop delay, so focus follows immediately like sway.
