@@ -1,0 +1,7 @@
+{
+  "uuid": "workspace-occupancy@lczyk",
+  "name": "Workspace Occupancy",
+  "description": "Colours gnome's native panel workspace dots: occupied workspaces get the accent colour, empty ones stay dim. No second indicator.",
+  "shell-version": ["48", "49", "50"],
+  "version": 1
+}
