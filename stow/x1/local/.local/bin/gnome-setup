@@ -1,0 +1,88 @@
+#!/bin/sh
+# apply gnome settings to match the sway setup (keyboard layout + super binds).
+# idempotent: safe to re-run. gnome stores these in the dconf binary blob, which
+# isn't stow-friendly, so we keep the source of truth here and replay it.
+set -e
+
+# us layout (gb types the not-sign U+00AC on shift+grave instead of ~)
+gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'us')]"
+
+# super+q -> close window (sway binds $mod+q to kill)
+gsettings set org.gnome.desktop.wm.keybindings close "['<Alt>F4', '<Super>q']"
+
+# free super+space (was bound to input-source switching)
+gsettings set org.gnome.desktop.wm.keybindings switch-input-source "['XF86Keyboard']"
+gsettings set org.gnome.desktop.wm.keybindings switch-input-source-backward "[]"
+
+# ibus also grabs super+space (input-method switch), separate from the wm
+# switch-input-source above. clear it too.
+gsettings set org.freedesktop.ibus.general.hotkey triggers "[]"
+
+# super+space -> app grid (gnome-native, type-to-search; replaces sway's
+# launcher.sh, which spawned a terminal running dmenu/fzf).
+gsettings set org.gnome.shell.keybindings toggle-application-view "['<Super>a', '<Super>space']"
+
+base=org.gnome.settings-daemon.plugins.media-keys
+p0=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/term/
+
+gsettings set $base custom-keybindings "['$p0']"
+
+# super+enter -> terminal (plain alacritty; spawn-term.py is sway-only)
+gsettings set $base.custom-keybinding:$p0 name 'terminal'
+gsettings set $base.custom-keybinding:$p0 command 'alacritty'
+gsettings set $base.custom-keybinding:$p0 binding '<Super>Return'
+
+# ubuntu-dock: no permanent dock under sway, so kill the always-on bar entirely.
+# (dash still shows in the overview.) hot-keys=false is moot once disabled but
+# harmless if you ever re-enable the dock.
+gnome-extensions disable ubuntu-dock@ubuntu.com 2>/dev/null || true
+gsettings set org.gnome.shell.extensions.dash-to-dock hot-keys false 2>/dev/null || true
+
+# workspaces: sway has 10 static, $mod+1..0 switch, $mod+shift+1..0 move.
+# gnome defaults to dynamic workspaces and grabs <Super>1..9 for app-launching.
+gsettings set org.gnome.mutter dynamic-workspaces false
+gsettings set org.gnome.desktop.wm.preferences num-workspaces 10
+wm=org.gnome.desktop.wm.keybindings
+shell=org.gnome.shell.keybindings
+n=1
+for k in 1 2 3 4 5 6 7 8 9 0; do  # sway maps 0 -> workspace 10
+  gsettings set $wm switch-to-workspace-$n "['<Super>$k']"
+  gsettings set $wm move-to-workspace-$n "['<Super><Shift>$k']"
+  [ $n -le 9 ] && gsettings set $shell switch-to-application-$n "[]"
+  n=$((n+1))
+done
+
+# forge: sway-like auto-tiling extension. enable if installed. its focus
+# (super+hjkl) and move (super+shift+hjkl) defaults already match sway; only
+# fix is freeing super+return (forge grabs it for swap, we want it for terminal).
+# forge's metadata may not list the running shell version -> gnome marks it
+# OUT OF DATE and won't load it. skip the version check (forge tracks shell closely).
+gsettings set org.gnome.shell disable-extension-version-validation true
+if gnome-extensions list 2>/dev/null | grep -q forge@jmmaranan.com; then
+  gnome-extensions enable forge@jmmaranan.com 2>/dev/null || true
+  forge_schemas=$HOME/.local/share/gnome-shell/extensions/forge@jmmaranan.com/schemas
+  GSETTINGS_SCHEMA_DIR=$forge_schemas \
+    gsettings set org.gnome.shell.extensions.forge.keybindings window-swap-last-active "[]"
+  # sway: gaps inner 5
+  GSETTINGS_SCHEMA_DIR=$forge_schemas \
+    gsettings set org.gnome.shell.extensions.forge window-gap-size 5
+fi
+
+# sway: focus_follows_mouse yes. focus-change-on-pointer-rest=false kills mutter's
+# wait-for-pointer-to-stop delay, so focus follows immediately like sway.
+gsettings set org.gnome.desktop.wm.preferences focus-mode 'sloppy'
+gsettings set org.gnome.mutter focus-change-on-pointer-rest false
+
+# wallpaper: goo (animated layer-shell) can't run on gnome, so mirror the static
+# fallback -- reuse sway's frecency picker and pin its choice as the gnome bg.
+wp_script=$HOME/.local/share/sway/scripts/wallpaper.sh
+if [ -x "$wp_script" ]; then
+  wp=$("$wp_script" 2>/dev/null) || true
+  if [ -n "$wp" ] && [ -f "$wp" ]; then
+    gsettings set org.gnome.desktop.background picture-uri "file://$wp"
+    gsettings set org.gnome.desktop.background picture-uri-dark "file://$wp"
+    gsettings set org.gnome.desktop.background picture-options 'zoom'
+  fi
+fi
+
+echo "gnome settings applied"

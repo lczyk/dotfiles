@@ -50,7 +50,12 @@ function main() {
     fi
     if [ -n "$response" ]; then
         if command -v "$response" &> /dev/null; then
-            swaymsg exec -- "$response"
+            # NOTE: swaymsg under sway; setsid fallback so launcher works in gnome too
+            if [ -n "$SWAYSOCK" ] && command -v swaymsg &> /dev/null; then
+                swaymsg exec -- "$response"
+            else
+                setsid -f "$response" &> /dev/null
+            fi
         else
             echo "Command not found: $response"
         fi
