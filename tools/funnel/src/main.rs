@@ -275,10 +275,33 @@ struct LineRec {
     prefix: Vec<u8>,
     pw: usize,
     content: Vec<u8>,
-    // cached count of visual rows this rec occupies at the renderer's current
-    // width + mode. recomputed on insert and on resize. lets scroll math
-    // operate in visual-row space w/out re-walking content every frame.
-    visual_rows: usize,
+    // cached rendered visual rows at the renderer's current width + mode.
+    // computed once on insert, recomputed on resize. paint reuses these
+    // instead of re-running the (cubic, for long lines) word-wrap every frame.
+    rows: Vec<Vec<u8>>,
+    // cached trim-mode `>` overflow flag (false in wrap/indent modes).
+    overflow: bool,
+}
+
+impl LineRec {
+    fn new(prefix: &[u8], pw: usize, content: &[u8], mode: LongLines, width: usize) -> Self {
+        let rows = render_rows(prefix, pw, content, mode, width);
+        let overflow =
+            matches!(mode, LongLines::Trim) && line_overflows(pw, content, width);
+        LineRec {
+            prefix: prefix.to_vec(),
+            pw,
+            content: content.to_vec(),
+            rows,
+            overflow,
+        }
+    }
+
+    fn rerender(&mut self, mode: LongLines, width: usize) {
+        self.rows = render_rows(&self.prefix, self.pw, &self.content, mode, width);
+        self.overflow =
+            matches!(mode, LongLines::Trim) && line_overflows(self.pw, &self.content, width);
+    }
 }
 
 // Renderer: alt-screen TUI pager when stdout-tty AND mode=Trim. Ring buffer of
@@ -318,7 +341,7 @@ impl Renderer {
     }
 
     fn total_visual_rows(&self) -> usize {
-        self.ring.iter().map(|r| r.visual_rows).sum()
+        self.ring.iter().map(|r| r.rows.len()).sum()
     }
 
     // visible content rows = total height - 1 (status row reserved at bottom).
@@ -339,13 +362,9 @@ impl Renderer {
         while self.ring.len() >= self.cap {
             self.ring.pop_front();
         }
-        let vr = render_rows(prefix, pw, content, self.mode, self.width).len();
-        self.ring.push_back(LineRec {
-            prefix: prefix.to_vec(),
-            pw,
-            content: content.to_vec(),
-            visual_rows: vr,
-        });
+        let rec = LineRec::new(prefix, pw, content, self.mode, self.width);
+        let vr = rec.rows.len();
+        self.ring.push_back(rec);
         // Paused: bump offset by the new rec's visual-row count so the visible
         // window stays anchored on the same content as the ring grows.
         // Saturates at max_offset -- once there, content silently ages out of
@@ -364,10 +383,10 @@ impl Renderer {
             self.width = w;
             self.height = h;
             if width_changed {
-                // visual-row counts depend on width; recompute for every rec.
+                // rendered rows depend on width; recompute for every rec.
+                let (mode, w) = (self.mode, self.width);
                 for rec in self.ring.iter_mut() {
-                    rec.visual_rows =
-                        render_rows(&rec.prefix, rec.pw, &rec.content, self.mode, self.width).len();
+                    rec.rerender(mode, w);
                 }
             }
             let max = self.max_offset();
@@ -410,20 +429,16 @@ impl Renderer {
             return Ok(());
         }
         let vs = self.view_size();
-        // Expand every rec to its visual rows in oldest-first order. Cheap
-        // enough given ring is bounded by `cap` and the same walk that
-        // populated `visual_rows` is done here.
-        let mut visual: Vec<Vec<u8>> = Vec::new();
+        // Flatten cached rows in oldest-first order. No re-wrapping here --
+        // rows were rendered once on insert / resize.
+        let mut visual: Vec<&[u8]> = Vec::new();
         // Track which rec each visual row came from so we can flag overflow
         // (trim mode only) for the `>` status indicator.
         let mut row_overflows: Vec<bool> = Vec::new();
         for rec in &self.ring {
-            let rows = render_rows(&rec.prefix, rec.pw, &rec.content, self.mode, self.width);
-            let overflow = matches!(self.mode, LongLines::Trim)
-                && line_overflows(rec.pw, &rec.content, self.width);
-            for r in rows {
+            for r in &rec.rows {
                 visual.push(r);
-                row_overflows.push(overflow);
+                row_overflows.push(rec.overflow);
             }
         }
         let total = visual.len();
