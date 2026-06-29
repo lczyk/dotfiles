@@ -37,13 +37,14 @@ function __wincolor_tilde --argument p
     string replace -- $HOME '~' $p
 end
 
-# dark bg hex for a given dir, sharing that dir's prompt hue.
-function __wincolor_hex --argument dir
-    set -l shas (echo $dir | cksum | string split -f1 ' ' | math --base=hex \
+# raw dark-bg rgb triple ("r g b") for a dir at a given hash seed. seed feeds
+# the hash so a colliding colour can be re-rolled (see __wincolor_seed).
+function __wincolor_rgb --argument dir seed
+    set -l shas (echo "$dir:$seed" | cksum | string split -f1 ' ' | math --base=hex \
         | string sub -s 3 | string pad -c 0 -w 6 | string match -ra ..)
     set -l col
     for c in $shas[1..3]
-        set col $col (math "floor(0x$c * 0.30)")
+        set col $col (math "floor(0x$c * 0.45)")
     end
     # min-brightness floor: keep tints clearly above the default 0x1c1c1c bg
     # (luminance ~28) so even near-black hashes read as a distinct colour.
@@ -55,8 +56,8 @@ function __wincolor_hex --argument dir
     end
     # hue floor: base bg is neutral grey, so a near-grey tint (channels ~equal)
     # reads as the same hue, just brighter. force a channel gap by pushing the
-    # largest channel up until max-min spread is clear. scaled vals top out ~76
-    # (0.30 x 255), so plenty of headroom -- no 255 clamp loop risk.
+    # largest channel up until max-min spread is clear. scaled vals top out ~115
+    # (0.45 x 255), so plenty of headroom -- no 255 clamp loop risk.
     set -l mn (math "min($col[1],$col[2],$col[3])")
     set -l mx (math "max($col[1],$col[2],$col[3])")
     while test (math "$mx - $mn") -lt 24
@@ -65,8 +66,59 @@ function __wincolor_hex --argument dir
         end
         set mx (math "$mx + 4")
     end
+    printf '%s\n' $col
+end
+
+# redmean rgb distance -- cheap perceptual approximation, no Lab/cksum gymnastics
+# needed. args: r1 g1 b1 r2 g2 b2 -> floored int distance.
+function __wincolor_dist
+    set -l rb (math "($argv[1] + $argv[4]) / 2")
+    set -l dr (math "$argv[1] - $argv[4]")
+    set -l dg (math "$argv[2] - $argv[5]")
+    set -l db (math "$argv[3] - $argv[6]")
+    math "floor(sqrt((2 + $rb/256)*$dr^2 + 4*$dg^2 + (2 + (255-$rb)/256)*$db^2))"
+end
+
+# resolve the hash seed for a dir given the whole enabled set. greedy in state
+# file order: each dir takes the lowest seed whose colour stays >= threshold from
+# every earlier dir's resolved colour. deterministic from the file, so list and
+# apply agree. NOTE: O(n^2) over enabled dirs; n is a handful, not worth caching.
+function __wincolor_seed --argument dir
+    set -l thresh 60   # min redmean distance between any two tints
+    # NOTE: the dark gamut (0.45 scale) only fits ~12-15 distinct tints at this
+    # threshold; past that a re-roll exhausts cap and two tints end up similar.
+    # fine for typical use (a handful of live tinted dirs). to pack more: lower
+    # thresh (less distinct) or raise the 0.45 scale (brighter bg). bumping cap
+    # barely helps -- the space is full, not under-sampled.
+    set -l cap 50      # seed attempts before giving up (keep last try)
+    set -l prev
+    for d in (cat $__wincolor_state)
+        test -n "$d"; or continue
+        set -l s 0
+        while test $s -lt $cap
+            set -l rgb (__wincolor_rgb $d $s)
+            set -l ok 1
+            for p in $prev
+                set -l q (string split ' ' $p)
+                test (__wincolor_dist $rgb[1] $rgb[2] $rgb[3] $q[1] $q[2] $q[3]) -lt $thresh
+                and set ok 0
+                and break
+            end
+            test $ok -eq 1; and break
+            set s (math $s + 1)
+        end
+        test "$d" = "$dir"; and echo $s; and return
+        set prev $prev (string join ' ' (__wincolor_rgb $d $s))
+    end
+    echo 0   # dir not in state file: fall back to seed 0
+end
+
+# dark bg hex for a dir, with collision-avoiding seed. pass an already-resolved
+# seed as $argv[2] to skip the lookup (list does, having the seed in hand).
+function __wincolor_hex --argument dir seed
+    test -n "$seed"; or set seed (__wincolor_seed $dir)
     set -l hex
-    for c in $col
+    for c in (__wincolor_rgb $dir $seed)
         set hex $hex (math --base=hex $c | string replace 0x '' | string pad -c 0 -w 2)
     end
     string join '' $hex
@@ -185,7 +237,8 @@ function wincolor --description 'toggle/list/prune alacritty background tints'
                 test -n "$d"; or continue
                 set -l mark ''
                 test -d "$d"; or set mark ' (missing)'
-                echo "#"(__wincolor_hex $d)" "(__wincolor_tilde $d)"$mark"
+                set -l seed (__wincolor_seed $d)
+                echo "#"(__wincolor_hex $d $seed)"($seed) "(__wincolor_tilde $d)"$mark"
             end
             return
         case prune
