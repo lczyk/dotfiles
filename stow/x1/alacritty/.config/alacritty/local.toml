@@ -23,6 +23,8 @@ style = "Bold Italic"
 
 [window]
 opacity = 1.0
+# no titlebar/frame -- sway draws none anyway; this kills gnome's server-side deco
+decorations = "None"
 
 [[keyboard.bindings]]
 key = "Return"

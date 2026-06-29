@@ -23,6 +23,7 @@ y = 1
 
 [window]
 opacity = 0.9
+decorations = "buttonless"
 # treat option as alt so option+letter / option+backspace carry alt mod into apps.
 option_as_alt = "Both"
 

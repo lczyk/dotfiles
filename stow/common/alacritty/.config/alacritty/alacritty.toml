@@ -34,7 +34,9 @@ background = "0x1c1c1c"
 foreground = "0xddeedd"
 
 [window]
-decorations = "buttonless"
+# NOTE: decorations is set per-machine in each local.toml (mac: buttonless,
+# x1: None) -- this importing file loads last and would clobber the import, so
+# decorations must NOT live here.
 dynamic_padding = false
 dynamic_title = true
 title = "Terminal"
