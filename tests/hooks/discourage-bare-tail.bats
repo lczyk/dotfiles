@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
-# tests for stow/common/claude/.claude/hooks/discourage-bare-tail.sh
+# tests for stow/common/agent-hooks/.config/agent-hooks/discourage-bare-tail.sh
 # the hook reads claude-code's PreToolUse JSON on stdin and exits 2 to block
 # a bare `| tail` / `| head` (or `tail <(...)` procsub) that isn't tee'd to
-# /tmp/claude/log/.
+# /tmp/ai/log/.
 
 setup() {
-    HOOK="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/hooks/discourage-bare-tail.sh"
+    HOOK="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/discourage-bare-tail.sh"
 }
 
 # pipe a fake PreToolUse payload with the given Bash command. RE_ENGINE (if
@@ -53,22 +53,22 @@ fire() {
 # -- allowed: tee'd into the log dir ------------------------------------
 
 @test "allows tee to log dir then tail" {
-    run fire "cmd 2>&1 | tee /tmp/claude/log/x.log | tail -50"
+    run fire "cmd 2>&1 | tee /tmp/ai/log/x.log | tail -50"
     [ "$status" -eq 0 ]
 }
 
 @test "allows tee -a (append) to log dir then tail" {
-    run fire "cmd 2>&1 | tee -a /tmp/claude/log/x.log | tail"
+    run fire "cmd 2>&1 | tee -a /tmp/ai/log/x.log | tail"
     [ "$status" -eq 0 ]
 }
 
 @test "allows tee to quoted log path then tail" {
-    run fire "cmd | tee \"/tmp/claude/log/x.log\" | tail -20"
+    run fire "cmd | tee \"/tmp/ai/log/x.log\" | tail -20"
     [ "$status" -eq 0 ]
 }
 
 @test "allows multi-file tee where log dir is not first then head" {
-    run fire "cmd | tee out.txt /tmp/claude/log/x.log | head"
+    run fire "cmd | tee out.txt /tmp/ai/log/x.log | head"
     [ "$status" -eq 0 ]
 }
 
@@ -94,21 +94,21 @@ fire() {
 @test "rg engine: blocks bare tail, allows tee'd tail" {
     RE_ENGINE=rg run fire "cmd | tail"
     [ "$status" -eq 2 ]
-    RE_ENGINE=rg run fire "cmd | tee /tmp/claude/log/x.log | tail"
+    RE_ENGINE=rg run fire "cmd | tee /tmp/ai/log/x.log | tail"
     [ "$status" -eq 0 ]
 }
 
 @test "grep engine: blocks bare tail, allows tee'd tail" {
     RE_ENGINE=grep run fire "cmd | tail"
     [ "$status" -eq 2 ]
-    RE_ENGINE=grep run fire "cmd | tee /tmp/claude/log/x.log | tail"
+    RE_ENGINE=grep run fire "cmd | tee /tmp/ai/log/x.log | tail"
     [ "$status" -eq 0 ]
 }
 
 @test "awk engine: blocks bare tail, allows tee'd tail" {
     RE_ENGINE=awk run fire "cmd | tail"
     [ "$status" -eq 2 ]
-    RE_ENGINE=awk run fire "cmd | tee /tmp/claude/log/x.log | tail"
+    RE_ENGINE=awk run fire "cmd | tee /tmp/ai/log/x.log | tail"
     [ "$status" -eq 0 ]
 }
 
@@ -125,7 +125,7 @@ fire() {
 
 @test "xfail: \$LOG-expanded tee path should be allowed" {
     skip "hook can't expand \$LOG -- over-blocks (currently exits 2)"
-    run fire 'LOG=/tmp/claude/log/x.log; cmd | tee $LOG | tail'
+    run fire 'LOG=/tmp/ai/log/x.log; cmd | tee $LOG | tail'
     [ "$status" -eq 0 ]
 }
 

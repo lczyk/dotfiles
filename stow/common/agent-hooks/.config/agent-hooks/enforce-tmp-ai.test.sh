@@ -1,42 +1,42 @@
 #!/usr/bin/env bash
-# tests for enforce-tmp-claude.sh. run directly:
-#   bash enforce-tmp-claude.test.sh
+# tests for enforce-tmp-ai.sh. run directly:
+#   bash enforce-tmp-ai.test.sh
 #
 # each case is "expected_exit|channel|value". expected_exit is 0 (allowed) or
 # 2 (blocked). channel is 'f' (Write/Edit file_path) or 'c' (Bash command).
-# the hook blocks claude scratch in /tmp (and the /private/tmp alias) unless it
-# lives under /tmp/claude/.
+# the hook blocks ai scratch in /tmp (and the /private/tmp alias) unless it
+# lives under /tmp/ai/.
 
 set -u
-HOOK="$(dirname "$0")/enforce-tmp-claude.sh"
+HOOK="$(dirname "$0")/enforce-tmp-ai.sh"
 
 CASES=(
-    # --- file_path: allowed (under claude, or not in /tmp at all) ---
-    "0|f|/tmp/claude/foo.py"
-    "0|f|/tmp/claude/log/x.log"
-    "0|f|/private/tmp/claude/foo.py"
-    "0|f|/private/tmp/claude/sub/dir/x"
+    # --- file_path: allowed (under ai, or not in /tmp at all) ---
+    "0|f|/tmp/ai/foo.py"
+    "0|f|/tmp/ai/log/x.log"
+    "0|f|/private/tmp/ai/foo.py"
+    "0|f|/private/tmp/ai/sub/dir/x"
     "0|f|/Users/marcin/dotfiles/x.py"
     "0|f|/home/user/scratch.txt"
     "0|f|relative/path.py"
 
-    # --- file_path: blocked (in /tmp but not under claude) ---
+    # --- file_path: blocked (in /tmp but not under ai) ---
     "2|f|/tmp/foo.py"
     "2|f|/tmp/scratch/x.py"
-    "2|f|/tmp/claudette/x.py"
+    "2|f|/tmp/aiette/x.py"
     "2|f|/private/tmp/foo.py"
-    "2|f|/private/tmp/claude-501/x/scratchpad/chisel_tree.py"
-    "2|f|/private/tmp/claudette/x.py"
+    "2|f|/private/tmp/ai-501/x/scratchpad/chisel_tree.py"
+    "2|f|/private/tmp/aiette/x.py"
 
     # --- bash redirect / tee: allowed ---
-    "0|c|echo hi > /tmp/claude/x.log"
-    "0|c|echo hi >> /tmp/claude/log/x.log"
-    "0|c|cmd 2>&1 | tee /tmp/claude/log/x.log"
-    "0|c|echo hi > /private/tmp/claude/x.log"
-    "0|c|cmd | tee /private/tmp/claude/log/x.log"
+    "0|c|echo hi > /tmp/ai/x.log"
+    "0|c|echo hi >> /tmp/ai/log/x.log"
+    "0|c|cmd 2>&1 | tee /tmp/ai/log/x.log"
+    "0|c|echo hi > /private/tmp/ai/x.log"
+    "0|c|cmd | tee /private/tmp/ai/log/x.log"
     "0|c|echo hi > /var/log/x.log"
     "0|c|ls -la"
-    "0|c|cat /tmp/claude/log/x.log"
+    "0|c|cat /tmp/ai/log/x.log"
 
     # --- bash redirect / tee: blocked ---
     "2|c|echo hi > /tmp/foo.log"
@@ -46,9 +46,9 @@ CASES=(
     "2|c|echo hi > /private/tmp/foo.log"
     "2|c|cmd | tee /private/tmp/other.log"
 
-    # --- mktemp: allowed only when targeting /tmp/claude ---
-    "0|c|mktemp -p /tmp/claude"
-    "0|c|mktemp -p /tmp/claude/sub"
+    # --- mktemp: allowed only when targeting /tmp/ai ---
+    "0|c|mktemp -p /tmp/ai"
+    "0|c|mktemp -p /tmp/ai/sub"
     "2|c|mktemp"
     "2|c|mktemp -d"
     "2|c|f=\$(mktemp)"

@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
-# tests for stow/common/claude/.claude/hooks/enforce-tmp-claude.sh
+# tests for stow/common/agent-hooks/.config/agent-hooks/enforce-tmp-ai.sh
 # the hook reads claude-code's PreToolUse JSON on stdin and exits 2 to block
-# any creation of a /tmp file outside /tmp/claude/. two channels: Bash
+# any creation of a /tmp file outside /tmp/ai/. two channels: Bash
 # (redirects / tee / mktemp) and Write|Edit|NotebookEdit (file_path).
 
 setup() {
-    HOOK="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/hooks/enforce-tmp-claude.sh"
+    HOOK="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/enforce-tmp-ai.sh"
 }
 
 # fire a Bash payload. RE_ENGINE (if exported) forces the regex engine.
@@ -22,7 +22,7 @@ fire_write() {
         | "$HOOK"
 }
 
-# -- Bash: blocked redirects outside /tmp/claude ------------------------
+# -- Bash: blocked redirects outside /tmp/ai ------------------------
 
 @test "blocks > redirect to /tmp" {
     run fire "cmd > /tmp/foo.sh"
@@ -54,15 +54,15 @@ fire_write() {
     [ "$status" -eq 2 ]
 }
 
-# -- Bash: allowed under /tmp/claude ------------------------------------
+# -- Bash: allowed under /tmp/ai ------------------------------------
 
-@test "allows > redirect under /tmp/claude" {
-    run fire "cmd > /tmp/claude/foo.sh"
+@test "allows > redirect under /tmp/ai" {
+    run fire "cmd > /tmp/ai/foo.sh"
     [ "$status" -eq 0 ]
 }
 
-@test "allows tee under /tmp/claude/log" {
-    run fire "cmd 2>&1 | tee /tmp/claude/log/x.log | tail -5"
+@test "allows tee under /tmp/ai/log" {
+    run fire "cmd 2>&1 | tee /tmp/ai/log/x.log | tail -5"
     [ "$status" -eq 0 ]
 }
 
@@ -83,7 +83,7 @@ fire_write() {
     [ "$status" -eq 0 ]
 }
 
-# -- Bash: mktemp must target /tmp/claude -------------------------------
+# -- Bash: mktemp must target /tmp/ai -------------------------------
 
 @test "blocks bare mktemp" {
     run fire "f=\$(mktemp)"
@@ -95,13 +95,13 @@ fire_write() {
     [ "$status" -eq 2 ]
 }
 
-@test "allows mktemp -p /tmp/claude" {
-    run fire "f=\$(mktemp -p /tmp/claude)"
+@test "allows mktemp -p /tmp/ai" {
+    run fire "f=\$(mktemp -p /tmp/ai)"
     [ "$status" -eq 0 ]
 }
 
-@test "allows mktemp --tmpdir=/tmp/claude" {
-    run fire "mktemp --tmpdir=/tmp/claude scratch.XXXX"
+@test "allows mktemp --tmpdir=/tmp/ai" {
+    run fire "mktemp --tmpdir=/tmp/ai scratch.XXXX"
     [ "$status" -eq 0 ]
 }
 
@@ -112,8 +112,8 @@ fire_write() {
     [ "$status" -eq 2 ]
 }
 
-@test "allows Write under /tmp/claude" {
-    run fire_write "/tmp/claude/note.md"
+@test "allows Write under /tmp/ai" {
+    run fire_write "/tmp/ai/note.md"
     [ "$status" -eq 0 ]
 }
 
@@ -122,38 +122,38 @@ fire_write() {
     [ "$status" -eq 0 ]
 }
 
-@test "allows Write to /tmp/claude exactly (no trailing slash)" {
-    run fire_write "/tmp/claude"
+@test "allows Write to /tmp/ai exactly (no trailing slash)" {
+    run fire_write "/tmp/ai"
     [ "$status" -eq 0 ]
 }
 
-# -- prefix trap: /tmp/claudette is NOT under /tmp/claude ---------------
+# -- prefix trap: /tmp/aiette is NOT under /tmp/ai ---------------
 
-@test "blocks Write to /tmp/claudette (prefix lookalike)" {
-    run fire_write "/tmp/claudette/foo"
+@test "blocks Write to /tmp/aiette (prefix lookalike)" {
+    run fire_write "/tmp/aiette/foo"
     [ "$status" -eq 2 ]
 }
 
 # -- regex engine cascade: same verdict under rg / grep / awk -----------
 
-@test "rg engine: blocks /tmp redirect, allows /tmp/claude" {
+@test "rg engine: blocks /tmp redirect, allows /tmp/ai" {
     RE_ENGINE=rg run fire "cmd > /tmp/foo"
     [ "$status" -eq 2 ]
-    RE_ENGINE=rg run fire "cmd > /tmp/claude/foo"
+    RE_ENGINE=rg run fire "cmd > /tmp/ai/foo"
     [ "$status" -eq 0 ]
 }
 
-@test "grep engine: blocks /tmp redirect, allows /tmp/claude" {
+@test "grep engine: blocks /tmp redirect, allows /tmp/ai" {
     RE_ENGINE=grep run fire "cmd > /tmp/foo"
     [ "$status" -eq 2 ]
-    RE_ENGINE=grep run fire "cmd > /tmp/claude/foo"
+    RE_ENGINE=grep run fire "cmd > /tmp/ai/foo"
     [ "$status" -eq 0 ]
 }
 
-@test "awk engine: blocks /tmp redirect, allows /tmp/claude" {
+@test "awk engine: blocks /tmp redirect, allows /tmp/ai" {
     RE_ENGINE=awk run fire "cmd > /tmp/foo"
     [ "$status" -eq 2 ]
-    RE_ENGINE=awk run fire "cmd > /tmp/claude/foo"
+    RE_ENGINE=awk run fire "cmd > /tmp/ai/foo"
     [ "$status" -eq 0 ]
 }
 

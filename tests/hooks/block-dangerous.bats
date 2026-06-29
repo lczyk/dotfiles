@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
-# tests for stow/common/claude/.claude/hooks/block-dangerous.sh
+# tests for stow/common/agent-hooks/.config/agent-hooks/block-dangerous.sh
 # the hook reads claude-code's PreToolUse JSON on stdin and exits 2 to block.
 
 setup() {
-    HOOK="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/hooks/block-dangerous.sh"
+    HOOK="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/block-dangerous.sh"
 }
 
 # pipe a fake PreToolUse payload with the given Bash command.

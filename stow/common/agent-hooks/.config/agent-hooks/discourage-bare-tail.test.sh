@@ -4,13 +4,13 @@
 #
 # each case is "expected_exit|command". expected_exit is 0 (allowed) or
 # 2 (blocked). the hook blocks bare `| tail` patterns and allows commands
-# that tee through /tmp/claude/log/ first (so the full log persists).
+# that tee through /tmp/ai/log/ first (so the full log persists).
 
 set -u
 HOOK="$(dirname "$0")/discourage-bare-tail.sh"
 
 CASES=(
-    # --- blocked: bare `| tail` w/out tee to /tmp/claude/log/ ---
+    # --- blocked: bare `| tail` w/out tee to /tmp/ai/log/ ---
     "2|ls /tmp | tail"
     "2|ls /tmp | tail -5"
     "2|ls /tmp | tail -50"
@@ -26,15 +26,15 @@ CASES=(
     "2|cmd | tee /var/log/x.log | tail -5"
     "2|cat huge.log | tail -100"
 
-    # --- allowed: tee to /tmp/claude/log/ before tail ---
-    "0|cmd 2>&1 | tee /tmp/claude/log/foo.log | tail -50"
-    "0|cmd 2>&1 | tee /tmp/claude/log/foo.log | tail -n 50"
-    "0|ls /tmp 2>&1 | tee /tmp/claude/log/lstest.log | tail -3"
-    "0|cmd | tee  /tmp/claude/log/x.log | tail -10"
+    # --- allowed: tee to /tmp/ai/log/ before tail ---
+    "0|cmd 2>&1 | tee /tmp/ai/log/foo.log | tail -50"
+    "0|cmd 2>&1 | tee /tmp/ai/log/foo.log | tail -n 50"
+    "0|ls /tmp 2>&1 | tee /tmp/ai/log/lstest.log | tail -3"
+    "0|cmd | tee  /tmp/ai/log/x.log | tail -10"
 
-    # --- allowed: tee to /tmp/claude/log/ without tail at all ---
-    "0|cmd 2>&1 | tee /tmp/claude/log/foo.log"
-    "0|cmd > /tmp/claude/log/foo.log 2>&1"
+    # --- allowed: tee to /tmp/ai/log/ without tail at all ---
+    "0|cmd 2>&1 | tee /tmp/ai/log/foo.log"
+    "0|cmd > /tmp/ai/log/foo.log 2>&1"
 
     # --- allowed: no tail at all ---
     "0|ls -la"
@@ -46,7 +46,7 @@ CASES=(
     # --- allowed: bare tail (reading a file, not piped from another cmd) ---
     "0|tail -50 /var/log/syslog"
     "0|tail -f /var/log/foo.log"
-    "0|tail /tmp/claude/log/foo.log"
+    "0|tail /tmp/ai/log/foo.log"
 
     # --- allowed: words that start with 'tail' but aren't tail ---
     "0|ls | tailscale up"
@@ -87,17 +87,17 @@ CASES=(
     "2|head -n 50 <(some-cmd)"
 
     # --- allowed (false positive fix): tee -a (append) to log dir ---
-    "0|cmd 2>&1 | tee -a /tmp/claude/log/foo.log | tail -5"
-    "0|cmd 2>&1 | tee --append /tmp/claude/log/foo.log | tail -5"
+    "0|cmd 2>&1 | tee -a /tmp/ai/log/foo.log | tail -5"
+    "0|cmd 2>&1 | tee --append /tmp/ai/log/foo.log | tail -5"
 
     # --- allowed (false positive fix): quoted log path ---
-    "0|cmd 2>&1 | tee \"/tmp/claude/log/foo.log\" | tail -5"
-    "0|cmd 2>&1 | tee '/tmp/claude/log/foo.log' | tail -5"
-    "0|cmd 2>&1 | tee -a \"/tmp/claude/log/foo.log\" | tail -5"
+    "0|cmd 2>&1 | tee \"/tmp/ai/log/foo.log\" | tail -5"
+    "0|cmd 2>&1 | tee '/tmp/ai/log/foo.log' | tail -5"
+    "0|cmd 2>&1 | tee -a \"/tmp/ai/log/foo.log\" | tail -5"
 
     # --- allowed (false positive fix): tee multi-file w/ log dir not first ---
-    "0|cmd | tee /tmp/other.log /tmp/claude/log/x.log | tail -5"
-    "0|cmd | tee /tmp/a.log /tmp/b.log /tmp/claude/log/x.log | tail -5"
+    "0|cmd | tee /tmp/other.log /tmp/ai/log/x.log | tail -5"
+    "0|cmd | tee /tmp/a.log /tmp/b.log /tmp/ai/log/x.log | tail -5"
 )
 
 pass=0; fail=0; failures=()

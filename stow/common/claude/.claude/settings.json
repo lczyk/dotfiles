@@ -43,19 +43,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/block-dangerous.sh\""
+            "command": "bash \"$HOME/.config/agent-hooks/block-dangerous.sh\""
           },
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/discourage-bare-tail.sh\""
+            "command": "bash \"$HOME/.config/agent-hooks/discourage-bare-tail.sh\""
           },
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/enforce-log-suffix.sh\""
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-log-suffix.sh\""
           },
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/enforce-tmp-claude.sh\""
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\""
           }
         ]
       },
@@ -64,7 +64,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/enforce-tmp-claude.sh\""
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\""
           }
         ]
       }
@@ -97,8 +97,8 @@
     }
   },
   "effortLevel": "low",
+  "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
-  "voiceEnabled": false,
-  "tui": "fullscreen"
+  "voiceEnabled": false
 }

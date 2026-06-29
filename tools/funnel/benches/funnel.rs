@@ -5,7 +5,7 @@ use funnel::{Glob, build_prefix, fnv1a, path_color, watch_root};
 
 fn bench_fnv1a(c: &mut Criterion) {
     let short = b"foo.log";
-    let medium = b"/tmp/claude/log/session-2026-05-18/agent-42.log";
+    let medium = b"/tmp/ai/log/session-2026-05-18/agent-42.log";
     let long: Vec<u8> = (0..1024).map(|i| (i % 256) as u8).collect();
 
     c.bench_function("fnv1a/short", |b| {
@@ -21,7 +21,7 @@ fn bench_fnv1a(c: &mut Criterion) {
 
 fn bench_path_color(c: &mut Criterion) {
     let short = Path::new("a.log");
-    let medium = Path::new("/tmp/claude/log/agent-42.log");
+    let medium = Path::new("/tmp/ai/log/agent-42.log");
     let many: Vec<_> = (0..16)
         .map(|i| format!("/tmp/funnel/bench-{i}.log"))
         .collect();
@@ -42,7 +42,7 @@ fn bench_path_color(c: &mut Criterion) {
 }
 
 fn bench_build_prefix(c: &mut Criterion) {
-    let path = Path::new("/tmp/claude/log/agent-42.log");
+    let path = Path::new("/tmp/ai/log/agent-42.log");
     c.bench_function("build_prefix/no_color", |b| {
         b.iter(|| {
             build_prefix(
@@ -65,16 +65,16 @@ fn bench_build_prefix(c: &mut Criterion) {
 
 fn bench_watch_root(c: &mut Criterion) {
     c.bench_function("watch_root/simple", |b| {
-        b.iter(|| watch_root(std::hint::black_box("/tmp/claude/log/*.log")))
+        b.iter(|| watch_root(std::hint::black_box("/tmp/ai/log/*.log")))
     });
     c.bench_function("watch_root/recursive", |b| {
-        b.iter(|| watch_root(std::hint::black_box("/tmp/claude/log/**/*.log")))
+        b.iter(|| watch_root(std::hint::black_box("/tmp/ai/log/**/*.log")))
     });
 }
 
 fn bench_glob_compile(c: &mut Criterion) {
     c.bench_function("glob_compile/simple", |b| {
-        b.iter(|| Glob::compile(std::hint::black_box("/tmp/claude/log/*.log")))
+        b.iter(|| Glob::compile(std::hint::black_box("/tmp/ai/log/*.log")))
     });
     c.bench_function("glob_compile/recursive", |b| {
         b.iter(|| Glob::compile(std::hint::black_box("/tmp/**/*.log")))
@@ -82,11 +82,11 @@ fn bench_glob_compile(c: &mut Criterion) {
 }
 
 fn bench_glob_match(c: &mut Criterion) {
-    let simple = Glob::compile("/tmp/claude/log/*.log").unwrap();
+    let simple = Glob::compile("/tmp/ai/log/*.log").unwrap();
     let recursive = Glob::compile("/tmp/**/*.log").unwrap();
-    let path_hit = "/tmp/claude/log/agent-42.log";
+    let path_hit = "/tmp/ai/log/agent-42.log";
     let path_deep = "/tmp/a/b/c/d/e/f/g/h/i/agent-42.log";
-    let path_miss = "/tmp/claude/other/agent-42.txt";
+    let path_miss = "/tmp/ai/other/agent-42.txt";
 
     c.bench_function("glob_match/simple_hit", |b| {
         b.iter(|| simple.is_match(std::hint::black_box(path_hit)))
@@ -103,9 +103,9 @@ fn bench_glob_match(c: &mut Criterion) {
 }
 
 fn bench_glob_label(c: &mut Criterion) {
-    let simple = Glob::compile("/tmp/claude/log/*.log").unwrap();
+    let simple = Glob::compile("/tmp/ai/log/*.log").unwrap();
     let recursive = Glob::compile("/tmp/**/*.log").unwrap();
-    let path_simple = "/tmp/claude/log/agent-42.log";
+    let path_simple = "/tmp/ai/log/agent-42.log";
     let path_deep = "/tmp/a/b/c/d/e/f/g/h/i/agent-42.log";
 
     c.bench_function("glob_label/simple", |b| {
