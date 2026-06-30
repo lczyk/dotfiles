@@ -94,6 +94,7 @@ CASES=(
     "2|git branch -m oldname newname"
     "2|git am patch.mbox"
     "2|git apply patch.diff"
+    "2|git apply -3 patch.diff"
     "2|git worktree add ../wt main"
     "2|git stash drop"
     "2|git config --global user.name foo"
@@ -191,6 +192,14 @@ CASES=(
     "0|git add -n src/foo.rs"
     "0|git add ./src/foo.rs"
     "0|git add Allusers.txt"
+
+    # --- allowed: index-only / dry-run git apply (patch staging) ---
+    "0|git apply --cached patch.diff"
+    "0|git apply --index patch.diff"
+    "0|git apply --check patch.diff"
+    "0|git apply --stat patch.diff"
+    "0|git apply --numstat patch.diff"
+    "0|git apply --summary patch.diff"
 
     # --- blocked: gpg / installs / remote ---
     "2|git C0MMIT --no-gpg-sign -m foo"

@@ -44,7 +44,8 @@ GIT_WRITE_PATTERNS=(
     "(^|[ ;|&])git cherry-pick( |$)"
     "(^|[ ;|&])git revert( |$)"
     "(^|[ ;|&])git am( |$)"
-    "(^|[ ;|&])git apply( |$)"
+    # NOTE: `git apply` handled by a special-case below -- index-only
+    # (--cached/--index) and dry-run forms allowed for patch staging.
     "(^|[ ;|&])git stash (drop|clear)"
     "(^|[ ;|&])git config (--add|--unset|--global|--system|--replace-all|--remove-section)"
 )
@@ -173,6 +174,16 @@ fi
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git rm "; then
     if ! echo "$COMMAND" | grep -qE -- "(--cached|-n |--dry-run)"; then
         echo "BLOCKED: '$COMMAND' deletes worktree files. $GIT_REASON" >&2
+        exit 2
+    fi
+fi
+
+# `git apply` mutates the worktree by default. allow index-only forms
+# (--cached/--index, same safety class as the allowed `git commit`) and
+# dry-run inspection (--check/--stat/--numstat/--summary) for patch staging.
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git apply "; then
+    if ! echo "$COMMAND" | grep -qE -- "--(cached|index|check|stat|numstat|summary)"; then
+        echo "BLOCKED: '$COMMAND' mutates worktree. $GIT_WRITE_REASON" >&2
         exit 2
     fi
 fi

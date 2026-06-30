@@ -78,7 +78,6 @@
     "gopls-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
     "ralph-loop@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true,
     "chrome-devtools-mcp@claude-plugins-official": true,
     "clangd-lsp@claude-plugins-official": true
   },
@@ -87,12 +86,6 @@
       "source": {
         "source": "github",
         "repo": "mksglu/context-mode"
-      }
-    },
-    "mason": {
-      "source": {
-        "source": "github",
-        "repo": "rockcrafters/mason"
       }
     }
   },

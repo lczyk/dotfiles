@@ -795,7 +795,19 @@ fn drain(
 }
 
 fn warn(path: &Path, err: &dyn std::fmt::Display) {
-    eprintln!("funnel: {}: {err}", path.display());
+    // dedup consecutive identical warnings: a missing watched dir re-errors
+    // every poll tick (100ms), which would otherwise spam the terminal. print
+    // once, stay quiet until the message changes (dir came back, different err).
+    thread_local! {
+        static LAST: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+    }
+    let msg = format!("funnel: {}: {err}", path.display());
+    LAST.with(|last| {
+        if *last.borrow() != msg {
+            eprintln!("{msg}");
+            *last.borrow_mut() = msg;
+        }
+    });
 }
 
 // raw-mode guard for stdin: disables canonical + echo so we can read 'q'
