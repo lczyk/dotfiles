@@ -43,19 +43,25 @@ GIT_WRITE_PATTERNS=(
     "(^|[ ;|&])git tag( -[adfsmu]| [^-])"
     "(^|[ ;|&])git cherry-pick( |$)"
     "(^|[ ;|&])git revert( |$)"
-    "(^|[ ;|&])git branch( -[cCmMdD]| [^-])"
-    # agent stays on the current branch -- no switching / creating. reading
-    # other branches goes via log / diff / show, which aren't matched here.
-    # also catches `checkout -- <path>` (worktree discard) and `checkout -b`.
-    "(^|[ ;|&])git checkout( |$)"
-    "(^|[ ;|&])git switch( |$)"
     "(^|[ ;|&])git am( |$)"
     "(^|[ ;|&])git apply( |$)"
-    "(^|[ ;|&])git worktree (add|remove|move|prune)"
     "(^|[ ;|&])git stash (drop|clear)"
     "(^|[ ;|&])git config (--add|--unset|--global|--system|--replace-all|--remove-section)"
 )
-GIT_WRITE_REASON="agent is fenced to read-only git -- run write ops yourself or disable the hook"
+GIT_WRITE_REASON="these git ops are user-run -- commits on the current branch ARE allowed, but run push / tag / cherry-pick / etc yourself or disable the hook"
+
+# branch / worktree creation+switching. the agent works ON the currently
+# checked-out branch -- it must not create or switch branches / worktrees.
+# committing on the current branch is fine (with per-prompt permission).
+# `git checkout` also catches `checkout -- <path>` (worktree discard) and
+# `checkout -b`. reading other branches goes via log / diff / show.
+BRANCH_PATTERNS=(
+    "(^|[ ;|&])git branch( -[cCmMdD]| [^-])"
+    "(^|[ ;|&])git checkout( |$)"
+    "(^|[ ;|&])git switch( |$)"
+    "(^|[ ;|&])git worktree (add|remove|move|prune)"
+)
+BRANCH_REASON="stay on the current branch -- don't create or switch branches / worktrees. you CAN commit on this branch (commits aren't blocked); just don't branch off it. to read other branches use git log / diff / show <ref>."
 
 # wide `git add` -- agent must stage explicit paths, not sweep the worktree.
 # blocks -A / --all / -u / --update / `.` / `*` (and combined short flags
@@ -144,6 +150,7 @@ check() {
 
 check "$GIT_REASON"       "${GIT_PATTERNS[@]}"
 check "$GIT_WRITE_REASON" "${GIT_WRITE_PATTERNS[@]}"
+check "$BRANCH_REASON"    "${BRANCH_PATTERNS[@]}"
 check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 
