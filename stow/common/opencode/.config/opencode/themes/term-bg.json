@@ -79,7 +79,10 @@
     },
     "background": "none",
     "backgroundPanel": "none",
-    "backgroundElement": "none",
+    "backgroundElement": {
+      "dark": "darkStep2",
+      "light": "lightStep2"
+    },
     "border": {
       "dark": "darkStep7",
       "light": "lightStep7"
