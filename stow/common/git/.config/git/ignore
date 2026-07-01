@@ -1,2 +1,4 @@
 **/.claude/settings.local.json
+.claude
+.opencode
 .DS_Store
