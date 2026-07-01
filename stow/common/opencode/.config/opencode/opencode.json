@@ -10,8 +10,8 @@
     }
   },
   "plugin": [
-    "/Users/marcin/git/meridian/plugin/meridian.ts",
-    "/Users/marcin/.config/opencode/plugin/safety.ts",
-    "/Users/marcin/.config/opencode/plugin/caveman.ts"
+    "~/git/meridian/plugin/meridian.ts",
+    "~/.config/opencode/plugin/safety.ts",
+    "~/.config/opencode/plugin/caveman.ts"
   ]
 }
