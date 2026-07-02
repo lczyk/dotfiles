@@ -286,8 +286,7 @@ struct LineRec {
 impl LineRec {
     fn new(prefix: &[u8], pw: usize, content: &[u8], mode: LongLines, width: usize) -> Self {
         let rows = render_rows(prefix, pw, content, mode, width);
-        let overflow =
-            matches!(mode, LongLines::Trim) && line_overflows(pw, content, width);
+        let overflow = matches!(mode, LongLines::Trim) && line_overflows(pw, content, width);
         LineRec {
             prefix: prefix.to_vec(),
             pw,
