@@ -31,7 +31,8 @@ case "$RESP" in
 		systemctl suspend
 		;;
 	Lock)
-		loginctl lock-session $(loginctl show-user $USER -p Sessions | cut -d'=' -f2)
+		# shellcheck disable=SC2046  # sessions list is space-separated on purpose
+		loginctl lock-session $(loginctl show-user "$USER" -p Sessions | cut -d'=' -f2)
 		;;
 	Logout)
 		swaymsg exit

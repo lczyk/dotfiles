@@ -90,7 +90,7 @@ debx::unpack() {
     [ -n "$input" ] || debx::fatal "No .deb file provided for unpacking."
     [[ "$input" != *.deb ]] && debx::fatal "No .deb file provided for unpacking."
     [ -f "$input" ] || debx::fatal "File '$input' does not exist."
-    local dir="$(echo "${input%.deb}")"
+    local dir="${input%.deb}"
     if [ -d "$dir" ] && [ $FORCE -eq 0 ]; then
         # confirm if we want to remove the existing directory
         read -p "Directory '$dir' already exists. Do you want to continue? (yes/no/[T]ree): " -n 1 -r

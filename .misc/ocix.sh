@@ -9,7 +9,7 @@ INPUT="$1"
 
 INPUT=$(realpath "$INPUT")
 
-DIR="$(echo "${INPUT%.rock}")"
+DIR="${INPUT%.rock}"
 if [ -d "$DIR" ]; then
     # confirm if we want to remove the existing directory
     read -p "Directory '$DIR' already exists. Do you want to continue? ([Y]/n): " -n 1 -r

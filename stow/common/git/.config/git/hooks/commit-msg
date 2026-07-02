@@ -32,7 +32,7 @@ function main() {
     # -- conventional commits prefix ------------------------------------
     local types_alt types_list
     types_alt=$(IFS='|'; echo "${HEADERS[*]}")
-    types_list=$(IFS=,; echo "${HEADERS[*]}" | sed 's/,/:, /g')":"
+    types_list=$(printf '%s:, ' "${HEADERS[@]}"); types_list=${types_list%, }
     if ! echo "$subject" | grep -qE "^(${types_alt})(\([a-z0-9._-]+\))?(!|\?)?: "; then
       _fail "subject must use Conventional Commits" \
            "  valid: ${types_list}" \

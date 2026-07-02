@@ -14,6 +14,7 @@ function main() {
 
     # Pass the list to the handler and get the selected wallpaper
     local selected_wallpaper
+    # shellcheck disable=SC2086  # wallpapers is a list, splitting is the point
     selected_wallpaper=$("$handler_path" select $wallpapers)
 
     if [ -n "$selected_wallpaper" ]; then

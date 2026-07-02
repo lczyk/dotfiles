@@ -35,7 +35,7 @@ is_force_invocation() {
         parent_cmd=$(ps -o command= -p "$PPID" 2>/dev/null)
     fi
     case " $parent_cmd " in
-        *" --force "*|*" -f "*|*" --force-with-lease"*|*" --force-with-lease="*) return 0 ;;
+        *" --force "*|*" -f "*|*" --force-with-lease"*) return 0 ;;
     esac
     return 1
 }
@@ -43,6 +43,7 @@ is_force_invocation() {
 z40="0000000000000000000000000000000000000000"
 
 rc=0
+# shellcheck disable=SC2034  # local_ref unused but part of the stdin format
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ -z "$remote_ref" ] && continue
     is_protected "$remote_ref" || continue
