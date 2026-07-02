@@ -54,15 +54,6 @@ stow:  ## Stow common + $(PROFILE) packages into $$HOME
 		stow --restow --dir=$(STOW_PROFILE) --target=$(STOW_TARGET) "$$d" && echo "Stowed $(PROFILE)/$$d" || echo "Failed $(PROFILE)/$$d"; \
 	done
 
-.PHONY: restow
-restow:  ## Restow common + $(PROFILE) packages into $$HOME
-	@for d in $(COMMON_DIRS); do \
-		stow --restow --no-folding --dir=$(STOW_COMMON) --target=$(STOW_TARGET) "$$d" && echo "Restowed common/$$d" || echo "Failed common/$$d"; \
-	done
-	@for d in $(PROFILE_DIRS); do \
-		stow --restow --dir=$(STOW_PROFILE) --target=$(STOW_TARGET) "$$d" && echo "Restowed $(PROFILE)/$$d" || echo "Failed $(PROFILE)/$$d"; \
-	done
-
 .PHONY: unstow
 unstow:  ## Unstow common + $(PROFILE) packages from $$HOME
 	@for d in $(PROFILE_DIRS); do \
@@ -80,7 +71,7 @@ list-stow:  ## List dotfile packages discovered for stow
 	@for d in $(PROFILE_DIRS); do echo "  $$d"; done
 
 .PHONY: test
-test: test-cargo test-hooks test-statusline test-fish test-py  ## Run all tests (rust + bats + pytest)
+test: test-cargo test-hooks test-statusline test-fish test-debx test-py test-clc  ## Run all tests (rust + bats + pytest)
 
 .PHONY: test-cargo
 test-cargo: $(addprefix test-cargo-,$(CARGO_BINS))  ## cargo test all rust binaries
@@ -101,12 +92,20 @@ test-statusline:  ## Run bats tests for claude statusline
 test-fish:  ## Run bats tests for fish helpers
 	bats tests/fish/
 
+.PHONY: test-debx
+test-debx:  ## Run bats tests for debx
+	bats tests/debx/
+
 .PHONY: test-py
 test-py:  ## Run pytest for python scripts
 	uvx pytest tests/py/ -q
 
+.PHONY: test-clc
+test-clc:  ## Run pytest for claude-commit
+	uv run --project $(CLC_DIR) pytest $(CLC_DIR)/tests -q
+
 .PHONY: lint
-lint: $(addprefix lint-,$(CARGO_BINS)) lint-py  ## cargo clippy + fmt --check + ruff
+lint: $(addprefix lint-,$(CARGO_BINS)) lint-py lint-sh  ## cargo clippy + fmt --check + ruff + shellcheck
 
 .PHONY: lint-%
 lint-%:
@@ -117,6 +116,10 @@ lint-%:
 lint-py:  ## ruff check claude-commit (no writes)
 	uv run --project $(CLC_DIR) ruff check $(CLC_DIR)
 	uv run --project $(CLC_DIR) ruff format --check $(CLC_DIR)
+
+.PHONY: lint-sh
+lint-sh:  ## shellcheck tracked shell scripts + git hooks
+	git ls-files '*.sh' 'stow/common/git/.config/git/hooks/*' | grep -v '\.md$$' | xargs shellcheck
 
 .PHONY: format
 format: $(addprefix format-,$(CARGO_BINS)) format-py  ## cargo fmt + ruff format
