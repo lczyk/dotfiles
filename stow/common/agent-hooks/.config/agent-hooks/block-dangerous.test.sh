@@ -21,6 +21,7 @@ declare -a SUBS=(
     "RE5ET"  "reset"
     "REB4SE" "rebase"
     "MERG3"  "merge"
+    "PU_LL"  "pull"
 )
 
 unmunge() {
@@ -47,13 +48,30 @@ CASES=(
     "2|git filter-repo --path foo"
     "2|gh pr merge 123"
 
-    # --- blocked: discarding named-file worktree changes ---
-    "2|git checkout -- src/foo.rs"
+    # --- allowed: explicit-path discard (same power as the Write tool) ---
+    "0|git checkout -- src/foo.rs"
+    "0|git checkout -- file.txt other.txt"
+    "0|git restore src/foo.rs"
+    "0|git restore path/a path/b"
+    "0|git restore --worktree src/foo.rs"
+    "0|git restore --staged --worktree src/foo.rs"
+    "0|git restore -W -S src/foo.rs"
+    "0|git restore src/foo.rs && git status --short"
+
+    # --- blocked: broader-than-named-files discard ---
     "2|git checkout HEAD -- src/foo.rs"
     "2|git checkout abc123 -- file.txt other.txt"
-    "2|git restore src/foo.rs"
-    "2|git restore --worktree src/foo.rs"
-    "2|git restore --staged --worktree src/foo.rs"
+    "2|git checkout -- ."
+    "2|git checkout -- 'src/*.rs'"
+    "2|git restore"
+    "2|git restore .."
+    "2|git restore :/"
+    "2|git restore src/"
+    "2|git restore /tmp"
+    "2|git restore 'src/*.rs'"
+    "2|git restore \$FILE"
+    "2|git restore --source=HEAD~1 src/foo.rs"
+    "2|git status && git restore ."
     "2|git rm src/foo.rs"
     "2|git rm -r src/dir"
     "2|git rm -f src/foo.rs"
@@ -71,11 +89,31 @@ CASES=(
     "2|git checkout -"
     "2|git checkout -b newfeat"
     "2|git checkout -B existing"
+    "2|git checkout --track origin/foo"
+    "2|git checkout --orphan foo"
+    "2|git checkout --detach"
     "2|git switch main"
     "2|git switch -"
     "2|git switch -c newbranch"
     "2|git switch -C existing"
     "2|git switch --create foo"
+    "2|git switch --detach HEAD~2"
+
+    # --- blocked: branch create / move / retarget via long flags & plumbing ---
+    "2|git branch --track foo origin/foo"
+    "2|git branch --copy a b"
+    "2|git branch --move a b"
+    "2|git branch --force main HEAD~1"
+    "2|git branch -f main HEAD~1"
+    "2|git branch -t foo"
+    "2|git branch -u origin/main"
+    "2|git branch --set-upstream-to=origin/main"
+    "2|git branch --unset-upstream"
+    "2|git branch -fD feature"
+    "2|git update-ref refs/heads/foo HEAD"
+    "2|git update-ref -d refs/heads/main"
+    "2|git symbolic-ref HEAD refs/heads/other"
+    "2|git symbolic-ref HEAD"
 
     # --- allowed: reading other branches (no switch) ---
     "0|git log main..feature"
@@ -83,6 +121,10 @@ CASES=(
     "0|git diff main feature"
     "0|git show main:src/foo.rs"
     "0|git branch --contains HEAD"
+    "0|git branch --show-current"
+    "0|git branch --merged"
+    "0|git branch -vv"
+    "0|git branch -a"
 
     # --- blocked: write git ops ---
     "2|git P_USH origin main"
@@ -195,11 +237,61 @@ CASES=(
 
     # --- allowed: index-only / dry-run git apply (patch staging) ---
     "0|git apply --cached patch.diff"
-    "0|git apply --index patch.diff"
     "0|git apply --check patch.diff"
     "0|git apply --stat patch.diff"
     "0|git apply --numstat patch.diff"
     "0|git apply --summary patch.diff"
+    # --index applies to index AND worktree -- not index-only, must block
+    "2|git apply --index patch.diff"
+
+    # --- blocked: anchor evasion (global opts / backslash escape) ---
+    "2|git -C . P_USH origin main"
+    "2|git -C /some/repo checkout -b foo"
+    "2|git -c user.name=x P_USH"
+    "2|git --git-dir=.git P_USH"
+    "2|git --git-dir .git P_USH"
+    "2|git --no-pager P_USH"
+    "2|git -C . -c a=b P_USH"
+    "2|\\git P_USH origin main"
+
+    # --- allowed: global opts on read-only / allowed ops ---
+    "0|git -C . status"
+    "0|git -C . checkout -- file.txt"
+    "0|git --no-pager log --oneline"
+
+    # --- blocked: worktree / repo mutation via other doors ---
+    "2|git PU_LL"
+    "2|git PU_LL origin main"
+    "2|git clean -xdf"
+    "2|git clean -f"
+    "2|git clean --force"
+    "2|git clean -di"
+    "2|git reflog delete HEAD@{1}"
+    "2|git remote add evil https://x/y"
+    "2|git remote set-url origin https://x/y"
+    "2|git remote rename origin backup"
+    "2|git remote prune origin"
+    "2|git config user.name attacker"
+    "2|git config user.email a@b.c"
+    "2|git config --local core.editor vim"
+    "2|git config set user.name x"
+    "2|git config unset user.name"
+
+    # --- allowed: dry-run clean, config / remote reads ---
+    "0|git clean -n"
+    "0|git clean -nd"
+    "0|git config user.name"
+    "0|git config --list"
+    "0|git config --get-regexp 'user.*'"
+    "0|git remote get-url origin"
+    "0|git remote show origin"
+
+    # --- blocked: glued gh api method flag ---
+    "2|gh api /repos/x/y -XP0ST"
+    "2|gh api -XDEL /repos/x/y"
+
+    # --- allowed: glued GET with field flags (query params) ---
+    "0|gh api -XGET /user -f per_page=10"
 
     # --- blocked: gpg / installs / remote ---
     "2|git C0MMIT --no-gpg-sign -m foo"
