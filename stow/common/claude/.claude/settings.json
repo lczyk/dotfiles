@@ -101,7 +101,7 @@
       }
     }
   },
-  "effortLevel": "high",
+  "effortLevel": "low",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
