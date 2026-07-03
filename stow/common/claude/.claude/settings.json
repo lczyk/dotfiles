@@ -1,5 +1,5 @@
 {
-  "model": "opus[1m]",
+  "model": "claude-fable-5[1m]",
   "hooks": {
     "SessionStart": [
       {
@@ -15,6 +15,12 @@
             "command": "node \"$HOME/.claude/hooks/ponytail-activate.js\"",
             "timeout": 5,
             "statusMessage": "Loading ponytail mode..."
+          },
+          {
+            "type": "command",
+            "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi.md\"",
+            "timeout": 5,
+            "statusMessage": "Loading lofi style..."
           }
         ]
       }
@@ -33,6 +39,12 @@
             "command": "node \"$HOME/.claude/hooks/ponytail-mode-tracker.js\"",
             "timeout": 5,
             "statusMessage": "Tracking ponytail mode..."
+          },
+          {
+            "type": "command",
+            "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi-reminder.md\"",
+            "timeout": 5,
+            "statusMessage": "lofi style reminder..."
           }
         ]
       }
@@ -89,7 +101,7 @@
       }
     }
   },
-  "effortLevel": "low",
+  "effortLevel": "high",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark-ansi",
