@@ -1,26 +1,72 @@
 {
-  "model": "claude-fable-5[1m]",
+  "enabledPlugins": {
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "clangd-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "context-mode": {
+      "source": {
+        "repo": "mksglu/context-mode",
+        "source": "github"
+      }
+    }
+  },
   "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.config/agent-hooks/block-dangerous.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HOME/.config/agent-hooks/discourage-bare-tail.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-log-suffix.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Write|Edit|NotebookEdit"
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
           {
-            "type": "command",
             "command": "node \"$HOME/.claude/hooks/caveman-activate.js\"",
+            "statusMessage": "Loading caveman mode...",
             "timeout": 5,
-            "statusMessage": "Loading caveman mode..."
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "node \"$HOME/.claude/hooks/ponytail-activate.js\"",
+            "statusMessage": "Loading ponytail mode...",
             "timeout": 5,
-            "statusMessage": "Loading ponytail mode..."
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi.md\"",
+            "statusMessage": "Loading lofi style...",
             "timeout": 5,
-            "statusMessage": "Loading lofi style..."
+            "type": "command"
           }
         ]
       }
@@ -29,81 +75,31 @@
       {
         "hooks": [
           {
-            "type": "command",
             "command": "node \"$HOME/.claude/hooks/caveman-mode-tracker.js\"",
+            "statusMessage": "Tracking caveman mode...",
             "timeout": 5,
-            "statusMessage": "Tracking caveman mode..."
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "node \"$HOME/.claude/hooks/ponytail-mode-tracker.js\"",
+            "statusMessage": "Tracking ponytail mode...",
             "timeout": 5,
-            "statusMessage": "Tracking ponytail mode..."
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi-reminder.md\"",
+            "statusMessage": "lofi style reminder...",
             "timeout": 5,
-            "statusMessage": "lofi style reminder..."
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/block-dangerous.sh\""
-          },
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/discourage-bare-tail.sh\""
-          },
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/enforce-log-suffix.sh\""
-          },
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\""
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\""
+            "type": "command"
           }
         ]
       }
     ]
   },
-  "statusLine": {
-    "type": "command",
-    "command": "bash \"$HOME/.claude/statusline.sh\""
-  },
-  "enabledPlugins": {
-    "gopls-lsp@claude-plugins-official": true,
-    "rust-analyzer-lsp@claude-plugins-official": true,
-    "ralph-loop@claude-plugins-official": true,
-    "chrome-devtools-mcp@claude-plugins-official": true,
-    "clangd-lsp@claude-plugins-official": true
-  },
-  "extraKnownMarketplaces": {
-    "context-mode": {
-      "source": {
-        "source": "github",
-        "repo": "mksglu/context-mode"
-      }
-    }
-  },
-  "effortLevel": "low",
-  "tui": "fullscreen",
+  "model": "claude-fable-5[1m]",
   "skipDangerousModePermissionPrompt": true,
-  "theme": "dark-ansi",
-  "voiceEnabled": false
+  "statusLine": {
+    "command": "bash \"$HOME/.claude/statusline.sh\"",
+    "type": "command"
+  }
 }

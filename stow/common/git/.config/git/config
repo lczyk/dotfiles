@@ -35,6 +35,10 @@ smudge = git-lfs smudge -- %f
 process = git-lfs filter-process
 required = true
 
+# strip transient claude-code settings on commit (see .gitattributes in dotfiles repo)
+[filter "claudecfg"]
+	clean = "jq -S 'del(.effortLevel, .theme, .tui, .voiceEnabled)'"
+
 # https://blog.gitbutler.com/how-git-core-devs-configure-git/
 
 [column]

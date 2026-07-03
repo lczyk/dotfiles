@@ -2,6 +2,7 @@
 
 CARGO_BINS := peek time_fuzzer funnel mosaic
 CLC_DIR    := tools/claude-commit
+CLAUDE_SETTINGS := stow/common/claude/.claude/settings.json
 
 # profile detection: mac (Darwin) / armstrong (headless) / x1 (Linux). override via `PROFILE=...`.
 UNAME_S := $(shell uname -s)
@@ -69,6 +70,13 @@ list-stow:  ## List dotfile packages discovered for stow
 	@for d in $(COMMON_DIRS); do echo "  $$d"; done
 	@echo "$(PROFILE):"
 	@for d in $(PROFILE_DIRS); do echo "  $$d"; done
+
+.PHONY: normalize-claude-settings
+normalize-claude-settings:  ## Restage settings.json through the claudecfg clean filter (drops transient keys)
+	git add --renormalize $(CLAUDE_SETTINGS)
+	@git diff --cached --quiet -- $(CLAUDE_SETTINGS) \
+		&& echo "$(CLAUDE_SETTINGS) already normalized" \
+		|| echo "$(CLAUDE_SETTINGS) restaged -- commit to record"
 
 .PHONY: test
 test: test-cargo test-hooks test-statusline test-fish test-debx test-py test-clc  ## Run all tests (rust + bats + pytest)
