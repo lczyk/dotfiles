@@ -33,7 +33,7 @@ sub-file splits use the host program's own include mechanism. e.g. `stow/common/
 
 ## claude settings churn
 
-claude-code rewrites transient keys (`effortLevel`, `theme`, `tui`, `voiceEnabled`) back into the stowed `stow/common/claude/.claude/settings.json`, which used to cause git churn and stash conflicts. a `claudecfg` git clean filter strips those keys from the tracked version while leaving your live file untouched:
+claude-code rewrites transient keys (`effortLevel`, `model`, `theme`, `tui`, `voiceEnabled`) back into the stowed `stow/common/claude/.claude/settings.json`, which used to cause git churn and stash conflicts. a `claudecfg` git clean filter strips those keys from the tracked version while leaving your live file untouched:
 
 - filter def: `[filter "claudecfg"]` in `stow/common/git/.config/git/config` (`jq -S`, sorted so key-reordering can't churn either).
 - `.gitattributes` (repo root) maps `settings.json` to the filter.
