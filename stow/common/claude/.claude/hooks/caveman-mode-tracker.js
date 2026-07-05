@@ -68,9 +68,10 @@ process.stdin.on('end', () => {
       process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
           hookEventName: "UserPromptSubmit",
-          additionalContext: "CAVEMAN MODE ACTIVE (" + activeMode + "). " +
-            "Drop articles/filler/pleasantries/hedging. Fragments OK. " +
-            "Code/commits/security: write normal."
+          additionalContext: "caveman mode active (" + activeMode + "). " +
+            "drop articles/filler/pleasantries/hedging. fragments ok. " +
+            "composes with lofi: caveman = density, lofi = surface (lowercase/en-gb/ascii). apply both, drop neither. " +
+            "code/commits/security: write normal."
         }
       }));
     }
