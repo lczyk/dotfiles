@@ -35,6 +35,21 @@ strip_ansi() {
     [ "$out" = "[claude-opus-4-7]" ]
 }
 
+@test "fable badge is bold white on bright-red background" {
+    run bash -c "echo '{\"model\":{\"display_name\":\"Fable 5\"}}' | '$BADGE'"
+    [ "$output" = $'\033[1;97;48;5;196m[F5]\033[0m' ]
+}
+
+@test "fable badge fires on the raw model id too" {
+    run bash -c "echo '{\"model\":{\"id\":\"claude-fable-5\"}}' | '$BADGE'"
+    [[ "$output" == *$'\033[1;97;48;5;196m'* ]]
+}
+
+@test "non-fable badge keeps the default blue" {
+    run bash -c "echo '{\"model\":{\"display_name\":\"Opus 4.8\"}}' | '$BADGE'"
+    [ "$output" = $'\033[38;5;39m[O48]\033[0m' ]
+}
+
 @test "silent on empty stdin" {
     run bash -c "printf '' | '$BADGE'"
     [ "$status" -eq 0 ]
