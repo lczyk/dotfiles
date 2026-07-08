@@ -68,33 +68,6 @@ _added_lines() {
     printf '%s\n' "$1" | awk '/^\+[^+]/'
 }
 
-function check_todo_tag() {
-    local diff="$1"
-
-    if [ -z "$diff" ]; then
-        return 0
-    fi
-
-    # require TODO(name): or FIXME(name): form. match bare TODO/FIXME not
-    # followed by `(`. needs PCRE for negative lookahead.
-    local added pattern='\b(TODO|FIXME)\b(?!\()'
-    added=$(_added_lines "$diff")
-
-    local hits
-    if command -v rg >/dev/null 2>&1; then
-        hits=$(printf '%s\n' "$added" | rg -nP --color=never -- "$pattern")
-    else
-        hits=$(printf '%s\n' "$added" | grep -nP -- "$pattern")
-    fi
-
-    if [ -n "$hits" ]; then
-        printf '%s: bare TODO/FIXME in staged changes:\n' "$LABEL" >&2
-        printf '%s\n' "$hits" >&2
-        printf '%s: use TODO(name): / FIXME(name): form so orphan todos do not accumulate.\n' "$LABEL" >&2
-        return "$FAIL"
-    fi
-}
-
 function check_secrets() {
     local diff="$1"
 
@@ -158,7 +131,6 @@ function main() {
     local rc=0
     check_non_ascii "$diff" || rc=$?
     check_trailing_ws "$diff" || rc=$?
-    check_todo_tag "$diff" || rc=$?
     check_secrets "$diff" || rc=$?
     check_nocommit "$diff" || rc=$?
     return $rc

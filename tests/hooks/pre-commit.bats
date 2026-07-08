@@ -140,38 +140,6 @@ EOF
     [ "$status" -eq 0 ]
 }
 
-# -- TODO/FIXME tag form --
-
-@test "rejects bare TODO in added line" {
-    fake_diff $'+// TODO fix this later\n'
-    run "$HOOK"
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects bare FIXME in added line" {
-    fake_diff $'+// FIXME broken\n'
-    run "$HOOK"
-    [ "$status" -ne 0 ]
-}
-
-@test "accepts TODO(name): form" {
-    fake_diff $'+// TODO(marcin): fix this later\n'
-    run "$HOOK"
-    [ "$status" -eq 0 ]
-}
-
-@test "accepts FIXME(alice): form" {
-    fake_diff $'+// FIXME(alice): broken\n'
-    run "$HOOK"
-    [ "$status" -eq 0 ]
-}
-
-@test "ignores bare TODO on context lines" {
-    fake_diff $' // TODO old\n+clean\n'
-    run "$HOOK"
-    [ "$status" -eq 0 ]
-}
-
 # -- secret scan --
 
 @test "rejects AWS AKIA key" {
