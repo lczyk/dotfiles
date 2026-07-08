@@ -6,3 +6,9 @@
 __pycache__/
 tmp/
 settings.local.json
+
+# the global excludes (~/.config/git/ignore) carry a bare `.claude` rule to keep
+# agent cruft out of every other repo. here the claude config *is* the payload,
+# so re-include the stow package. the settings.local.json rule above still hides
+# the machine-local override inside it.
+!stow/common/claude/.claude/
