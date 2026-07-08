@@ -1,0 +1,9 @@
+[playback]
+
+# playback speed (can be fractional), default: 1
+speed = 2
+
+[session]
+
+# cap idle time between events at n seconds, default: off
+idle_time_limit = 2
