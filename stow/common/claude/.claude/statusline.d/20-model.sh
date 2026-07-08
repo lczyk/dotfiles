@@ -46,4 +46,10 @@ label=$(alias_for "$name")
 label=$(printf '%s' "$label" | tr -cd 'A-Za-z0-9 ._-' | head -c 20)
 [ -z "$label" ] && exit 0
 
-printf '\033[38;5;39m[%s]\033[0m' "$label"
+# fable gets a loud badge -- bold white on bright red -- so there's no missing
+# which model is driving. matched on the raw name so `claude-fable-5` (id
+# fallback, no alias) lights up too.
+case "$name" in
+    *[Ff]able*) printf '\033[1;97;48;5;196m[%s]\033[0m' "$label" ;;
+    *)          printf '\033[38;5;39m[%s]\033[0m' "$label" ;;
+esac
