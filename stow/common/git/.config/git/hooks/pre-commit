@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# warn on non-ASCII characters in staged changes; block entirely for agents.
-# always block nocommit-tagged lines (scratch files, temp debug code, etc.).
+# staged-diff guard rails:
+#   - non-ASCII / trailing whitespace: warn for humans, block for agents.
+#   - secrets / nocommit markers: always block.
+#
+# every check runs over added content lines only -- see _added_lines.
+#
+# known blind spot: git renders UTF-16 and binary files as "Binary files
+# differ", so their contents never reach any check. this hook is a speed bump,
+# not a secrets manager.
 
 if [ "$CLAUDECODE" = "1" ]; then
     LABEL="rejected"
@@ -10,20 +17,33 @@ else
     FAIL=0
 fi
 
+# PRECOMMIT_NO_RG=1 forces the grep/awk fallback path. the bats suite sets it
+# to exercise the branch that runs on boxes w/out ripgrep -- that branch used
+# to rely on `grep -P`, which BSD grep lacks, so it silently matched nothing.
+_has_rg() {
+    [ -z "$PRECOMMIT_NO_RG" ] && command -v rg >/dev/null 2>&1
+}
+
+_added_lines() {
+    # added content lines only. the file header is `+++ b/path` -- note the
+    # space. an added line whose content starts with `++` renders as
+    # `+++counter;` with no space, so it must NOT be filtered out.
+    # residual ambiguity: an added line whose content is literally `++ x`.
+    printf '%s\n' "$1" | awk '/^\+/ && !/^\+\+\+ /'
+}
+
 function check_non_ascii() {
-    local diff="$1"
+    local added="$1"
 
-    if [ -z "$diff" ]; then
-        return 0
-    fi
-
+    # anything outside tab + printable ASCII (0x20-0x7E). the fallback spells
+    # the class with literal bytes: BSD awk/grep do not honour `\x` escapes,
+    # they treat them as the literal chars x, 0, 7, F -- which silently turns
+    # `[^\x00-\x7F]` into a class that matches nearly every line.
     local hits
-    if command -v rg >/dev/null 2>&1; then
-        hits=$(printf '%s\n' "$diff" | rg -n '^\+[^+].*[^\x00-\x7F]' --color=never)
-    elif command -v grep >/dev/null 2>&1; then
-        hits=$(printf '%s\n' "$diff" | grep -nP '^\+[^+].*[^\x00-\x7F]')
+    if _has_rg; then
+        hits=$(printf '%s\n' "$added" | rg --color=never -e '[^\t\x20-\x7E]')
     else
-        hits=$(printf '%s\n' "$diff" | awk '/^\+[^+]/ && /[^\x00-\x7F]/ { print NR": "$0 }')
+        hits=$(printf '%s\n' "$added" | LC_ALL=C grep -E -e $'[^\t -~]')
     fi
 
     if [ -n "$hits" ]; then
@@ -39,17 +59,13 @@ function check_non_ascii() {
 }
 
 function check_trailing_ws() {
-    local diff="$1"
+    local added="$1"
 
-    if [ -z "$diff" ]; then
-        return 0
-    fi
-
-    local hits
-    if command -v rg >/dev/null 2>&1; then
-        hits=$(printf '%s\n' "$diff" | rg -n '^\+[^+].*[ 	]+$' --color=never)
+    local hits pattern=$'[ \t]+$'
+    if _has_rg; then
+        hits=$(printf '%s\n' "$added" | rg --color=never -e "$pattern")
     else
-        hits=$(printf '%s\n' "$diff" | grep -nE '^\+[^+].*[ 	]+$')
+        hits=$(printf '%s\n' "$added" | grep -E -e "$pattern")
     fi
 
     if [ -n "$hits" ]; then
@@ -63,31 +79,30 @@ function check_trailing_ws() {
     fi
 }
 
-_added_lines() {
-    # emit only +-added lines (skip ++ header lines).
-    printf '%s\n' "$1" | awk '/^\+[^+]/'
-}
-
 function check_secrets() {
-    local diff="$1"
+    local added="$1"
 
-    if [ -z "$diff" ]; then
-        return 0
-    fi
+    # high-signal secret patterns. ERE only -- no PCRE, so the grep fallback
+    # behaves identically to the rg path.
+    #   AKIA...                      AWS access key id
+    #   gh[posur]_...                GitHub PATs
+    #   sk-...                       Anthropic (sk-ant-) / OpenAI (sk-, sk-proj-)
+    #   xox[baprs]-...               Slack tokens
+    #   -----BEGIN ... PRIVATE KEY   PEM block (incl. GCP service-account json)
+    #   password= "literal"          quoted assignment, 8+ non-space chars
+    #   ^PASSWORD=literal            unquoted env-file assignment, 8+ chars
+    #
+    # the unquoted branch is anchored to line start (after the diff `+`) so it
+    # catches .env / shell / Makefile leaks w/out flagging `f(token=some_val)`.
+    # deliberately not matched: bare JWTs -- too many false positives.
+    local q="\"'"
+    local pattern="(AKIA[0-9A-Z]{16}|gh[posur]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|(password|passwd|api[_-]?key|secret|token)[[:space:]]*[:=][[:space:]]*[${q}][^${q} ]{8,}[${q}]|^\+[[:space:]]*(export[[:space:]]+)?(password|passwd|api[_-]?key|secret|token)=[^${q}[:space:]]{8,})"
 
-    # high-signal secret patterns:
-    # AWS access key (AKIA...), GitHub PATs (ghp_/gho_/ghs_/ghu_/ghr_),
-    # Anthropic sk-ant-..., OpenAI sk-..., PEM private key headers,
-    # generic password=/api_key=/secret=/token= with quoted non-trivial literal.
-    local pattern='(AKIA[0-9A-Z]{16}|gh[posur]_[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_\-]{20,}|sk-[A-Za-z0-9]{20,}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|(password|passwd|api[_-]?key|secret|token)\s*[:=]\s*["'"'"'][^"'"'"' ]{8,}["'"'"'])'
-
-    local added hits
-    added=$(_added_lines "$diff")
-
-    if command -v rg >/dev/null 2>&1; then
-        hits=$(printf '%s\n' "$added" | rg -niP --color=never -- "$pattern")
+    local hits
+    if _has_rg; then
+        hits=$(printf '%s\n' "$added" | rg -i --color=never -e "$pattern")
     else
-        hits=$(printf '%s\n' "$added" | grep -niP -- "$pattern")
+        hits=$(printf '%s\n' "$added" | grep -iE -e "$pattern")
     fi
 
     if [ -n "$hits" ]; then
@@ -100,19 +115,13 @@ function check_secrets() {
 }
 
 function check_nocommit() {
-    local diff="$1"
-
-    if [ -z "$diff" ]; then
-        return 0
-    fi
+    local added="$1"
 
     local hits
-    if command -v rg >/dev/null 2>&1; then
-        hits=$(printf '%s\n' "$diff" | rg -in '^\+.*nocommit' --color=never)
-    elif command -v grep >/dev/null 2>&1; then
-        hits=$(printf '%s\n' "$diff" | grep -Ein '^\+.*nocommit')
+    if _has_rg; then
+        hits=$(printf '%s\n' "$added" | rg -i --color=never -e 'nocommit')
     else
-        hits=$(printf '%s\n' "$diff" | awk 'tolower($0) ~ /^\+.*nocommit/ { print NR": "$0 }')
+        hits=$(printf '%s\n' "$added" | grep -iE -e 'nocommit')
     fi
 
     if [ -n "$hits" ]; then
@@ -125,14 +134,22 @@ function check_nocommit() {
 }
 
 function main() {
-    local diff
-    diff=$(git diff --cached)
+    local diff added
+    # --no-ext-diff / --no-color / --no-textconv: a user's diff.external,
+    # color.diff=always, or a textconv filter would otherwise reshape the
+    # output and every pattern below would quietly stop matching.
+    diff=$(git diff --cached --no-ext-diff --no-color --no-textconv)
+    added=$(_added_lines "$diff")
+
+    if [ -z "$added" ]; then
+        return 0
+    fi
 
     local rc=0
-    check_non_ascii "$diff" || rc=$?
-    check_trailing_ws "$diff" || rc=$?
-    check_secrets "$diff" || rc=$?
-    check_nocommit "$diff" || rc=$?
+    check_non_ascii "$added" || rc=$?
+    check_trailing_ws "$added" || rc=$?
+    check_secrets "$added" || rc=$?
+    check_nocommit "$added" || rc=$?
     return $rc
 }
 

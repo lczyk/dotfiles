@@ -196,3 +196,145 @@ EOF
     run "$HOOK"
     [ "$status" -ne 0 ]
 }
+
+@test "rejects OpenAI sk-proj- key (hyphen in body)" {
+    fake_diff $'+OPENAI=sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz123456\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects Slack bot token" {
+    fake_diff $'+SLACK=xoxb-123456789012-abcdefghijkl\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects unquoted env-file password assignment" {
+    fake_diff $'+PASSWORD=hunter2hunter2\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects unquoted exported api key" {
+    fake_diff $'+export API_KEY=abcdefgh12345678\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "ignores mid-line kwarg that looks like an assignment" {
+    fake_diff $'+result = fetch(token=some_value)\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+@test "ignores spaced assignment from a call expression" {
+    fake_diff $'+token = getToken()\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+# -- added lines whose content starts with '+' (regression: ^\+[^+] bypass) --
+
+@test "rejects secret on added line starting with ++" {
+    fake_diff $'+++counter; // password="supersecret123"\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects non-ASCII on added line starting with ++" {
+    fake_diff $'+++counter; // caf\xc3\xa9\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects trailing whitespace on added line starting with ++" {
+    fake_diff $'+++counter;   \n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects nocommit on added line starting with ++" {
+    fake_diff $'+++counter; // nocommit\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "ignores nocommit in a +++ file header path" {
+    fake_diff $'+++ b/nocommit-notes.md\n+clean content\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+@test "ignores trailing whitespace in a +++ file header path" {
+    fake_diff $'+++ b/file \n+clean content\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+# -- fallback path (no ripgrep): regression for the fail-open `grep -P` bug --
+
+@test "fallback rejects non-ASCII" {
+    export PRECOMMIT_NO_RG=1
+    fake_diff $'+hello \xe2\x80\x94 world\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "fallback rejects secret" {
+    export PRECOMMIT_NO_RG=1
+    fake_diff $'+token = ghp_abcdefghijklmnopqrstuvwxyz0123456789\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "fallback rejects unquoted env-file password assignment" {
+    export PRECOMMIT_NO_RG=1
+    fake_diff $'+PASSWORD=hunter2hunter2\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "fallback rejects trailing whitespace" {
+    export PRECOMMIT_NO_RG=1
+    fake_diff $'+hello   \n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "fallback rejects trailing tab" {
+    export PRECOMMIT_NO_RG=1
+    fake_diff $'+hello\t\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "fallback rejects nocommit" {
+    export PRECOMMIT_NO_RG=1
+    fake_diff $'+debug print // nocommit\n'
+    run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "fallback passes on clean added line" {
+    export PRECOMMIT_NO_RG=1
+    fake_diff $'+hello world\n'
+    run "$HOOK"
+    [ "$status" -eq 0 ]
+}
+
+# -- diff invocation hardening --
+
+@test "requests a plain diff (no ext-diff, color, or textconv)" {
+    fake_diff $'+clean\n'
+    cat > "$SHIMDIR/git" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "$FLAGS_OUT"
+EOF
+    chmod +x "$SHIMDIR/git"
+    export FLAGS_OUT="$BATS_TEST_TMPDIR/flags"
+    run "$HOOK"
+    run cat "$FLAGS_OUT"
+    [[ "$output" == *"--no-ext-diff"* ]]
+    [[ "$output" == *"--no-color"* ]]
+    [[ "$output" == *"--no-textconv"* ]]
+}
