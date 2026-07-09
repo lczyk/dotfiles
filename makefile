@@ -127,7 +127,7 @@ lint-py:  ## ruff check claude-commit (no writes)
 
 .PHONY: lint-sh
 lint-sh:  ## shellcheck tracked shell scripts + git hooks
-	git ls-files '*.sh' 'stow/common/git/.config/git/hooks/*' | grep -v '\.md$$' | xargs shellcheck
+	git ls-files '*.sh' 'stow/common/git/.config/git/hooks/*' | grep -v '\.md$$' | xargs shellcheck -x
 
 .PHONY: format
 format: $(addprefix format-,$(CARGO_BINS)) format-py  ## cargo fmt + ruff format
