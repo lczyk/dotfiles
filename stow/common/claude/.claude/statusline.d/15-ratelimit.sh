@@ -3,6 +3,9 @@
 # or context-window %), falling back to [$N.NN] session cost when no % is
 # available (e.g. some non-Anthropic providers).
 
+# shellcheck source-path=SCRIPTDIR source=../statusline-colour.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"
+
 INPUT=$(cat)
 [ -z "$INPUT" ] && exit 0
 
@@ -38,7 +41,7 @@ case "$pct" in
                 g=$(( (100 - pct) * 255 / 50 ))
             fi
             b=0
-            printf '\033[38;2;%d;%d;%dm[%d%%]\033[0m' "$r" "$g" "$b" "$pct"
+            sl_paint "2;$r;$g;$b" "$(printf '[%d%%]' "$pct")"
             exit 0
         fi
         ;;
@@ -52,4 +55,4 @@ esac
 printf -v cost_fmt '%.2f' "$cost" 2>/dev/null || cost_fmt="$cost"
 case "$cost_fmt" in ''|0|0.00) exit 0 ;; esac
 
-printf '\033[38;5;71m[$%s]\033[0m' "$cost_fmt"
+sl_paint '5;71' "[\$$cost_fmt]"

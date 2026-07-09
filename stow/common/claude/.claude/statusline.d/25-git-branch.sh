@@ -4,6 +4,9 @@
 # combined). <repo> is the repo-root dir name; <subpath> is the path within
 # the repo (omitted at the root). silent outside a git repo or w/out git.
 
+# shellcheck source-path=SCRIPTDIR source=../statusline-colour.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"
+
 INPUT=$(cat)
 
 if command -v jq >/dev/null 2>&1 && [ -n "$INPUT" ]; then
@@ -50,7 +53,7 @@ done
 dirty=$(git -C "$cwd" status --porcelain 2>/dev/null | grep -c '^')
 
 if [ "$dirty" -gt 0 ]; then
-    printf '\033[38;5;139m[%s/%s(%d)]\033[0m' "$pwd_name" "$branch" "$dirty"
+    sl_paint '5;139' "[$pwd_name/$branch($dirty)]"
 else
-    printf '\033[38;5;139m[%s/%s]\033[0m' "$pwd_name" "$branch"
+    sl_paint '5;139' "[$pwd_name/$branch]"
 fi

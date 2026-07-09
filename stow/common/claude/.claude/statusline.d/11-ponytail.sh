@@ -15,8 +15,11 @@
 CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 FLAG="${CONFIG_DIR}/.ponytail-active"
 SETTINGS="${CONFIG_DIR}/settings.json"
+# shellcheck source-path=SCRIPTDIR source=../statusline-colour.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"
 
-badge() { printf '\033[38;5;108m[%s]\033[0m' "$1"; }
+
+badge() { sl_paint '5;108' "[$1]"; }
 
 _ponytail_configured() {
     [ -f "$SETTINGS" ] || return 1

@@ -5,6 +5,9 @@
 # add aliases below to render shorter labels for known display names. anything
 # not in the map falls back to the raw display name, capped at 20 chars.
 
+# shellcheck source-path=SCRIPTDIR source=../statusline-colour.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"
+
 # NOTE: case-statement instead of `declare -A` -- macos ships bash 3.2 which
 # doesn't have associative arrays, and the script needs to work under it.
 alias_for() {
@@ -48,8 +51,9 @@ label=$(printf '%s' "$label" | tr -cd 'A-Za-z0-9 ._-' | head -c 20)
 
 # fable gets a loud badge -- bold white on bright red -- so there's no missing
 # which model is driving. matched on the raw name so `claude-fable-5` (id
-# fallback, no alias) lights up too.
+# fallback, no alias) lights up too. it renders verbatim, never contrast-
+# adjusted: the whole point is that it looks the same everywhere.
 case "$name" in
     *[Ff]able*) printf '\033[1;97;48;5;196m[%s]\033[0m' "$label" ;;
-    *)          printf '\033[38;5;39m[%s]\033[0m' "$label" ;;
+    *)          sl_paint '5;39' "[$label]" ;;
 esac

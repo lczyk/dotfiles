@@ -2,6 +2,9 @@
 # context-window usage badge. prints [ctx N%] coloured by usage level.
 # silent before first api call or when context_window data is absent.
 
+# shellcheck source-path=SCRIPTDIR source=../statusline-colour.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"
+
 INPUT=$(cat)
 [ -z "$INPUT" ] && exit 0
 
@@ -31,11 +34,11 @@ used=${used%%.*}
 [ -z "$used" ] && exit 0
 
 if [ "$used" -ge 80 ]; then
-    colour='\033[38;5;196m'
+    colour='5;196'
 elif [ "$used" -ge 50 ]; then
-    colour='\033[38;5;214m'
+    colour='5;214'
 else
-    colour='\033[38;5;71m'
+    colour='5;71'
 fi
 
-printf "${colour}[ctx %d%%]\033[0m" "$used"
+sl_paint "$colour" "$(printf '[ctx %d%%]' "$used")"

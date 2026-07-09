@@ -4,6 +4,9 @@
 #
 # cache file: $XDG_CACHE_HOME/claude-deepseek-balance (falls back to /tmp)
 
+# shellcheck source-path=SCRIPTDIR source=../statusline-colour.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"
+
 # only when deepseek is configured via env vars
 [ -z "$ANTHROPIC_AUTH_TOKEN" ] && exit 0
 case "${ANTHROPIC_BASE_URL:-}" in
@@ -66,9 +69,9 @@ esac
 
 # colour: green >= 5, yellow >= 1, red < 1
 if [ "$(printf '%.0f' "$balance" 2>/dev/null || echo 0)" -ge 5 ]; then
-    printf '\033[38;5;71m[$%s]\033[0m' "$balance"
+    sl_paint '5;71' "[\$$balance]"
 elif [ "$(printf '%.0f' "$balance" 2>/dev/null || echo 0)" -ge 1 ]; then
-    printf '\033[38;5;214m[$%s]\033[0m' "$balance"
+    sl_paint '5;214' "[\$$balance]"
 else
-    printf '\033[38;5;196m[$%s]\033[0m' "$balance"
+    sl_paint '5;196' "[\$$balance]"
 fi
