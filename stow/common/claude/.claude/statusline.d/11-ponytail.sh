@@ -13,7 +13,8 @@
 #   flag says off                   -> [x] (mode off, but hooks are there)
 
 CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-FLAG="${CONFIG_DIR}/.ponytail-active"
+STATE_DIR="${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}"
+FLAG="${STATE_DIR}/ponytail-active"
 SETTINGS="${CONFIG_DIR}/settings.json"
 # shellcheck source-path=SCRIPTDIR source=../statusline-colour.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"

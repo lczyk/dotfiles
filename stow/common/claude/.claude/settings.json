@@ -63,7 +63,7 @@
             "type": "command"
           },
           {
-            "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi.md\"",
+            "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
             "statusMessage": "Loading lofi style...",
             "timeout": 5,
             "type": "command"
@@ -87,7 +87,7 @@
             "type": "command"
           },
           {
-            "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi-reminder.md\"",
+            "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi-reminder.md\"",
             "statusMessage": "lofi style reminder...",
             "timeout": 5,
             "type": "command"

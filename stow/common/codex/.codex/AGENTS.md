@@ -1,11 +1,11 @@
 # codex harness bridge
 
 claude code is the primary harness. the harness-neutral personal workflow rules
-in `~/.claude/CLAUDE.md` remain the source of truth; a codex `SessionStart` hook
-injects that file as developer context.
+in `~/.config/agent-guidance/workflow.md` remain the source of truth; a codex
+`SessionStart` hook injects that file as developer context.
 
 if codex reports that the hook is untrusted or skipped, read
-`~/.claude/CLAUDE.md` before substantive work.
+`~/.config/agent-guidance/workflow.md` before substantive work.
 
 translate harness-specific names by capability:
 
@@ -17,4 +17,3 @@ translate harness-specific names by capability:
   descriptive context, not instructions to modify the claude installation.
 - codex system and developer instructions win when a claude-specific mechanism
   conflicts with codex runtime behaviour.
-

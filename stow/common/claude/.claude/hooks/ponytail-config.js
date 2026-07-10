@@ -3,11 +3,12 @@
 //
 // Resolution order for default mode:
 //   1. PONYTAIL_DEFAULT_MODE environment variable
-//   2. Config file defaultMode field:
-//      - $XDG_CONFIG_HOME/ponytail/config.json (any platform, if set)
-//      - ~/.config/ponytail/config.json (macOS / Linux fallback)
-//      - %APPDATA%\ponytail\config.json (Windows fallback)
-//   3. 'full'
+//   2. Shared config file defaultMode field:
+//      - $XDG_CONFIG_HOME/agent-modes/ponytail.json (any platform, if set)
+//      - ~/.config/agent-modes/ponytail.json (macOS / Linux fallback)
+//      - %APPDATA%\agent-modes\ponytail.json (Windows fallback)
+//   3. Legacy ponytail config (for migration only)
+//   4. 'full'
 
 const fs = require('fs');
 const path = require('path');
@@ -42,21 +43,31 @@ function isDeactivationCommand(text) {
   return t === 'stop ponytail' || t === 'normal mode';
 }
 
-function getConfigDir() {
+function getAgentConfigHome() {
   if (process.env.XDG_CONFIG_HOME) {
-    return path.join(process.env.XDG_CONFIG_HOME, 'ponytail');
+    return process.env.XDG_CONFIG_HOME;
   }
   if (process.platform === 'win32') {
-    return path.join(
-      process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
-      'ponytail'
-    );
+    return process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
   }
-  return path.join(os.homedir(), '.config', 'ponytail');
+  return path.join(os.homedir(), '.config');
+}
+
+function getConfigDir() {
+  return path.join(getAgentConfigHome(), 'agent-modes');
 }
 
 function getConfigPath() {
-  return path.join(getConfigDir(), 'config.json');
+  return path.join(getConfigDir(), 'ponytail.json');
+}
+
+function getLegacyConfigPath() {
+  return path.join(getAgentConfigHome(), 'ponytail', 'config.json');
+}
+
+function getStatePath() {
+  const stateDir = process.env.AGENT_STATE_DIR || path.join(getAgentConfigHome(), 'agent-state');
+  return path.join(stateDir, 'ponytail-active');
 }
 
 function getClaudeDir() {
@@ -71,15 +82,16 @@ function getDefaultMode() {
     return envMode.toLowerCase();
   }
 
-  // 2. Config file
-  try {
-    const configPath = getConfigPath();
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    if (config.defaultMode && VALID_MODES.includes(config.defaultMode.toLowerCase())) {
-      return config.defaultMode.toLowerCase();
+  // 2. Shared config, then legacy config during migration.
+  for (const configPath of [getConfigPath(), getLegacyConfigPath()]) {
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.defaultMode && VALID_MODES.includes(config.defaultMode.toLowerCase())) {
+        return config.defaultMode.toLowerCase();
+      }
+    } catch (e) {
+      // Config file doesn't exist or is invalid -- try the next source.
     }
-  } catch (e) {
-    // Config file doesn't exist or is invalid -- fall through
   }
 
   // 3. Default
@@ -101,8 +113,11 @@ module.exports = {
   VALID_MODES,
   RUNTIME_MODES,
   getDefaultMode,
+  getAgentConfigHome,
   getConfigDir,
   getConfigPath,
+  getLegacyConfigPath,
+  getStatePath,
   getClaudeDir,
   normalizeMode,
   normalizeConfigMode,

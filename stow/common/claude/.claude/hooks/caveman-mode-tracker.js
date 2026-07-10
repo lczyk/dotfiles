@@ -7,16 +7,13 @@
 // Inspects user input for /caveman commands and writes mode to flag file
 
 const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { getDefaultMode, safeWriteFlag, readFlag, VALID_MODES } = require('./caveman-config');
+const { getDefaultMode, getStatePath, safeWriteFlag, readFlag, VALID_MODES } = require('./caveman-config');
 
 // Modes handled by their own slash commands (/caveman-commit, etc.) -- not
 // selectable via /caveman <arg>.
 const INDEPENDENT_MODES = new Set(['commit', 'compress']);
 
-const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-const flagPath = path.join(claudeDir, '.caveman-active');
+const flagPath = getStatePath();
 
 let input = '';
 process.stdin.on('data', chunk => { input += chunk; });

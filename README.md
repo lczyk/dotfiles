@@ -44,14 +44,25 @@ caveat: needs `jq`, and the filter def must be live (`make stow`) before committ
 
 ## agent harnesses
 
-claude code is the primary harness. its `~/.claude/CLAUDE.md` remains the
-source of truth for harness-neutral workflow instructions. opencode and codex
-are secondary harnesses that adapt those rules and share the safety hooks under
-`~/.config/agent-hooks/`.
+claude code is the primary harness. harness-neutral sources live under
+`~/.config/agent-*`; the claude, codex, and opencode packages are thin adapters
+around them:
 
-the codex stow package manages `~/.codex/AGENTS.md`, `~/.codex/hooks.json`, and
-`~/.codex/config.toml`. codex writes machine-local project trust, tui onboarding
-state, hook trust hashes, and the `/model` picker choice into the live config.
+- `agent-guidance` -- workflow rules.
+- `agent-styles` -- lofi and language-specific style guides.
+- `agent-skills` -- portable skills and their licence notices.
+- `agent-modes` -- shared mode defaults.
+- `agent-state` -- runtime mode state, created on demand and not tracked.
+- `agent-hooks` -- shared safety hooks.
+
+claude and codex skill paths are symlinks to `agent-skills`; opencode reads the
+same canonical caveman skill directly. status lines, hook definitions, and
+plugin implementations remain harness-specific.
+
+the codex stow package manages `~/.codex/AGENTS.md`, `~/.codex/hooks.json`,
+`~/.codex/skills/`, and `~/.codex/config.toml`. codex writes machine-local
+project trust, tui onboarding state, hook trust hashes, and the `/model` picker
+choice into the live config.
 the `codexcfg` git clean filter (also `required`, same hard-fail guarantee as
 `claudecfg`) removes those from the committed version while retaining them in
 the live file. run `make normalize-codex-config` after adding another transient

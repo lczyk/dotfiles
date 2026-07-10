@@ -10,7 +10,7 @@ import path from "node:path";
 //     plus a statusline badge. opencode collapses this to one plugin:
 //       chat.message                     -> toggle mode from /caveman <mode>
 //       experimental.chat.system.transform -> inject ruleset every turn
-//   - source of truth is the shared SKILL.md, reused from the claude stow pkg.
+//   - source of truth is the shared agent-skills package.
 //   - commit/compress modes and the statusline badge are claude-only; skipped.
 //     NOTE: add an opencode command if /caveman-commit is ever wanted here.
 // ---------------------------------------------------------------------------
@@ -18,14 +18,15 @@ import path from "node:path";
 const VALID = ["lite", "full", "ultra"] as const;
 type Mode = (typeof VALID)[number];
 
-const FLAG = path.join(os.homedir(), ".config", "opencode", ".caveman-active");
-const SKILL = path.join(
-  os.homedir(),
-  ".claude",
-  "skills",
-  "caveman",
-  "SKILL.md",
-);
+const CONFIG_HOME = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+const STATE_DIR = process.env.AGENT_STATE_DIR || path.join(CONFIG_HOME, "agent-state");
+const FLAG = path.join(STATE_DIR, "caveman-active");
+const SKILL = path.join(CONFIG_HOME, "agent-skills", "caveman", "SKILL.md");
+
+function writeMode(mode: Mode): void {
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  fs.writeFileSync(FLAG, mode, { mode: 0o600 });
+}
 
 function readMode(): Mode | null {
   try {
@@ -72,11 +73,11 @@ export default (async () => {
       if (prompt.startsWith("/caveman")) {
         const arg = prompt.split(/\s+/)[1] ?? "";
         if (!arg) {
-          fs.writeFileSync(FLAG, "full");
+          writeMode("full");
         } else if (arg === "off" || arg === "stop" || arg === "disable") {
           try { fs.unlinkSync(FLAG); } catch {}
         } else if ((VALID as readonly string[]).includes(arg)) {
-          fs.writeFileSync(FLAG, arg);
+          writeMode(arg as Mode);
         }
         return;
       }

@@ -37,12 +37,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat \"$HOME/.claude/CLAUDE.md\"",
+            "command": "cat \"$HOME/.config/agent-guidance/workflow.md\"",
             "statusMessage": "Loading shared agent instructions..."
           },
           {
             "type": "command",
-            "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi.md\"",
+            "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
             "statusMessage": "Loading lofi style..."
           }
         ]
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi-reminder.md\"",
+            "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi-reminder.md\"",
             "statusMessage": "Loading lofi style reminder..."
           }
         ]

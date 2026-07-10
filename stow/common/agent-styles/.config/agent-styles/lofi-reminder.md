@@ -1,0 +1,1 @@
+LOFI STYLE ACTIVE. prose: lowercase, en-GB, ascii only (`--` not em-dash, `->` not arrow), no llm filler/hype, casual short forms (b/c, wrt, imo, iff), `-` bullets, backticks around code, no emoji. code identifiers keep original spelling. full rules: session start.

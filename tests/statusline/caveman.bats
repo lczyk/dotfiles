@@ -7,6 +7,7 @@ setup() {
     unset ALACRITTY_WINDOW_ID CLAUDE_STATUSLINE_BG
     BADGE="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/statusline.d/10-caveman.sh"
     export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude"
+    export AGENT_STATE_DIR="$BATS_TEST_TMPDIR/agent-state"
     mkdir -p "$CLAUDE_CONFIG_DIR"
 }
 
@@ -17,8 +18,8 @@ write_settings() {
     cat > "$CLAUDE_CONFIG_DIR/settings.json"
 }
 write_flag() {
-    mkdir -p "$(dirname "$CLAUDE_CONFIG_DIR/.caveman-active")"
-    printf '%s' "$1" > "$CLAUDE_CONFIG_DIR/.caveman-active"
+    mkdir -p "$AGENT_STATE_DIR"
+    printf '%s' "$1" > "$AGENT_STATE_DIR/caveman-active"
 }
 
 @test "[x] when settings.json is absent and flag is missing" {
@@ -107,8 +108,8 @@ write_flag() {
 @test "refuses symlink flag" {
     write_settings <<<'{"enabledPlugins":{"caveman@caveman":true}}'
     write_flag "full"
-    mv "$CLAUDE_CONFIG_DIR/.caveman-active" "$CLAUDE_CONFIG_DIR/.caveman-real"
-    ln -s "$CLAUDE_CONFIG_DIR/.caveman-real" "$CLAUDE_CONFIG_DIR/.caveman-active"
+    mv "$AGENT_STATE_DIR/caveman-active" "$AGENT_STATE_DIR/caveman-real"
+    ln -s "$AGENT_STATE_DIR/caveman-real" "$AGENT_STATE_DIR/caveman-active"
     run bash -c "echo '{}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
     [ "$out" = "[x]" ]

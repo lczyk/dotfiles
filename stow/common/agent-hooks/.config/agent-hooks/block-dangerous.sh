@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse hook for the Bash tool. blocks dangerous / out-of-bounds
-# operations per the rules in ~/.claude/CLAUDE.md. exit 2 to block.
+# operations per the rules in ~/.config/agent-guidance/workflow.md. exit 2 to block.
 #
 # categories:
 #   - destructive / history-rewriting git

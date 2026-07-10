@@ -87,7 +87,7 @@ normalize-codex-config:  ## Restage config.toml through the codexcfg clean filte
 		|| echo "$(CODEX_CONFIG) restaged -- commit to record"
 
 .PHONY: test
-test: test-cargo test-hooks test-statusline test-fish test-debx test-git test-py test-clc  ## Run all tests (rust + bats + pytest)
+test: test-cargo test-hooks test-agents test-statusline test-fish test-debx test-git test-py test-clc  ## Run all tests (rust + bats + pytest)
 
 .PHONY: test-cargo
 test-cargo: $(addprefix test-cargo-,$(CARGO_BINS))  ## cargo test all rust binaries
@@ -99,6 +99,10 @@ test-cargo-%:
 .PHONY: test-hooks
 test-hooks:  ## Run bats tests for shell hooks
 	bats tests/hooks/
+
+.PHONY: test-agents
+test-agents:  ## Run bats tests for shared agent assets
+	bats tests/agents/
 
 .PHONY: test-statusline
 test-statusline:  ## Run bats tests for claude statusline

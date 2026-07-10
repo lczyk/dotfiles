@@ -1,17 +1,11 @@
 const fs = require('fs');
-const path = require('path');
-const { getClaudeDir, normalizeMode } = require('./ponytail-config');
+const { getStatePath, normalizeMode } = require('./ponytail-config');
 const { safeWriteFlag, readFlagRaw } = require('./flag-io');
 
-const STATE_FILE = '.ponytail-active';
 const isCopilot = Boolean(process.env.COPILOT_PLUGIN_DATA);
 const isCodex = !isCopilot && Boolean(process.env.PLUGIN_DATA);
 
-let stateDir = getClaudeDir();
-if (isCodex) stateDir = process.env.PLUGIN_DATA;
-if (isCopilot) stateDir = process.env.COPILOT_PLUGIN_DATA;
-
-const statePath = path.join(stateDir, STATE_FILE);
+const statePath = getStatePath();
 
 function setMode(mode) {
   safeWriteFlag(statePath, mode);

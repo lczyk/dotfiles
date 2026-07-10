@@ -13,10 +13,10 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { getDefaultMode, safeWriteFlag } = require('./caveman-config');
+const { getDefaultMode, getSkillPath, getStatePath, safeWriteFlag } = require('./caveman-config');
 
 const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-const flagPath = path.join(claudeDir, '.caveman-active');
+const flagPath = getStatePath();
 const settingsPath = path.join(claudeDir, 'settings.json');
 
 const mode = getDefaultMode();
@@ -40,12 +40,10 @@ if (INDEPENDENT_MODES.has(mode)) {
 }
 
 // Read SKILL.md -- the single source of truth for caveman behavior.
-// __dirname = ~/.claude/hooks/, SKILL.md at ~/.claude/skills/caveman/SKILL.md
+// SKILL.md lives at ~/.config/agent-skills/caveman/SKILL.md.
 let skillContent = '';
 try {
-  skillContent = fs.readFileSync(
-    path.join(__dirname, '..', 'skills', 'caveman', 'SKILL.md'), 'utf8'
-  );
+  skillContent = fs.readFileSync(getSkillPath(), 'utf8');
 } catch (e) { /* will use fallback below */ }
 
 let output;
