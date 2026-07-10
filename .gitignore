@@ -12,3 +12,7 @@ settings.local.json
 # so re-include the stow package. the settings.local.json rule above still hides
 # the machine-local override inside it.
 !stow/common/claude/.claude/
+
+# codex runtime state is globally ignored; this package contains the tracked
+# instruction, hook, and filtered config payload.
+!stow/common/codex/.codex/

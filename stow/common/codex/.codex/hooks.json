@@ -1,0 +1,63 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.config/agent-hooks/block-dangerous.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.config/agent-hooks/discourage-bare-tail.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-log-suffix.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\" --paths-from-patch"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat \"$HOME/.claude/CLAUDE.md\"",
+            "statusMessage": "Loading shared agent instructions..."
+          },
+          {
+            "type": "command",
+            "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi.md\"",
+            "statusMessage": "Loading lofi style..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f \"$HOME/.claude/.lofi-off\" ] || cat \"$HOME/.claude/styles/lofi-reminder.md\"",
+            "statusMessage": "Loading lofi style reminder..."
+          }
+        ]
+      }
+    ]
+  }
+}
