@@ -3,6 +3,7 @@
 CARGO_BINS := peek time_fuzzer funnel mosaic
 CLC_DIR    := tools/claude-commit
 CLAUDE_SETTINGS := stow/common/claude/.claude/settings.json
+CODEX_CONFIG    := stow/common/codex/.codex/config.toml
 
 # profile detection: mac (Darwin) / armstrong (headless) / x1 (Linux). override via `PROFILE=...`.
 UNAME_S := $(shell uname -s)
@@ -78,8 +79,15 @@ normalize-claude-settings:  ## Restage settings.json through the claudecfg clean
 		&& echo "$(CLAUDE_SETTINGS) already normalized" \
 		|| echo "$(CLAUDE_SETTINGS) restaged -- commit to record"
 
+.PHONY: normalize-codex-config
+normalize-codex-config:  ## Restage config.toml through the codexcfg clean filter (drops transient tables)
+	git add --renormalize $(CODEX_CONFIG)
+	@git diff --cached --quiet -- $(CODEX_CONFIG) \
+		&& echo "$(CODEX_CONFIG) already normalized" \
+		|| echo "$(CODEX_CONFIG) restaged -- commit to record"
+
 .PHONY: test
-test: test-cargo test-hooks test-statusline test-fish test-debx test-py test-clc  ## Run all tests (rust + bats + pytest)
+test: test-cargo test-hooks test-statusline test-fish test-debx test-git test-py test-clc  ## Run all tests (rust + bats + pytest)
 
 .PHONY: test-cargo
 test-cargo: $(addprefix test-cargo-,$(CARGO_BINS))  ## cargo test all rust binaries
@@ -103,6 +111,10 @@ test-fish:  ## Run bats tests for fish helpers
 .PHONY: test-debx
 test-debx:  ## Run bats tests for debx
 	bats tests/debx/
+
+.PHONY: test-git
+test-git:  ## Run bats tests for git filters
+	bats tests/git/
 
 .PHONY: test-py
 test-py:  ## Run pytest for python scripts
