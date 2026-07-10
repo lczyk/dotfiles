@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 # tests for stow/common/agent-hooks/.config/agent-hooks/enforce-tmp-ai.sh
-# the hook reads claude-code's PreToolUse JSON on stdin and exits 2 to block
-# any creation of a /tmp file outside /tmp/ai/. two channels: Bash
-# (redirects / tee / mktemp) and Write|Edit|NotebookEdit (file_path).
+# the hook reads a PreToolUse JSON object on stdin and exits 2 to block any
+# write to a /tmp file outside /tmp/ai/. supported channels: shell commands
+# (redirects / tee / mktemp), direct file paths, and patch headers.
 
 setup() {
     HOOK="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/enforce-tmp-ai.sh"
@@ -20,6 +20,14 @@ fire_write() {
     local path="$1"
     printf '{"tool_input":{"file_path":%s}}' "$(printf '%s' "$path" | jq -Rs .)" \
         | "$HOOK"
+}
+
+# fire a patch payload. the semantic flag tells the hook that command contains
+# patch text rather than shell source.
+fire_patch() {
+    local patch="$1"
+    printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$patch" | jq -Rs .)" \
+        | "$HOOK" --paths-from-patch
 }
 
 # -- Bash: blocked redirects outside /tmp/ai ------------------------
@@ -131,6 +139,57 @@ fire_write() {
 
 @test "blocks Write to /tmp/aiette (prefix lookalike)" {
     run fire_write "/tmp/aiette/foo"
+    [ "$status" -eq 2 ]
+}
+
+# -- Patch: paths come from patch headers -----------------------------------
+
+@test "blocks patch Add File under /tmp" {
+    run fire_patch $'*** Begin Patch\n*** Add File: /tmp/note.md\n+text\n*** End Patch'
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks patch Update File under /private/tmp" {
+    run fire_patch $'*** Begin Patch\n*** Update File: /private/tmp/note.md\n@@\n-old\n+new\n*** End Patch'
+    [ "$status" -eq 2 ]
+}
+
+@test "allows patch Delete File under /tmp" {
+    # deletes aren't scratch creation -- same stance as reads
+    run fire_patch $'*** Begin Patch\n*** Delete File: /tmp/stray.md\n*** End Patch'
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks patch Move to under /tmp" {
+    run fire_patch $'*** Begin Patch\n*** Update File: note.md\n*** Move to: /tmp/note.md\n*** End Patch'
+    [ "$status" -eq 2 ]
+}
+
+@test "allows patch paths under /tmp/ai" {
+    run fire_patch $'*** Begin Patch\n*** Add File: /tmp/ai/note.md\n+text\n*** End Patch'
+    [ "$status" -eq 0 ]
+}
+
+@test "allows patch paths in the project tree" {
+    run fire_patch $'*** Begin Patch\n*** Update File: src/main.rs\n@@\n-old\n+new\n*** End Patch'
+    [ "$status" -eq 0 ]
+}
+
+@test "patch mode ignores shell-looking text in file contents" {
+    run fire_patch $'*** Begin Patch\n*** Update File: README.md\n@@\n-old\n+cmd > /tmp/not-a-write-by-the-hook.md\n*** End Patch'
+    [ "$status" -eq 0 ]
+}
+
+@test "rejects unknown input-mode flags" {
+    run "$HOOK" --codex </dev/null
+    [ "$status" -eq 2 ]
+}
+
+@test "rejects unknown flags before reading stdin" {
+    # flag parsing precedes the stdin read: on a slow-closing pipe the hook
+    # must exit immediately, not sit in `cat` until the feeder finishes.
+    # exit 99 if it took the slow path.
+    run bash -c '"$1" --codex < <(sleep 10); rc=$?; (( SECONDS < 5 )) || exit 99; exit $rc' _ "$HOOK"
     [ "$status" -eq 2 ]
 }
 
