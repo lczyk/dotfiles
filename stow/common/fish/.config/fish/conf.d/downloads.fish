@@ -19,7 +19,11 @@ end
 
 # Unpack recently downloaded archive here
 function urd
-    set P (/usr/bin/env ls -td ~/Downloads/* | head -n1)
+    set P (find ~/Downloads -mindepth 1 -maxdepth 1 -type f -printf '%T@ %p\n' | sort -nr | string replace -r '^[^ ]+ ' '' | head -n1)
+    if test (count $P) -eq 0; or not test -f "$P"
+        echo "no downloaded file found" >&2
+        return 1
+    end
     set F (basename "$P")
     set TMP (mktemp -d)
 
@@ -30,23 +34,47 @@ function urd
     set extracted 0
 
     if string match -q '*gzip compressed*' "$FTYPE"
-        gunzip -c "$P" > "$TMP/_inner"
+        gunzip -c "$P" > "$TMP/_inner"; or begin
+            rm -rf "$TMP"
+            return 1
+        end
     else if string match -q '*bzip2 compressed*' "$FTYPE"
-        bunzip2 -c "$P" > "$TMP/_inner"
+        bunzip2 -c "$P" > "$TMP/_inner"; or begin
+            rm -rf "$TMP"
+            return 1
+        end
     else if string match -q '*XZ compressed*' "$FTYPE"
-        unxz -c "$P" > "$TMP/_inner"
+        unxz -c "$P" > "$TMP/_inner"; or begin
+            rm -rf "$TMP"
+            return 1
+        end
     else if string match -q '*Zstandard compressed*' "$FTYPE"
-        zstd -dc "$P" > "$TMP/_inner"
+        zstd -dc "$P" > "$TMP/_inner"; or begin
+            rm -rf "$TMP"
+            return 1
+        end
     else if string match -q '*tar archive*' "$FTYPE"
-        cp "$P" "$TMP/_inner"
+        cp "$P" "$TMP/_inner"; or begin
+            rm -rf "$TMP"
+            return 1
+        end
     else if string match -q '*Zip archive*' "$FTYPE"
-        unzip -q "$P" -d "$TMP"
+        unzip -q "$P" -d "$TMP"; or begin
+            rm -rf "$TMP"
+            return 1
+        end
         set extracted 1
     else if string match -q '*7-zip archive*' "$FTYPE"
-        7z x "$P" -o"$TMP" -y > /dev/null
+        7z x "$P" -o"$TMP" -y > /dev/null; or begin
+            rm -rf "$TMP"
+            return 1
+        end
         set extracted 1
     else if string match -q '*RAR archive*' "$FTYPE"
-        unrar x "$P" "$TMP/" > /dev/null
+        unrar x "$P" "$TMP/" > /dev/null; or begin
+            rm -rf "$TMP"
+            return 1
+        end
         set extracted 1
     else
         echo "not an archive: $F" >&2
@@ -57,15 +85,27 @@ function urd
     if test $extracted -eq 0
         set INNER_TYPE (file -b "$TMP/_inner")
         if string match -q '*tar archive*' "$INNER_TYPE"
-            tar -xf "$TMP/_inner" -C "$TMP"
+            tar -xf "$TMP/_inner" -C "$TMP"; or begin
+                rm -rf "$TMP"
+                return 1
+            end
         else
             mv "$TMP/_inner" "$TMP/"(string replace -r '\.[^.]+$' '' "$F")
         end
         rm -f "$TMP/_inner"
     end
 
-    for item in $TMP/*
-        mv $item .
+    set items (find "$TMP" -mindepth 1 -maxdepth 1 -print)
+    if test (count $items) -eq 0
+        echo "archive is empty: $F" >&2
+        rm -rf "$TMP"
+        return 1
+    end
+    for item in $items
+        mv -v -- "$item" .; or begin
+            rm -rf "$TMP"
+            return 1
+        end
     end
     rm -rf "$TMP"
 end
