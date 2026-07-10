@@ -40,7 +40,32 @@ claude-code rewrites transient keys (`effortLevel`, `model`, `theme`, `tui`, `vo
 
 to add a newly-discovered transient key: append it to the `del(...)` list in the filter def, then `make normalize-claude-settings` and commit. the make target is idempotent -- restages the file through the filter, no-op if already clean.
 
-caveat: needs `jq`, and the filter def must be live (`make stow`) before committing that file from a fresh machine -- otherwise the stripped keys leak back into the tracked copy.
+caveat: needs `jq`, and the filter def must be live (`make stow`) before committing that file from a fresh machine. the filter is marked `required`, so a missing def hard-fails `git add` rather than silently staging the raw file with the transient keys still in it.
+
+## agent harnesses
+
+claude code is the primary harness. its `~/.claude/CLAUDE.md` remains the
+source of truth for harness-neutral workflow instructions. opencode and codex
+are secondary harnesses that adapt those rules and share the safety hooks under
+`~/.config/agent-hooks/`.
+
+the codex stow package manages `~/.codex/AGENTS.md`, `~/.codex/hooks.json`, and
+`~/.codex/config.toml`. codex writes machine-local project trust, tui onboarding
+state, hook trust hashes, and the `/model` picker choice into the live config.
+the `codexcfg` git clean filter (also `required`, same hard-fail guarantee as
+`claudecfg`) removes those from the committed version while retaining them in
+the live file. run `make normalize-codex-config` after adding another transient
+table to the filter. it is a denylist: a transient table codex invents later
+ships to the repo by default until added to the filter.
+
+after `make stow`, start codex and open `/hooks` to review and trust the stowed
+hook definitions. codex records trust against each definition's hash, so repeat
+that review after hook configuration changes.
+
+caveat: there is no smudge filter, so any checkout that rewrites `config.toml`
+(`git checkout` / `restore` / `stash pop`) replaces the live file with the
+stripped version -- project trust, hook trust hashes, and the model pin are
+lost. codex re-prompts for trust; harmless but noisy.
 
 
 # todo
