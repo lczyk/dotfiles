@@ -42,6 +42,12 @@
           },
           {
             "type": "command",
+            "command": "node \"$HOME/.claude/hooks/caveman-activate.js\"",
+            "timeout": 5,
+            "statusMessage": "Loading caveman mode..."
+          },
+          {
+            "type": "command",
             "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
             "statusMessage": "Loading lofi style..."
           }
@@ -51,6 +57,12 @@
     "UserPromptSubmit": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/caveman-mode-tracker.js\"",
+            "timeout": 5,
+            "statusMessage": "Tracking caveman mode..."
+          },
           {
             "type": "command",
             "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi-reminder.md\"",
