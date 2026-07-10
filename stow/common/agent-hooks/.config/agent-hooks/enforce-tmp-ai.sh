@@ -3,16 +3,32 @@
 # blocks (exit 2, nudge) any creation elsewhere in /tmp. reads of existing /tmp
 # files are fine -- only writes/creation are gated.
 #
-# two channels, wired under two matchers in settings.json:
+# input channels:
 #   - Bash:   redirects (> / >>) and `tee` targeting /tmp/<not-ai>, plus
 #             bare `mktemp` (lands in /tmp/tmp.XXXX) -- require -p /tmp/ai.
 #   - Write / Edit / NotebookEdit:  tool_input.file_path under /tmp/<not-ai>.
+#   - Patch tools: pass --paths-from-patch to inspect Add / Update / Move-to
+#                  headers in tool_input.command instead of treating the
+#                  command as shell source. Delete headers are not gated --
+#                  removing a stray /tmp file isn't scratch creation.
 #
 # TODO(lczyk): edge cases need real shell parsing (documented xfail in the bats):
 #   - cp / mv / touch / install / dd of= / sed -i dest args
 #   - cd /tmp; touch foo            (relative path after cd)
 #   - $VAR-expanded paths, literal '>' inside a quoted string
 #   - tee with flags / multiple files (only the first path after tee is seen)
+
+# parse flags before consuming stdin so a bad flag fails fast instead of
+# hanging on a never-arriving payload
+PATHS_FROM_PATCH=false
+case "${1:-}" in
+    "") ;;
+    --paths-from-patch) PATHS_FROM_PATCH=true ;;
+    *)
+        printf 'unknown option: %s\n' "$1" >&2
+        exit 2
+        ;;
+esac
 
 INPUT=$(cat)
 
@@ -38,8 +54,21 @@ if [[ -n "$FILE" ]]; then
     under_ai "$FILE" || bad+=("$FILE")
 fi
 
+# -- channel: patch command ---------------------------------------------
+if [[ "$PATHS_FROM_PATCH" == true && -n "$CMD" ]]; then
+    while IFS= read -r path; do
+        [[ -z "$path" ]] && continue
+        under_ai "$path" || bad+=("$path")
+    done < <(
+        printf '%s\n' "$CMD" |
+            sed -nE \
+                -e 's/^\*\*\* (Add|Update) File: (.*)$/\2/p' \
+                -e 's/^\*\*\* Move to: (.*)$/\1/p'
+    )
+fi
+
 # -- channel: Bash ------------------------------------------------------
-if [[ -n "$CMD" ]]; then
+if [[ "$PATHS_FROM_PATCH" == false && -n "$CMD" ]]; then
     # redirect / tee write targets in /tmp. while-read (not mapfile) for
     # bash 3.2 / macos.
     while IFS= read -r tok; do
