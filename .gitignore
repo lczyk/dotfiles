@@ -16,3 +16,7 @@ settings.local.json
 # codex runtime state is globally ignored; this package contains the tracked
 # instruction, hook, and filtered config payload.
 !stow/common/codex/.codex/
+
+# copilot runtime state is globally ignored; this package contains only the
+# tracked instruction, skill, hook, and user-settings payload.
+!stow/common/copilot/.copilot/

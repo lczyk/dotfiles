@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "node \"${COPILOT_HOME:-$HOME/.copilot}/hooks/context.js\" session-start",
+        "timeoutSec": 5
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "node \"${COPILOT_HOME:-$HOME/.copilot}/hooks/context.js\" prompt",
+        "timeoutSec": 5
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "node \"${COPILOT_HOME:-$HOME/.copilot}/hooks/pre-tool-use.js\"",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}
