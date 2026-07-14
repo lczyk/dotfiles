@@ -1,2 +1,3 @@
 stow/common/claude/.claude/settings.json filter=claudecfg
 stow/common/codex/.codex/config.toml filter=codexcfg
+stow/common/copilot/.copilot/settings.json filter=copilotcfg

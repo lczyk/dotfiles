@@ -4,6 +4,8 @@ CARGO_BINS := peek time_fuzzer funnel mosaic
 CLC_DIR    := tools/claude-commit
 CLAUDE_SETTINGS := stow/common/claude/.claude/settings.json
 CODEX_CONFIG    := stow/common/codex/.codex/config.toml
+COPILOT_SETTINGS := stow/common/copilot/.copilot/settings.json
+NORMALIZE_FILES := $(CLAUDE_SETTINGS) $(CODEX_CONFIG) $(COPILOT_SETTINGS)
 
 # profile detection: mac (Darwin) / armstrong (headless) / x1 (Linux). override via `PROFILE=...`.
 UNAME_S := $(shell uname -s)
@@ -72,19 +74,12 @@ list-stow:  ## List dotfile packages discovered for stow
 	@echo "$(PROFILE):"
 	@for d in $(PROFILE_DIRS); do echo "  $$d"; done
 
-.PHONY: normalize-claude-settings
-normalize-claude-settings:  ## Restage settings.json through the claudecfg clean filter (drops transient keys)
-	git add --renormalize $(CLAUDE_SETTINGS)
-	@git diff --cached --quiet -- $(CLAUDE_SETTINGS) \
-		&& echo "$(CLAUDE_SETTINGS) already normalized" \
-		|| echo "$(CLAUDE_SETTINGS) restaged -- commit to record"
-
-.PHONY: normalize-codex-config
-normalize-codex-config:  ## Restage config.toml through the codexcfg clean filter (drops transient tables)
-	git add --renormalize $(CODEX_CONFIG)
-	@git diff --cached --quiet -- $(CODEX_CONFIG) \
-		&& echo "$(CODEX_CONFIG) already normalized" \
-		|| echo "$(CODEX_CONFIG) restaged -- commit to record"
+.PHONY: normalize
+normalize:  ## Restage filtered agent settings and config
+	git add --renormalize $(NORMALIZE_FILES)
+	@git diff --cached --quiet -- $(NORMALIZE_FILES) \
+		&& echo "agent settings already normalized" \
+		|| echo "agent settings restaged -- commit to record"
 
 .PHONY: test
 test: test-cargo test-hooks test-agents test-statusline test-fish test-debx test-git test-py test-clc  ## Run all tests (rust + bats + pytest)

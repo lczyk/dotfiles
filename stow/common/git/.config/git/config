@@ -50,6 +50,12 @@ required = true
 	smudge = cat
 	required = true
 
+# commit only explicitly approved copilot-cli settings
+[filter "copilotcfg"]
+	clean = "jq -S '{footer, includeCoAuthoredBy, theme} | with_entries(select(.value != null))'"
+	smudge = cat
+	required = true
+
 # https://blog.gitbutler.com/how-git-core-devs-configure-git/
 
 [column]

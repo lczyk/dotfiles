@@ -1,0 +1,20 @@
+{
+  "footer": {
+    "showAgent": true,
+    "showAiUsed": true,
+    "showBranch": true,
+    "showCiStatus": true,
+    "showCodeChanges": true,
+    "showContextWindow": true,
+    "showCustom": true,
+    "showDirectory": true,
+    "showModelEffort": true,
+    "showPullRequest": true,
+    "showQuota": true,
+    "showSandbox": true,
+    "showUsername": true,
+    "showYolo": true
+  },
+  "includeCoAuthoredBy": false,
+  "theme": "default"
+}
