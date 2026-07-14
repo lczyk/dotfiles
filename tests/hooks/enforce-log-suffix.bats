@@ -1,17 +1,16 @@
 #!/usr/bin/env bats
 # tests for stow/common/agent-hooks/.config/agent-hooks/enforce-log-suffix.sh
-# the hook reads claude-code's PreToolUse JSON on stdin and exits 2 to block
-# any write under /tmp/ai/log/ whose final path component is not *.log.
+# the policy reads a neutral shell request and exits 2 to deny any write under
+# /tmp/ai/log/ whose final path component is not *.log.
 
 setup() {
     HOOK="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/enforce-log-suffix.sh"
 }
 
-# pipe a fake PreToolUse payload with the given Bash command. RE_ENGINE (if
-# exported) forces a specific regex engine; otherwise the hook auto-picks.
+# pipe a neutral shell request with the given command.
 fire() {
     local cmd="$1"
-    printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$cmd" | jq -Rs .)" \
+    printf '{"version":1,"operation":"shell","command":%s}' "$(printf '%s' "$cmd" | jq -Rs .)" \
         | "$HOOK"
 }
 

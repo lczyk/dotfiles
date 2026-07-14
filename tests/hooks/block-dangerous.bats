@@ -1,15 +1,15 @@
 #!/usr/bin/env bats
 # tests for stow/common/agent-hooks/.config/agent-hooks/block-dangerous.sh
-# the hook reads claude-code's PreToolUse JSON on stdin and exits 2 to block.
+# the policy reads a harness-neutral shell request and exits 2 to deny.
 
 setup() {
     HOOK="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/block-dangerous.sh"
 }
 
-# pipe a fake PreToolUse payload with the given Bash command.
+# pipe a neutral shell request with the given command.
 fire() {
     local cmd="$1"
-    printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$cmd" | jq -Rs .)" \
+    printf '{"version":1,"operation":"shell","command":%s}' "$(printf '%s' "$cmd" | jq -Rs .)" \
         | "$HOOK"
 }
 

@@ -1,33 +1,39 @@
 #!/usr/bin/env bats
 # tests for stow/common/agent-hooks/.config/agent-hooks/enforce-tmp-ai.sh
-# the hook reads a PreToolUse JSON object on stdin and exits 2 to block any
-# write to a /tmp file outside /tmp/ai/. supported channels: shell commands
-# (redirects / tee / mktemp), direct file paths, and patch headers.
+# the policy reads harness-neutral shell/write requests and exits 2 to deny
+# writes to /tmp outside /tmp/ai/.
 
 setup() {
     HOOK="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/enforce-tmp-ai.sh"
 }
 
-# fire a Bash payload. RE_ENGINE (if exported) forces the regex engine.
+# fire a neutral shell request.
 fire() {
     local cmd="$1"
-    printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$cmd" | jq -Rs .)" \
+    printf '{"version":1,"operation":"shell","command":%s}' "$(printf '%s' "$cmd" | jq -Rs .)" \
         | "$HOOK"
 }
 
-# fire a Write/Edit payload with the given file_path.
+# fire a neutral write request with one destination path.
 fire_write() {
     local path="$1"
-    printf '{"tool_input":{"file_path":%s}}' "$(printf '%s' "$path" | jq -Rs .)" \
+    printf '{"version":1,"operation":"write","write_paths":[%s]}' "$(printf '%s' "$path" | jq -Rs .)" \
         | "$HOOK"
 }
 
-# fire a patch payload. the semantic flag tells the hook that command contains
-# patch text rather than shell source.
+# Normalize patch destinations as a harness adapter would, then fire the policy.
 fire_patch() {
     local patch="$1"
-    printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$patch" | jq -Rs .)" \
-        | "$HOOK" --paths-from-patch
+    local paths
+
+    paths=$(
+        printf '%s\n' "$patch" |
+            sed -nE \
+                -e 's/^\*\*\* (Add|Update) File: (.*)$/\2/p' \
+                -e 's/^\*\*\* Move to: (.*)$/\1/p' |
+            jq -Rsc 'split("\n") | map(select(length > 0))'
+    )
+    printf '{"version":1,"operation":"write","write_paths":%s}' "$paths" | "$HOOK"
 }
 
 # -- Bash: blocked redirects outside /tmp/ai ------------------------
@@ -178,19 +184,6 @@ fire_patch() {
 @test "patch mode ignores shell-looking text in file contents" {
     run fire_patch $'*** Begin Patch\n*** Update File: README.md\n@@\n-old\n+cmd > /tmp/not-a-write-by-the-hook.md\n*** End Patch'
     [ "$status" -eq 0 ]
-}
-
-@test "rejects unknown input-mode flags" {
-    run "$HOOK" --codex </dev/null
-    [ "$status" -eq 2 ]
-}
-
-@test "rejects unknown flags before reading stdin" {
-    # flag parsing precedes the stdin read: on a slow-closing pipe the hook
-    # must exit immediately, not sit in `cat` until the feeder finishes.
-    # exit 99 if it took the slow path.
-    run bash -c '"$1" --codex < <(sleep 10); rc=$?; (( SECONDS < 5 )) || exit 99; exit $rc' _ "$HOOK"
-    [ "$status" -eq 2 ]
 }
 
 # -- regex engine cascade: same verdict under rg / grep / awk -----------

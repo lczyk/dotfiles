@@ -16,10 +16,11 @@ setup() {
     done
 }
 
-@test "claude and codex shims point at canonical shared sources" {
+@test "instruction and skill shims point at canonical shared sources" {
     [ "$(readlink "$REPO/stow/common/claude/.claude/CLAUDE.md")" = "../../agent-guidance/.config/agent-guidance/workflow.md" ]
+    [ "$(readlink "$REPO/stow/common/copilot/.copilot/copilot-instructions.md")" = "../../agent-guidance/.config/agent-guidance/workflow.md" ]
 
-    for harness in claude codex; do
+    for harness in claude codex copilot; do
         for skill in caveman caveman-commit grill-me lofi ponytail; do
             [ "$(readlink "$REPO/stow/common/$harness/.${harness}/skills/$skill")" = "../../../agent-skills/.config/agent-skills/$skill" ]
         done
@@ -35,7 +36,10 @@ setup() {
         "$TARGET/.claude/CLAUDE.md" \
         "$TARGET/.claude/styles/lofi.md" \
         "$TARGET/.claude/skills/caveman/SKILL.md" \
-        "$TARGET/.codex/skills/caveman/SKILL.md"; do
+        "$TARGET/.codex/skills/caveman/SKILL.md" \
+        "$TARGET/.copilot/copilot-instructions.md" \
+        "$TARGET/.copilot/skills/caveman/SKILL.md" \
+        "$TARGET/.copilot/hooks/agent-hooks.json"; do
         [ -r "$path" ]
     done
 }
@@ -44,17 +48,62 @@ setup() {
     run rg -F '$HOME/.config/agent-guidance/workflow.md' "$REPO/stow/common/codex/.codex/hooks.json"
     [ "$status" -eq 0 ]
 
-    run rg -F 'agent-styles/lofi' "$REPO/stow/common/claude/.claude/settings.json" "$REPO/stow/common/codex/.codex/hooks.json"
+    run rg -F 'agent-styles/lofi' \
+        "$REPO/stow/common/claude/.claude/settings.json" \
+        "$REPO/stow/common/codex/.codex/hooks.json" \
+        "$REPO/stow/common/copilot/.copilot/hooks/context.js"
     [ "$status" -eq 0 ]
 
     run rg -F 'agent-state' \
         "$REPO/stow/common/claude/.claude/hooks" \
         "$REPO/stow/common/claude/.claude/statusline.d" \
+        "$REPO/stow/common/copilot/.copilot/hooks" \
         "$REPO/stow/common/opencode/.config/opencode/plugin/caveman.ts"
     [ "$status" -eq 0 ]
 
-    run rg -F '.claude' "$REPO/stow/common/opencode/.config/opencode/plugin/caveman.ts"
+    run rg -F 'agent-hooks/evaluate.sh' \
+        "$REPO/stow/common/claude/.claude/hooks/safety-adapter.sh" \
+        "$REPO/stow/common/codex/.codex/hooks/safety-adapter.sh" \
+        "$REPO/stow/common/copilot/.copilot/hooks/pre-tool-use.js" \
+        "$REPO/stow/common/opencode/.config/opencode/plugin/safety.ts"
+    [ "$status" -eq 0 ]
+
+    run rg -F '.claude' \
+        "$REPO/stow/common/copilot/.copilot/hooks" \
+        "$REPO/stow/common/opencode/.config/opencode/plugin/caveman.ts"
     [ "$status" -ne 0 ]
+}
+
+@test "copilot configuration uses native user-level contracts" {
+    hooks="$REPO/stow/common/copilot/.copilot/hooks/agent-hooks.json"
+    settings="$REPO/stow/common/copilot/.copilot/settings.json"
+
+    run jq -e '
+        .version == 1 and
+        (.hooks.sessionStart | length == 1) and
+        (.hooks.userPromptSubmitted | length == 1) and
+        (.hooks.preToolUse | length == 1) and
+        ([.hooks[][] | has("hooks")] | any | not)
+    ' "$hooks"
+    [ "$status" -eq 0 ]
+
+    run jq -e '.includeCoAuthoredBy == false' "$settings"
+    [ "$status" -eq 0 ]
+}
+
+@test "copilot discovers stowed shared skills" {
+    command -v copilot >/dev/null 2>&1 || skip "copilot is not installed"
+    copilot_target="$BATS_TEST_TMPDIR/copilot-home"
+    mkdir -p "$copilot_target"
+
+    run make -C "$REPO" stow STOW_TARGET="$copilot_target"
+    [ "$status" -eq 0 ]
+
+    run env COPILOT_HOME="$copilot_target/.copilot" copilot skill list
+    [ "$status" -eq 0 ]
+    for skill in caveman caveman-commit grill-me lofi ponytail; do
+        [[ "$output" == *"$skill"* ]]
+    done
 }
 
 @test "claude mode adapters resolve the shared config and state paths" {
