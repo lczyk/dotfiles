@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse hook for the Bash tool. blocks bare `| tail` / `| head` and
-# `tail <(...)` / `head <(...)` process-substitution forms.
+# Shell-command policy. blocks bare `| tail` / `| head` and `tail <(...)` /
+# `head <(...)` process-substitution forms. exit 2 means policy denial;
+# evaluate.sh translates that into a harness-neutral verdict.
 #
 # preferred pattern:
 #   cmd 2>&1 | tee /tmp/ai/log/<name>.log | tail -N
@@ -17,7 +18,7 @@
 #   - literal `| tail` inside quoted string: git commit -m "fix | tail crash"
 
 INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 
 # bad pattern 1: piped to tail/head. word boundary via [^[:alnum:]_] / EOL.
 # `[|]` (char class) for a literal pipe.

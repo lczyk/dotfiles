@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# PreToolUse hook for the Bash tool. makes sure anything written under
-# /tmp/ai/log/ has a .log suffix, so the log dir stays greppable and
-# the discourage-bare-tail convention (tee into a .log) is consistent.
+# Shell-command policy. makes sure anything written under /tmp/ai/log/ has a
+# .log suffix, so the log dir stays greppable and the discourage-bare-tail
+# convention stays consistent. exit 2 means policy denial; evaluate.sh
+# translates that into a harness-neutral verdict.
 #
 # blocked:  a /tmp/ai/log/<file> path whose final component is not *.log
 #           e.g. /tmp/ai/log/foo.txt, /tmp/ai/log/foo
@@ -12,7 +13,7 @@
 # punctuation (;)|&<>), so each extracted token is just the path.
 
 INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 
 PAT_LOGPATH='/tmp/ai/log/[A-Za-z0-9._/-]*'
 

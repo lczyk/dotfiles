@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse hook for the Bash tool. blocks dangerous / out-of-bounds
-# operations per the rules in ~/.config/agent-guidance/workflow.md. exit 2 to block.
+# Shell-command policy. blocks dangerous / out-of-bounds operations per the
+# rules in ~/.config/agent-guidance/workflow.md. exit 2 means policy denial;
+# evaluate.sh translates that into a harness-neutral verdict.
 #
 # categories:
 #   - destructive / history-rewriting git
@@ -15,7 +16,7 @@
 # disable this hook.
 
 INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 
 # normalise before matching, so `git <subcommand>` anchors can't be dodged:
 #   - `\git push` (backslash escape) -> `git push`

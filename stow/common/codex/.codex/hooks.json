@@ -6,19 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/block-dangerous.sh\""
-          },
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/discourage-bare-tail.sh\""
-          },
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/enforce-log-suffix.sh\""
-          },
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\""
+            "command": "bash \"$HOME/.codex/hooks/safety-adapter.sh\" shell"
           }
         ]
       },
@@ -27,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$HOME/.config/agent-hooks/enforce-tmp-ai.sh\" --paths-from-patch"
+            "command": "bash \"$HOME/.codex/hooks/safety-adapter.sh\" patch"
           }
         ]
       }
