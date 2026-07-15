@@ -6,6 +6,9 @@
     "ralph-loop@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true
   },
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+  },
   "extraKnownMarketplaces": {
     "context-mode": {
       "source": {
@@ -53,6 +56,12 @@
           {
             "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
             "statusMessage": "Loading lofi style...",
+            "timeout": 5,
+            "type": "command"
+          },
+          {
+            "command": "cat \"$HOME/.claude/subagent-policy.md\"",
+            "statusMessage": "Loading subagent model policy...",
             "timeout": 5,
             "type": "command"
           }
