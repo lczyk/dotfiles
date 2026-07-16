@@ -1,12 +1,12 @@
 ---
 name: to-issue
-description: Convert the most recent conversation subject -- a researched bug, enhancement, or task -- into a single well-formatted issue in markdown, ready to post to the issue tracker. Conventional-commits-style title, body in the user's writing style.
+description: Convert the most recent conversation subject -- a researched bug, enhancement, or task -- into a single well-formatted issue in markdown, ready to post to the issue tracker. Title and body shaped the way the user actually writes issues: lowercase, freeform, repro-first, no boilerplate template. Aware of a repo's own issue form when one exists.
 disable-model-invocation: true
 ---
 
 # To Issue
 
-Turn the thing we just researched into **one** issue -- a conventional-commits-titled, markdown-formatted digest ready to paste into the issue tracker.
+Turn the thing we just researched into **one** issue -- markdown-formatted, ready to paste into the tracker, written the way the user actually writes issues.
 
 The point: after digging into a bug or enhancement, invoke this to get a correctly-shaped write-up without re-teaching the format each time.
 
@@ -21,39 +21,33 @@ Convert only the **most recent** conversation subject into an issue.
 
 Work from what's already in the conversation. If the user passed a reference (a path, an issue number or URL) as an argument, that reference *is* the subject -- fetch it and read its full body and comments.
 
-### 2. Explore the codebase (optional)
+### 2. Get the facts right (optional)
 
 If you haven't already, look at the relevant code so the issue uses the project's real names and reflects the actual state. Keep it light -- enough to get the facts and the vocabulary right, not a full audit.
 
-### 3. Draft the issue
+### 3. Check for a repo issue template
 
-**Title** -- a conventional-commits-like line: `<type>: <short subject>`, e.g. `ci: lxd prep failure`, `feat: retry on 429`, `fix: off-by-one in cursor paging`. Reuse the commit-type vocab (`feat`, `fix`, `ci`, `docs`, `refactor`, `chore`, `test`, `perf`, `bench`, `revert`, `release`, ...). Lowercase subject, no trailing full stop. It's a memory-jogger, not a description -- keep it terse and skip specific identifiers unless the identifier *is* the subject.
+Before drafting, see whether the target repo enforces its own issue form (`.github/ISSUE_TEMPLATE/`, the form that pops up when opening an issue). If it does: fill every required section, terse, and keep the real voice in the free-text fields. If it doesn't -- most upstream OSS, and all the user's own repos -- go freeform, as below. Voice constriction tracks template presence, not personal-vs-team: a template-free upstream repo gets the same freeform voice as a personal one.
 
-**Body** -- write it in the user's personal writing style: lofi (lowercase, en-GB, ascii, casual short forms like `b/c` / `w/out` / `->`). Source of truth: `~/.config/agent-styles/lofi.md`. Use the template below, trimming any section that doesn't apply:
+### 4. Draft the issue
 
-<issue-template>
+**Title** -- lowercase, no trailing full stop, a single clause under ~10 words, symptom- or action-first (all elaboration goes in the body). Backtick every command, flag, filename, package, or symbol named in the title -- e.g. `` bug: `compile-tree -no-optimize` doesn't resolve stale edges ``. Prefix with a conventional-commits-ish tag **matching whatever the target repo's recent issues use**: `bug:` (note: `bug`, *not* `fix` -- `fix:` is reserved for commits), `feat:` / `enhancement:` (interchangeable), `chore:`, optionally a disambiguating scope (`bug(26.10): ...`). If the repo has no tag convention (most third-party OSS), drop the prefix and just write a plain lowercase symptom phrase. Append `?:` when you're not even sure the report is valid (`bug?: ...`).
 
-## what / why
+**Body** -- the user's voice: lofi (lowercase everywhere incl. `i`, en-GB, ascii, casual short forms like `b/c` / `w/out` / `->`). Source of truth: `~/.config/agent-styles/lofi.md`. **No fixed template** -- shape follows what the issue actually needs:
 
-one or two lines: what's wrong (bug) or what to add (enhancement), and why it matters.
+- open **directly on the symptom / claim / context**. the first sentence states the fact. no greeting, no "i noticed", no preamble.
+- **evidence** is the load-bearing part: a minimal runnable repro (a short shell / python snippet, sometimes literally `mwe.py`), a pasted terminal transcript or log, a diff, or a quoted doc excerpt (`>` blockquote). show expected-vs-actual as an inline `// comment` in the code (`// expected 512 512, got None None`), not a separate expected/actual heading pair.
+- a **root-cause guess**, if you have one, stays hedged -- "i think", "looks like", "seems to be", trailing `...?` -- never asserted as settled unless verified.
+- **fix ideas / open questions** go as a short `-` bullet list at the very end, kept out of the main narrative.
+- **links**: a single reference inline (`see https://...`); several as a trailing bullet list of bare URLs or a `## see also` appendix.
 
-## context
+Only add headings once the body is genuinely long enough to need sectioning, and name them after the actual topic -- never generic `## steps` / `## expected` / `## actual`. A short issue (especially on a personal repo) is often just one or two sentences plus a code fence, no headings at all.
 
-where it shows up -- the component, file area, or flow, using the real names from the codebase.
+Length is bimodal: a quick observation is 1-3 sentences; a real bug report or a persuade-the-maintainer ask is several dense paragraphs plus code / log blocks -- but never padded, every sentence carries new info. Match structure to content: don't inflate a one-liner into paragraphs, and don't flatten two distinct failure modes into one blob.
 
-## evidence
+References: same-repo sibling issues as bare `#N`; never `closes #` / `fixes #` (that's a PR convention -- these are issues). @-mention a maintainer only for a direct personal ask (`hi @user! any chance you could ...`). Emoji: at most one, ironic / self-aware, and most issues have none.
 
-for a bug: repro steps, the error, expected vs actual. for an enhancement: the current gap and what triggered wanting it. drop this section if there's nothing concrete to show.
-
-## direction (optional)
-
-proposed approach or options, iff the research turned some up. not a full design -- just the lead. open questions go here too.
-
-</issue-template>
-
-Keep it tight. Avoid specific file paths or code snippets -- they go stale. Exception: when one encodes a fact more precisely than prose can (the exact error string, a failing command, a type shape), inline just that part.
-
-### 4. Hand it over
+### 5. Hand it over
 
 Output two things:
 
