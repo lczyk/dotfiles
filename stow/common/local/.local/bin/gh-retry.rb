@@ -183,6 +183,23 @@ end
 LOG_FETCH_RETRIES = 4
 LOG_FETCH_BACKOFF = 5 # seconds between empty-log retries
 
+# after `gh run rerun --failed`, gh keeps the same run id but takes a few
+# seconds to flip status away from completed. if we loop straight back into
+# wait_for_actionable it can observe the stale completed/failure state and fire
+# a second rerun immediately, burning an attempt. block until the run actually
+# leaves completed (or a bounded number of polls elapse) before trusting it.
+RESTART_POLLS = 12
+
+def wait_until_restarted(repo, run_id, poll)
+  RESTART_POLLS.times do
+    return true if state_for(repo, run_id)["status"] != "completed"
+
+    sleep poll
+  end
+  warn_ "run #{run_id} still reports completed after rerun -- proceeding anyway"
+  false
+end
+
 def failed_logs(repo, run_id)
   attempts = 0
   loop do
@@ -269,4 +286,6 @@ loop do
   end
 
   sleep delay if delay.positive?
+  # don't let the next watch iteration read the pre-rerun completed state.
+  wait_until_restarted(repo, run_id, poll)
 end
