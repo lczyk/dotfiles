@@ -91,6 +91,9 @@ if repo.nil?
   exit 2
 end
 
+# first line: the resolved run url, plain and copy-pasteable.
+warn "https://github.com/#{repo}/actions/runs/#{run_id}"
+
 patterns = ARGV.dup
 
 # --- colours ----------------------------------------------------------------
