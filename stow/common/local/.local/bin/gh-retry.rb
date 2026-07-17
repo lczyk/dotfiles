@@ -25,6 +25,7 @@ end
 retries = 3
 delay = 30
 poll = 10
+timeout = 0 # 0 = no overall deadline
 ignore_case = false
 cancel = false
 dry_run = false
@@ -54,6 +55,7 @@ parser = OptionParser.new do |o|
   o.on("-n", "--retries N", Integer, "max reruns after first failure (default #{retries})") { |v| retries = v }
   o.on("-d", "--delay SECONDS", Integer, "delay between reruns (default #{delay})") { |v| delay = v }
   o.on("-p", "--poll SECONDS", Integer, "status poll interval while watching (default #{poll})") { |v| poll = v }
+  o.on("-t", "--timeout SECONDS", Integer, "overall wall-clock deadline; abort if exceeded, e.g. when a job wedges in_progress (default: none)") { |v| timeout = v }
   o.on("-i", "--ignore-case", "case-insensitive pattern matching") { ignore_case = true }
   o.on("-c", "--cancel", "if nothing is running but queued jobs keep the run open, cancel it to force a rerun (gh can't rerun an in-progress run)") { cancel = true }
   o.on("--dry-run", "watch and report what would happen, but stop before the first write action (rerun/cancel)") { dry_run = true }
@@ -148,10 +150,13 @@ end
 #   :retry     -- run completed with failures; safe to rerun --failed now
 #   :cancel    -- (cancel mode only) nothing running + failures, but queued jobs
 #                 keep the run in_progress; caller must cancel to force a rerun
+#   :timeout   -- the overall deadline passed while still waiting (e.g. a job
+#                 wedged in_progress and never returned)
 #   <other>    -- run completed, not green, nothing failed to rerun (give up)
 # keeps polling while any job is still in_progress. note: gh refuses to rerun a
-# run that isn't `completed`, so by default we wait for completion.
-def wait_for_actionable(repo, run_id, poll, cancel)
+# run that isn't `completed`, so by default we wait for completion. deadline is a
+# Time or nil (no deadline).
+def wait_for_actionable(repo, run_id, poll, cancel, deadline)
   last = nil
   loop do
     data = state_for(repo, run_id)
@@ -169,6 +174,10 @@ def wait_for_actionable(repo, run_id, poll, cancel)
     # run still in_progress. in cancel mode, if nothing is actually running and
     # something has failed, the queued jobs are just blocked -- cancel to move on.
     return :cancel if cancel && running.zero? && failed.positive?
+
+    # bail if we've blown the overall wall-clock deadline while still waiting --
+    # catches a job that wedges in_progress and never completes.
+    return :timeout if deadline && Time.now >= deadline
 
     label = "#{data['status']} (#{running} running, #{failed} failed)"
     info "status: #{label}" if label != last
@@ -225,12 +234,16 @@ end
 # --- main loop --------------------------------------------------------------
 
 attempts_left = retries
+deadline = timeout.positive? ? Time.now + timeout : nil
 
 loop do
   info "watching run #{run_id} in #{repo} ..."
-  state = wait_for_actionable(repo, run_id, poll, cancel)
+  state = wait_for_actionable(repo, run_id, poll, cancel, deadline)
 
-  if state == "success"
+  if state == :timeout
+    bad "overall timeout (#{timeout}s) exceeded while waiting on run #{run_id} -- giving up"
+    exit 1
+  elsif state == "success"
     good "run #{run_id} passed"
     exit 0
   elsif state == :cancel
