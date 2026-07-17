@@ -177,9 +177,24 @@ def wait_for_actionable(repo, run_id, poll, cancel)
   end
 end
 
+# `gh run view --log-failed` can come back empty right after a run completes,
+# before the logs have materialised. retry a few times so we don't mistake
+# "logs not ready yet" for "no pattern matched".
+LOG_FETCH_RETRIES = 4
+LOG_FETCH_BACKOFF = 5 # seconds between empty-log retries
+
 def failed_logs(repo, run_id)
-  out, _ok = gh_capture(repo, "run", "view", run_id, "--log-failed")
-  out
+  attempts = 0
+  loop do
+    out, _ok = gh_capture(repo, "run", "view", run_id, "--log-failed")
+    return out unless out.strip.empty?
+
+    attempts += 1
+    return out if attempts > LOG_FETCH_RETRIES
+
+    warn_ "failed logs empty (attempt #{attempts}/#{LOG_FETCH_RETRIES}), retrying in #{LOG_FETCH_BACKOFF}s"
+    sleep LOG_FETCH_BACKOFF
+  end
 end
 
 def match_pattern(logs, patterns, ignore_case)
@@ -220,12 +235,18 @@ loop do
 
   unless patterns.empty?
     logs = failed_logs(repo, run_id)
-    matched = match_pattern(logs, patterns, ignore_case)
-    if matched.nil?
-      bad "no retry pattern matched failed logs -- not transient, giving up"
-      exit 1
+    if logs.strip.empty?
+      # logs never materialised -- we can't classify the failure. don't treat
+      # "couldn't read the logs" as "not transient"; assume transient and rerun.
+      warn_ "failed logs empty/unavailable -- can't classify, assuming transient and rerunning"
+    else
+      matched = match_pattern(logs, patterns, ignore_case)
+      if matched.nil?
+        bad "no retry pattern matched failed logs -- not transient, giving up"
+        exit 1
+      end
+      info "matched pattern: #{matched.inspect}"
     end
-    info "matched pattern: #{matched.inspect}"
   end
 
   if dry_run
