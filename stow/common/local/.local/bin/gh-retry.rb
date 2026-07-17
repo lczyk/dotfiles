@@ -113,13 +113,34 @@ def gh_stream(repo, *args)
   system("gh", *args, "--repo", repo)
 end
 
+# querying the run can itself hit a transient gh/network/api failure. since the
+# whole point of this tool is riding out flaky infra, don't let a single bad
+# poll abort the watch -- retry a few times before giving up.
+POLL_QUERY_RETRIES = 5
+POLL_QUERY_BACKOFF = 5 # seconds between failed-poll retries
+
 def state_for(repo, run_id)
-  out, ok = gh_capture(repo, "run", "view", run_id, "--json", "status,conclusion,jobs")
-  unless ok
-    bad "failed to query run #{run_id}:\n#{out}"
-    exit 1
+  attempts = 0
+  loop do
+    out, ok = gh_capture(repo, "run", "view", run_id, "--json", "status,conclusion,jobs")
+    if ok
+      begin
+        return JSON.parse(out)
+      rescue JSON::ParserError => e
+        # gh returned success but unparsable output -- treat like a transient hiccup.
+        out = "#{e.message}\n#{out}"
+        ok = false
+      end
+    end
+
+    attempts += 1
+    if attempts > POLL_QUERY_RETRIES
+      bad "failed to query run #{run_id} after #{POLL_QUERY_RETRIES} retries:\n#{out}"
+      exit 1
+    end
+    warn_ "poll failed (attempt #{attempts}/#{POLL_QUERY_RETRIES}), retrying in #{POLL_QUERY_BACKOFF}s"
+    sleep POLL_QUERY_BACKOFF
   end
-  JSON.parse(out)
 end
 
 # poll until the run is actionable. returns:
