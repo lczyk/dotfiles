@@ -26,6 +26,7 @@ retries = 3
 delay = 30
 poll = 10
 timeout = 0 # 0 = no overall deadline
+stop_patterns = []
 ignore_case = false
 cancel = false
 dry_run = false
@@ -56,6 +57,7 @@ parser = OptionParser.new do |o|
   o.on("-d", "--delay SECONDS", Integer, "delay between reruns (default #{delay})") { |v| delay = v }
   o.on("-p", "--poll SECONDS", Integer, "status poll interval while watching (default #{poll})") { |v| poll = v }
   o.on("-t", "--timeout SECONDS", Integer, "overall wall-clock deadline; abort if exceeded, e.g. when a job wedges in_progress (default: none)") { |v| timeout = v }
+  o.on("-s", "--stop-on PATTERN", "give up immediately if PATTERN appears in the failed logs, even if a retry pattern also matches (repeatable)") { |v| stop_patterns << v }
   o.on("-i", "--ignore-case", "case-insensitive pattern matching") { ignore_case = true }
   o.on("-c", "--cancel", "if nothing is running but queued jobs keep the run open, cancel it to force a rerun (gh can't rerun an in-progress run)") { cancel = true }
   o.on("--dry-run", "watch and report what would happen, but stop before the first write action (rerun/cancel)") { dry_run = true }
@@ -263,19 +265,29 @@ loop do
 
   warn_ "run #{run_id} completed with failures"
 
-  unless patterns.empty?
+  unless patterns.empty? && stop_patterns.empty?
     logs = failed_logs(repo, run_id)
     if logs.strip.empty?
       # logs never materialised -- we can't classify the failure. don't treat
       # "couldn't read the logs" as "not transient"; assume transient and rerun.
       warn_ "failed logs empty/unavailable -- can't classify, assuming transient and rerunning"
     else
-      matched = match_pattern(logs, patterns, ignore_case)
-      if matched.nil?
-        bad "no retry pattern matched failed logs -- not transient, giving up"
+      # deny-list wins: a stop-on match means a real failure, give up now even
+      # if a retry pattern also matches somewhere in the noisy log.
+      aborted = match_pattern(logs, stop_patterns, ignore_case)
+      unless aborted.nil?
+        bad "stop-on pattern matched: #{aborted.inspect} -- treating as a real failure, giving up"
         exit 1
       end
-      info "matched pattern: #{matched.inspect}"
+
+      unless patterns.empty?
+        matched = match_pattern(logs, patterns, ignore_case)
+        if matched.nil?
+          bad "no retry pattern matched failed logs -- not transient, giving up"
+          exit 1
+        end
+        info "matched pattern: #{matched.inspect}"
+      end
     end
   end
 
