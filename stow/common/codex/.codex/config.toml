@@ -1,3 +1,5 @@
+approvals_reviewer = "user"
+
 [tui]
 status_line = [
     "model-with-reasoning",

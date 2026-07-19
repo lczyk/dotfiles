@@ -1,12 +1,12 @@
-"""tests for claude_commit.generate. plain asserts -- run directly with
+"""tests for auto_commit.generate. plain asserts -- run directly with
 `python tests/test_generate.py` or via `pytest`. no fixtures, no framework."""
 
 from __future__ import annotations
 
 import json
 
-from claude_commit import generate
-from claude_commit.generate import (
+from auto_commit import generate
+from auto_commit.generate import (
     GenerateError,
     _consume,
     _fmt_file,

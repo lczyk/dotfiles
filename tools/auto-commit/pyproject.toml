@@ -3,7 +3,7 @@ requires = ["uv_build>=0.5.15,<0.9"]
 build-backend = "uv_build"
 
 [project]
-name = "claude-commit"
+name = "auto-commit"
 authors = [{ name = "Marcin Konowalczyk", email = "marcin.konow@lczyk.xyz" }]
 version = "0.1.0"
 description = "tiny cli to generate conventional-commit messages with the cheapest claude model"
@@ -14,10 +14,10 @@ dependencies = [
 ]
 
 [project.scripts]
-claude-commit = "claude_commit:cli.main"
+auto-commit = "auto_commit:cli.main"
 
 [tool.uv.build-backend]
-module-name = "claude_commit"
+module-name = "auto_commit"
 module-root = ""
 
 [tool.pytest.ini_options]

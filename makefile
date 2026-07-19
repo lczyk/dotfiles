@@ -1,7 +1,7 @@
 .SUFFIXES:
 
 CARGO_BINS := peek time_fuzzer funnel mosaic
-CLC_DIR    := tools/claude-commit
+AC_DIR     := tools/auto-commit
 CLAUDE_SETTINGS := stow/common/claude/.claude/settings.json
 CODEX_CONFIG    := stow/common/codex/.codex/config.toml
 COPILOT_SETTINGS := stow/common/copilot/.copilot/settings.json
@@ -37,17 +37,17 @@ build-%:
 	cargo build --release --manifest-path ./tools/$*/Cargo.toml
 
 .PHONY: install
-install: build sync  ## Symlink rust binaries + claude-commit launcher into ~/.local/bin
+install: build sync  ## Symlink rust binaries + auto-commit launcher into ~/.local/bin
 	mkdir -p $(HOME)/.local/bin
 	@for b in $(CARGO_BINS); do \
 		ln -sfv "$(PWD)/tools/$$b/target/release/$$b" "$(HOME)/.local/bin/$$b"; \
 	done
-	ln -sfv "$(PWD)/$(CLC_DIR)/bin/claude-commit" "$(HOME)/.local/bin/claude-commit"
-	ln -sfv "$(PWD)/$(CLC_DIR)/bin/claude-commit" "$(HOME)/.local/bin/clc"
+	ln -sfv "$(PWD)/$(AC_DIR)/bin/auto-commit" "$(HOME)/.local/bin/auto-commit"
+	ln -sfv "$(PWD)/$(AC_DIR)/bin/auto-commit" "$(HOME)/.local/bin/ac"
 
 .PHONY: sync
-sync:  ## Sync the claude-commit uv environment
-	uv sync --project $(CLC_DIR)
+sync:  ## Sync the auto-commit uv environment
+	uv sync --project $(AC_DIR)
 
 .PHONY: stow
 stow:  ## Stow common + $(PROFILE) packages into $$HOME
@@ -82,7 +82,7 @@ normalize:  ## Restage filtered agent settings and config
 		|| echo "agent settings restaged -- commit to record"
 
 .PHONY: test
-test: test-cargo test-hooks test-agents test-statusline test-fish test-debx test-git test-py test-clc  ## Run all tests (rust + bats + pytest)
+test: test-cargo test-hooks test-agents test-statusline test-fish test-debx test-git test-py test-auto-commit  ## Run all tests (rust + bats + pytest)
 
 .PHONY: test-cargo
 test-cargo: $(addprefix test-cargo-,$(CARGO_BINS))  ## cargo test all rust binaries
@@ -119,9 +119,9 @@ test-git:  ## Run bats tests for git filters
 test-py:  ## Run pytest for python scripts
 	uvx pytest tests/py/ -q
 
-.PHONY: test-clc
-test-clc:  ## Run pytest for claude-commit
-	uv run --project $(CLC_DIR) pytest $(CLC_DIR)/tests -q
+.PHONY: test-auto-commit
+test-auto-commit:  ## Run pytest for auto-commit
+	uv run --project $(AC_DIR) pytest $(AC_DIR)/tests -q
 
 .PHONY: lint
 lint: $(addprefix lint-,$(CARGO_BINS)) lint-py lint-sh  ## cargo clippy + fmt --check + ruff + shellcheck
@@ -132,9 +132,9 @@ lint-%:
 	cargo fmt --manifest-path ./tools/$*/Cargo.toml -- --check
 
 .PHONY: lint-py
-lint-py:  ## ruff check claude-commit (no writes)
-	uv run --project $(CLC_DIR) ruff check $(CLC_DIR)
-	uv run --project $(CLC_DIR) ruff format --check $(CLC_DIR)
+lint-py:  ## ruff check auto-commit (no writes)
+	uv run --project $(AC_DIR) ruff check $(AC_DIR)
+	uv run --project $(AC_DIR) ruff format --check $(AC_DIR)
 
 .PHONY: lint-sh
 lint-sh:  ## shellcheck tracked shell scripts + git hooks
@@ -148,9 +148,9 @@ format-%:
 	cargo fmt --manifest-path ./tools/$*/Cargo.toml
 
 .PHONY: format-py
-format-py:  ## ruff format + fix claude-commit
-	uv run --project $(CLC_DIR) ruff format $(CLC_DIR)
-	uv run --project $(CLC_DIR) ruff check --fix $(CLC_DIR)
+format-py:  ## ruff format + fix auto-commit
+	uv run --project $(AC_DIR) ruff format $(AC_DIR)
+	uv run --project $(AC_DIR) ruff check --fix $(AC_DIR)
 
 .PHONY: clean
 clean:  ## Remove rust build artifacts

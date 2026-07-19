@@ -20,9 +20,9 @@ from .git import (
     staged_name_status,
 )
 
-ENV_OPTS = "CLC_DEFAULT_OPTS"
-ENV_MODEL = "CLC_MODEL"
-ENV_EFFORT = "CLC_EFFORT"
+ENV_OPTS = "AC_DEFAULT_OPTS"
+ENV_MODEL = "AC_MODEL"
+ENV_EFFORT = "AC_EFFORT"
 _VALID_OPTS = {"all", "yes", "print", "push"}
 
 
@@ -46,7 +46,7 @@ def _parse_env_opts() -> dict[str, bool]:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="claude-commit",
+        prog="auto-commit",
         description="generate a conventional-commit message for staged changes using a cheap claude model",
         epilog=(
             "env vars:\n"
@@ -59,7 +59,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--version", action="version", version=f"claude-commit {__version__}")
+    p.add_argument("--version", action="version", version=f"auto-commit {__version__}")
     p.add_argument(
         "--model",
         default=os.environ.get(ENV_MODEL, DEFAULT_MODEL),
@@ -125,7 +125,7 @@ def main() -> None:
     _log.setup(verbose=args.verbose)
 
     if args.completion:
-        cmd_name = os.environ.get("CLC_INVOKED_AS") or os.path.basename(sys.argv[0]) or "claude-commit"
+        cmd_name = os.environ.get("AC_INVOKED_AS") or os.path.basename(sys.argv[0]) or "auto-commit"
         sys.stdout.write(render_completion(args.completion, cmd_name))
         return
 

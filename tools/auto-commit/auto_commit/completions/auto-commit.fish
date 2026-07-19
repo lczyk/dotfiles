@@ -1,0 +1,12 @@
+complete -c __AC_CMD__ -s h -l help -d 'Show help'
+complete -c __AC_CMD__ -l version -d 'Show version'
+complete -c __AC_CMD__ -s p -l print -d 'Print message instead of committing'
+complete -c __AC_CMD__ -s y -l yes -d 'Skip y/n confirmation'
+complete -c __AC_CMD__ -s a -l all -d 'Stage everything (git add -A) before generating'
+complete -c __AC_CMD__ -s P -l push -d 'git push after committing'
+complete -c __AC_CMD__ -l staged -d 'Only use already-staged changes'
+complete -c __AC_CMD__ -o Pav -d 'up, up, donw, down, left, right, ...'
+complete -c __AC_CMD__ -l model -d 'Model id' -r
+complete -c __AC_CMD__ -l effort -d 'Effort level' -r -f -a 'none low medium high'
+complete -c __AC_CMD__ -s v -l verbose -d 'Verbose logs (-v info, -vv debug)'
+complete -c __AC_CMD__ -l completion -d 'Print shell completion script' -r -f -a 'fish'

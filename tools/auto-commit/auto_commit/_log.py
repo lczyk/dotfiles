@@ -14,7 +14,7 @@ _COLOUR: dict[str, str] = {
     "reset": "\033[0m",
 }
 
-_log = logging.getLogger("claude-commit")
+_log = logging.getLogger("auto-commit")
 
 
 def setup(verbose: int = 0) -> None:
