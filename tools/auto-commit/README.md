@@ -28,14 +28,13 @@ auto-commit --model claude-sonnet-4-6 ...
 - `-p`, `--print` -- print to stdout instead of committing
 - `-y`, `--yes` -- skip the confirmation prompt
 - `-a`, `--all` -- stage everything (`git add -A`) before generating
-- `-P`, `--push` -- `git push` after committing (cancelled by `--print`)
 - `--staged` -- only use already-staged changes (overrides `all` in `AC_DEFAULT_OPTS`)
 - `--model <id>` -- override the model id (default: `claude-haiku-4-5`)
 - `--effort <level>` -- override effort level (default: `low`)
 
 ## env
 
-- `AC_DEFAULT_OPTS` -- comma-separated default flags. valid tokens (case-insensitive): `all`, `yes`, `print`, `push`. `yes`/`push` are mutually exclusive with `print`. unknown tokens are a hard error. cli flags override: `--staged` cancels `all`, `--print` cancels `yes`/`push`, `--yes` cancels `print`.
+- `AC_DEFAULT_OPTS` -- comma-separated default flags. valid tokens (case-insensitive): `all`, `yes`, `print`. `yes` is mutually exclusive with `print`. unknown tokens are a hard error. cli flags override: `--staged` cancels `all`, `--print` cancels `yes`, `--yes` cancels `print`.
 
   e.g. `export AC_DEFAULT_OPTS=all,yes` -- always `git add -A` and skip the prompt; pass `--staged` for a one-off commit of only what's already staged.
 

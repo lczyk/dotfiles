@@ -9,7 +9,7 @@ class GitError(RuntimeError):
     pass
 
 
-def _run(args: list[str]) -> str:
+def _run(args: list[str], *, cwd: str | None = None) -> str:
     try:
         out = subprocess.run(
             ["git", *args],
@@ -17,6 +17,7 @@ def _run(args: list[str]) -> str:
             capture_output=True,
             text=True,
             errors="replace",
+            cwd=cwd,
         )
     except FileNotFoundError as e:
         raise GitError("git not found on PATH") from e
@@ -32,7 +33,8 @@ def staged_diff() -> str:
 def staged_diff_for(paths: list[str]) -> str:
     if not paths:
         return ""
-    return _run(["diff", "--cached", "--", *paths])
+    repo_root = _run(["rev-parse", "--show-toplevel"]).strip()
+    return _run(["diff", "--cached", "--", *paths], cwd=repo_root)
 
 
 def staged_blob(path: str) -> str:
@@ -79,11 +81,3 @@ def commit(message: str) -> None:
 
 def add_all() -> None:
     _run(["add", "-A"])
-
-
-def push() -> None:
-    _run(["push"])
-
-
-def has_any_remote() -> bool:
-    return bool(_run(["remote"]).strip())

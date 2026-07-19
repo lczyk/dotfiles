@@ -105,6 +105,32 @@ class GenerateError(RuntimeError):
     pass
 
 
+class GenerateCancelled(GenerateError):
+    pass
+
+
+def _kill(proc: subprocess.Popen[str]) -> None:
+    if proc.poll() is None:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            return
+
+
+def _reap(proc: subprocess.Popen[str], *, kill: bool) -> bool:
+    """stop and reap child; return true when ctrl+c interrupted cleanup."""
+    interrupted = False
+    if kill:
+        _kill(proc)
+    while True:
+        try:
+            proc.wait()
+            return interrupted
+        except KeyboardInterrupt:
+            interrupted = True
+            _kill(proc)
+
+
 def _truncate(diff: str) -> str:
     if len(diff) <= MAX_DIFF_CHARS:
         return diff
@@ -263,13 +289,22 @@ def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
             last_phase_logged = phase
         _render_status(phase, chars, started, is_tty)
 
+    interrupted = False
     try:
         final, _ = _consume(proc.stdout, _on_phase)
+    except KeyboardInterrupt:
+        interrupted = True
     finally:
         watchdog.cancel()
-        proc.wait()
-        drain.join(timeout=1)
+        interrupted = _reap(proc, kill=interrupted) or interrupted
+        try:
+            drain.join(timeout=1)
+        except KeyboardInterrupt:
+            interrupted = True
         _clear_status(is_tty)
+
+    if interrupted:
+        raise GenerateCancelled("aborted") from None
 
     if timed_out.is_set():
         raise GenerateError(f"claude cli timed out after {CLAUDE_TIMEOUT}s")

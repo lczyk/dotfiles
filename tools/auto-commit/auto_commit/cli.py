@@ -7,13 +7,11 @@ import sys
 from . import __version__, _log
 from .completions import SHELLS as COMPLETION_SHELLS
 from .completions import render as render_completion
-from .generate import DEFAULT_EFFORT, DEFAULT_MODEL, GenerateError, generate_message
+from .generate import DEFAULT_EFFORT, DEFAULT_MODEL, GenerateCancelled, GenerateError, generate_message
 from .git import (
     GitError,
     add_all,
     commit,
-    has_any_remote,
-    push,
     staged_binary_files,
     staged_diff_for,
     staged_files,
@@ -23,13 +21,13 @@ from .git import (
 ENV_OPTS = "AC_DEFAULT_OPTS"
 ENV_MODEL = "AC_MODEL"
 ENV_EFFORT = "AC_EFFORT"
-_VALID_OPTS = {"all", "yes", "print", "push"}
+_VALID_OPTS = {"all", "yes", "print"}
 
 
 def _parse_env_opts() -> dict[str, bool]:
     raw = os.environ.get(ENV_OPTS, "")
     tokens = [t.strip().lower() for t in raw.split(",") if t.strip()]
-    opts = {"all": False, "yes": False, "print": False, "push": False}
+    opts = {"all": False, "yes": False, "print": False}
     for t in tokens:
         if t not in _VALID_OPTS:
             _log.error(f"{ENV_OPTS}: unknown token {t!r} (valid: {sorted(_VALID_OPTS)})")
@@ -37,9 +35,6 @@ def _parse_env_opts() -> dict[str, bool]:
         opts[t] = True
     if opts["yes"] and opts["print"]:
         _log.error(f"{ENV_OPTS}: 'yes' and 'print' are mutually exclusive")
-        raise SystemExit(2)
-    if opts["push"] and opts["print"]:
-        _log.error(f"{ENV_OPTS}: 'push' and 'print' are mutually exclusive")
         raise SystemExit(2)
     return opts
 
@@ -50,9 +45,9 @@ def _build_parser() -> argparse.ArgumentParser:
         description="generate a conventional-commit message for staged changes using a cheap claude model",
         epilog=(
             "env vars:\n"
-            f"  {ENV_OPTS}  comma-separated default flags. tokens: all, yes, print, push.\n"
-            "                     'yes'/'push' are mutually exclusive with 'print'. cli flags override:\n"
-            "                     --staged cancels 'all', --print cancels 'yes'/'push',\n"
+            f"  {ENV_OPTS}  comma-separated default flags. tokens: all, yes, print.\n"
+            "                     'yes' is mutually exclusive with 'print'. cli flags override:\n"
+            "                     --staged cancels 'all', --print cancels 'yes',\n"
             "                     --yes cancels 'print'.\n"
             f"  {ENV_MODEL}           default model id (overridden by --model).\n"
             f"  {ENV_EFFORT}          default effort level (overridden by --effort)."
@@ -75,7 +70,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--print",
         action="store_true",
         default=None,
-        help=f"print message instead of committing (overrides 'yes'/'push' in {ENV_OPTS})",
+        help=f"print message instead of committing (overrides 'yes' in {ENV_OPTS})",
     )
     p.add_argument(
         "-y",
@@ -83,13 +78,6 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=None,
         help=f"skip y/n confirmation (overrides 'print' in {ENV_OPTS})",
-    )
-    p.add_argument(
-        "-P",
-        "--push",
-        action="store_true",
-        default=None,
-        help="`git push` after committing (cancelled by --print)",
     )
     p.add_argument(
         "-a",
@@ -137,10 +125,6 @@ def main() -> None:
     if args.print and args.yes:
         _log.error("--print and --yes are mutually exclusive")
         raise SystemExit(2)
-    if args.print and args.push:
-        _log.error("--print and --push are mutually exclusive")
-        raise SystemExit(2)
-
     do_all = (args.all is True) or (env_opts["all"] and not args.staged)
     if args.print:
         do_print, do_yes = True, False
@@ -148,11 +132,7 @@ def main() -> None:
         do_print, do_yes = False, True
     else:
         do_print, do_yes = env_opts["print"], env_opts["yes"]
-    do_push = (args.push is True) or (env_opts["push"] and not do_print)
-
-    _log.info(
-        f"resolved: all={do_all} yes={do_yes} print={do_print} push={do_push} model={args.model} effort={args.effort}"
-    )
+    _log.info(f"resolved: all={do_all} yes={do_yes} print={do_print} model={args.model} effort={args.effort}")
 
     if do_all:
         try:
@@ -179,10 +159,6 @@ def main() -> None:
     if binary:
         _log.warn(f"{len(binary)} binary file(s) staged; only filenames will be sent: " + ", ".join(sorted(binary)))
 
-    if do_push and not has_any_remote():
-        _log.warn("no git remote configured; will skip push.")
-        do_push = False
-
     try:
         tag, body = generate_message(
             files,
@@ -192,6 +168,10 @@ def main() -> None:
             model=args.model,
             effort=args.effort,
         )
+    except GenerateCancelled:
+        print()
+        _log.warn("aborted.")
+        raise SystemExit(130) from None
     except GenerateError as e:
         _log.error(str(e))
         raise SystemExit(1) from e
@@ -224,14 +204,6 @@ def main() -> None:
         _log.error(str(e))
         raise SystemExit(2) from e
     _log.info("committed.")
-
-    if do_push:
-        try:
-            push()
-        except GitError as e:
-            _log.error(str(e))
-            raise SystemExit(2) from e
-        _log.info("pushed.")
 
 
 if __name__ == "__main__":

@@ -77,6 +77,45 @@ def test_consume_phase_transitions():
     assert phases == ["thinking", "responding", "calling grep", "done"]
 
 
+class _InterruptingStream:
+    def __iter__(self):
+        raise KeyboardInterrupt
+
+
+class _FakeProc:
+    stdout = _InterruptingStream()
+    stderr = iter(())
+
+    def __init__(self):
+        self.returncode = None
+
+    def poll(self):
+        return self.returncode
+
+    def kill(self):
+        self.returncode = -9
+
+    def wait(self):
+        return self.returncode
+
+
+def test_claude_ctrl_c_is_cancelled_without_traceback():
+    real_popen = generate.subprocess.Popen
+    real_which = generate.shutil.which
+    generate.subprocess.Popen = lambda *args, **kwargs: _FakeProc()
+    generate.shutil.which = lambda name: "/usr/bin/claude"
+    try:
+        try:
+            generate._claude("prompt", generate.COMMIT_SCHEMA, model="model", effort="none")
+        except generate.GenerateCancelled:
+            pass
+        else:
+            raise AssertionError("expected GenerateCancelled")
+    finally:
+        generate.subprocess.Popen = real_popen
+        generate.shutil.which = real_which
+
+
 # --- pure helpers ---------------------------------------------------------
 
 
