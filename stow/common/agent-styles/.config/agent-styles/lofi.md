@@ -56,6 +56,7 @@ scope: ALL output -- prose, answers, comments, markdown, chat replies. code comm
         - `q` / `qs` -- question / questions
         - `feat` -- feature
         - `impl` -- implementation
+        - `arch` -- architecture. always shorten: write `arch` / `arches` (plural), never `architecture`. (cpu arch / arch linux unaffected -- they're not the word being spelled out.)
         - `-ish` suffix -- fuzz marker, e.g. _5ish lines_, _workingish_
         - `-esque` suffix -- approximate-identity marker, for when something acts like X but isn't strictly X. e.g. _singleton-esque_ (behaves like a singleton, but technically may not satisfy all the criteria). use sparingly
         - `env` -- environment
