@@ -49,17 +49,21 @@ function main() {
 # Ubuntu 13.04 "Raring Ringtail"
 
 _DISTRO_INFO_INITIALISED=
-# map of "Warty Warthog" -> "4.10"
-declare -A _CODENAME_TO_VERSION_MAP
-# map of "4.10" -> "warty
-declare -A _VERSION_TO_CODENAME_MAP
-# map of "Warty Warthog" -> "warty"
-declare -A _CODENAME_FULL_TO_SHORT_MAP
-# array of short codenames
-declare -a _UBUNTU_CODENAMES_SHORT
+# parallel indexed arrays -- same index across all three (bash 3.2 has no associative arrays)
+_UBUNTU_VERSIONS=()         # e.g. "4.10"
+_UBUNTU_CODENAMES_SHORT=()  # e.g. "warty"
+_UBUNTU_CODENAMES_FULL=()   # e.g. "Warty Warthog"
 
 function init_distro_info_data() {
     if [ -n "${_DISTRO_INFO_INITIALISED:-}" ]; then
+        return
+    fi
+    _DISTRO_INFO_INITIALISED=1
+
+    # distro-info is ubuntu-only; on other hosts (e.g. macos) leave the arrays
+    # empty and let normalise_ubuntu_version fall back to passing input through.
+    if ! command -v distro-info >/dev/null 2>&1; then
+        info "distro-info not found; skipping version<->codename normalisation"
         return
     fi
 
@@ -72,15 +76,13 @@ function init_distro_info_data() {
             local codename_full="${BASH_REMATCH[3]}"
             local codename_short
             codename_short=$(echo "$codename_full" | awk '{print tolower($1)}')
-            _CODENAME_TO_VERSION_MAP["$codename_short"]="$version"
-            _VERSION_TO_CODENAME_MAP["$version"]="$codename_short"
-            _CODENAME_FULL_TO_SHORT_MAP["$codename_full"]="$codename_short"
+            _UBUNTU_VERSIONS+=("$version")
             _UBUNTU_CODENAMES_SHORT+=("$codename_short")
+            _UBUNTU_CODENAMES_FULL+=("$codename_full")
         else
             fatal "Failed to parse distro-info line: $line"
         fi
     done <<< "$distro_info_output"
-    _DISTRO_INFO_INITIALISED=1
 }
 
 # translate ubuntu version to short codename
@@ -90,6 +92,13 @@ function init_distro_info_data() {
 function normalise_ubuntu_version() {
     init_distro_info_data
     local ubuntu_version=$1
+    local i
+
+    # no distro-info data (e.g. on macos): pass input through verbatim, best effort
+    if [ "${#_UBUNTU_CODENAMES_SHORT[@]}" -eq 0 ]; then
+        echo "$ubuntu_version"
+        return
+    fi
 
     # check if it's already a codename
     local ubuntu_version_lc
@@ -103,20 +112,22 @@ function normalise_ubuntu_version() {
     done
 
     # otherwise, check if it's a version number
-    local codename="${_VERSION_TO_CODENAME_MAP[$ubuntu_version]}"
-    if [ -n "$codename" ]; then
-        info "Mapped version $ubuntu_version to codename $codename"
-        echo "$codename"
-        return
-    fi
+    for i in "${!_UBUNTU_VERSIONS[@]}"; do
+        if [ "${_UBUNTU_VERSIONS[$i]}" = "$ubuntu_version" ]; then
+            info "Mapped version $ubuntu_version to codename ${_UBUNTU_CODENAMES_SHORT[$i]}"
+            echo "${_UBUNTU_CODENAMES_SHORT[$i]}"
+            return
+        fi
+    done
 
     # maybe it's a full codename like "Warty Warthog"
-    codename=${_CODENAME_FULL_TO_SHORT_MAP["$ubuntu_version"]}
-    if [ -n "$codename" ]; then
-        info "Mapped full codename '$ubuntu_version' to short codename '$codename'"
-        echo "$codename"
-        return
-    fi
+    for i in "${!_UBUNTU_CODENAMES_FULL[@]}"; do
+        if [ "${_UBUNTU_CODENAMES_FULL[$i]}" = "$ubuntu_version" ]; then
+            info "Mapped full codename '$ubuntu_version' to short codename '${_UBUNTU_CODENAMES_SHORT[$i]}'"
+            echo "${_UBUNTU_CODENAMES_SHORT[$i]}"
+            return
+        fi
+    done
 
     fatal "Unknown Ubuntu version or codename: $ubuntu_version"
 }
