@@ -26,10 +26,16 @@ test -n "$__wincolor_root"; or set -g __wincolor_root ~/.local/state
 set -g __wincolor_root $__wincolor_root/wincolor
 set -g __wincolor_state $__wincolor_root/dirs
 
-# window registry: one file per live alacritty window, named by window-id,
-# contents = that window's pwd. lets any session push the right tint to *every*
+# window registry: one file per live *shell*, named `<window-id>.<pid>`,
+# contents = that shell's pwd. lets any session push the right tint to *every*
 # window via `alacritty msg config -w <id>` -- no cross-session events needed,
 # so a window blocked in a fullscreen app still gets retinted by whoever toggled.
+#
+# per-shell, not per-window, because a window can hold several fish (nested
+# shells): one file per window meant an inner shell exiting deregistered the
+# still-live window it sat in. with a file each, exit only drops its own, and
+# the window keeps the outer shell's entry. when a window has several files the
+# newest wins (see __wincolor_apply) -- that's the shell that cd'd last.
 set -g __wincolor_win $__wincolor_root/win
 
 # abbreviate $HOME -> ~ for display only (state file keeps absolute paths).
@@ -144,29 +150,80 @@ function __wincolor_match --argument p
     echo $best
 end
 
-# record this window's pwd in the registry. tty-less shells (scripts) noop --
+# record this shell's pwd in the registry. tty-less shells (scripts) noop --
 # only a real window/shell can hold a tint.
 function __wincolor_register
     set -q ALACRITTY_WINDOW_ID; or return
     isatty stdout; or return
     mkdir -p $__wincolor_win
-    pwd -P >$__wincolor_win/$ALACRITTY_WINDOW_ID
+    pwd -P >$__wincolor_win/$ALACRITTY_WINDOW_ID.$fish_pid
+end
+
+# window ids belonging to a *live* alacritty window. env alone can't tell: any
+# process that outlives its window (a nohup'd job, a recorder, a daemon started
+# from the shell) keeps ALACRITTY_WINDOW_ID in its env for good and just
+# reparents to pid 1 -- so a plain env scan reports long-dead windows as live,
+# which would pin their registry entries and keep their dirs tinted forever.
+# require the env-carrying process to still descend from a running alacritty.
+#
+# prints nothing and returns 1 when no alacritty process is visible at all --
+# "can't tell", so callers skip reaping rather than wiping the registry.
+function __wincolor_live_ids
+    set -l pids
+    set -l ppids
+    set -l roots
+    # one ps for the whole process tree. ~600 lines through a fish loop, but gc
+    # only runs on toggle/exit -- never on cd -- so it stays off the hot path.
+    for l in (ps -axo pid=,ppid=,ucomm= 2>/dev/null)
+        set -l f (string split -n ' ' -- (string trim -- $l))
+        set -a pids $f[1]
+        set -a ppids $f[2]
+        string match -qi -- '*alacritty*' "$f[3]"; and set -a roots $f[1]
+    end
+    test -n "$roots"; or return 1
+
+    # pid/id pairs for every process carrying a window id, one pass, C-side.
+    set -l pairs (ps eww -o pid=,command= 2>/dev/null \
+        | string match -gr '^\s*(\d+)\s.*ALACRITTY_WINDOW_ID=(\d+)')
+    test (count $pairs) -ge 2; or return 0
+    set -l ids
+    for i in (seq 1 2 (count $pairs))
+        set -l id $pairs[(math $i + 1)]
+        contains -- $id $ids; and continue
+        # walk up the parent chain: live iff it reaches an alacritty process.
+        # orphans stop at pid 1 (or at a pid ps no longer lists) and lose.
+        set -l p $pairs[$i]
+        while test -n "$p"
+            contains -- $p $roots; and set -a ids $id; and break
+            set -l idx (contains -i -- $p $pids); or break
+            set p $ppids[$idx]
+            contains -- $p 0 1; and break
+        end
+    end
+    test -n "$ids"; and printf '%s\n' $ids
+    return 0
 end
 
 # garbage-collect stale state. order matters: reap dead windows first so the
 # window-less-dir purge sees an accurate live set, then drop enabled dirs no
 # live window sits under, then drop dirs that no longer exist on disk.
 function __wincolor_gc
-    # reap registry files for dead windows. alacritty has no window-list cmd,
-    # so derive liveness from process env: a live window has procs carrying
-    # ALACRITTY_WINDOW_ID=<id>.
+    # reap registry files whose window is gone (see __wincolor_live_ids) or
+    # whose shell is gone (a nested fish killed without running fish_exit).
     set -g __wincolor_reaped 0
     if test -d $__wincolor_win
-        set -l live (ps eww -o command= 2>/dev/null \
-            | string match -gr 'ALACRITTY_WINDOW_ID=(\d+)' | sort -u)
+        set -l live (__wincolor_live_ids)
+        set -l known $status   # 0 = liveness is knowable, 1 = don't reap on it
+        set -l live_pids (ps -axo pid= 2>/dev/null | string trim)
         for f in $__wincolor_win/*
             test -f $f; or continue
-            if not contains -- (basename $f) $live
+            # `<window-id>.<pid>`; a name without the suffix is a pre-split
+            # entry from an older shell -- keep riding on the window check.
+            set -l parts (string split -m1 -- . (basename $f))
+            set -l dead 0
+            test $known -eq 0; and not contains -- $parts[1] $live; and set dead 1
+            set -q parts[2]; and not contains -- $parts[2] $live_pids; and set dead 1
+            if test $dead -eq 1
                 rm -f $f
                 set __wincolor_reaped (math $__wincolor_reaped + 1)
             end
@@ -174,7 +231,12 @@ function __wincolor_gc
     end
 
     test -f $__wincolor_state; or return
-    set -l live_pwds (cat $__wincolor_win/* 2>/dev/null)
+    # collected via a loop, not `cat dir/*`: an empty registry dir makes fish
+    # abort the substitution on the unmatched wildcard (and moan on stderr).
+    set -l live_pwds
+    for f in $__wincolor_win/*
+        test -f $f; and set -a live_pwds (cat $f)
+    end
     set -l keep
     for d in (cat $__wincolor_state)
         test -n "$d"; or continue
@@ -194,11 +256,19 @@ end
 # blocked windows still update. dead-window ids just no-op (msg returns 0 either
 # way -- no liveness signal -- so stale entries are harmless; fish_exit prunes).
 function __wincolor_apply
+    command -sq alacritty; or return
     test -d $__wincolor_win; or return
-    for f in $__wincolor_win/*
-        test -f $f; or continue
-        set -l id (basename $f)
-        set -l d (__wincolor_match (cat $f))
+    set -l seen
+    # newest file first, so a window with several shells registered (nested
+    # fish) takes the pwd of whichever cd'd last -- the one being driven.
+    # `command ls` because interactive configs commonly shim ls to eza, whose
+    # -t means --time and wants a value.
+    for f in (command ls -t $__wincolor_win 2>/dev/null)
+        test -f $__wincolor_win/$f; or continue
+        set -l id (string split -m1 -- . $f)[1]
+        contains -- $id $seen; and continue
+        set -a seen $id
+        set -l d (__wincolor_match (cat $__wincolor_win/$f 2>/dev/null))
         # dead windows make `alacritty msg` write BrokenPipe to stderr; swallow it
         # (fish_exit prunes stale ids, but cd can race a just-closed window).
         if test -n "$d"
@@ -244,7 +314,7 @@ function wincolor --description 'toggle/list/prune alacritty background tints'
         case prune
             __wincolor_gc
             __wincolor_apply
-            echo "wincolor: kept $__wincolor_kept dir(s), reaped $__wincolor_reaped window(s)"
+            echo "wincolor: kept $__wincolor_kept dir(s), reaped $__wincolor_reaped registration(s)"
             return
     end
 
@@ -311,10 +381,11 @@ if status is-interactive
         __wincolor_apply
     end
 
-    # drop this window's registry entry on exit, then gc + retint the rest: a
-    # closed window may have been the last one under an enabled dir.
+    # drop this shell's registry entry on exit, then gc + retint the rest: a
+    # closed window may have been the last one under an enabled dir. only this
+    # shell's file goes -- a nested fish exiting must not deregister the window.
     function __wincolor_on_exit --on-event fish_exit
-        rm -f $__wincolor_win/$ALACRITTY_WINDOW_ID
+        rm -f $__wincolor_win/$ALACRITTY_WINDOW_ID.$fish_pid
         __wincolor_gc
         __wincolor_apply
     end
