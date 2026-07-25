@@ -88,6 +88,47 @@ fire() {
     [ "$status" -eq 0 ]
 }
 
+# -- the tee must be in the SAME pipeline as the tail --------------------
+
+@test "blocks a second, un-tee'd pipeline after && " {
+    run fire "cmd | tee /tmp/ai/log/x.log | tail -5 && other | tail -5"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a second, un-tee'd pipeline after ;" {
+    run fire "cmd | tee /tmp/ai/log/x.log | tail -5; other | head -5"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a second, un-tee'd pipeline after ||" {
+    run fire "cmd | tee /tmp/ai/log/x.log | tail -5 || other | tail -5"
+    [ "$status" -eq 2 ]
+}
+
+@test "allows chained pipelines when each tees" {
+    run fire "cmd | tee /tmp/ai/log/a.log | tail -5 && other | tee /tmp/ai/log/b.log | tail -5"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a tee'd pipeline chained with a plain command" {
+    run fire "cmd | tee /tmp/ai/log/x.log | tail -5 && echo done"
+    [ "$status" -eq 0 ]
+}
+
+# -- wrapped lines must not open a hole ---------------------------------
+
+@test "blocks a pipe to tail split across lines" {
+    run fire "cmd |
+tail -5"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a line-continued pipe to tail" {
+    run fire "cmd | \\
+tail -5"
+    [ "$status" -eq 2 ]
+}
+
 # -- regex engine cascade: same verdict under rg / grep / awk -----------
 
 @test "rg engine: blocks bare tail, allows tee'd tail" {
