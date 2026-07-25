@@ -8,6 +8,8 @@
 #           e.g. /tmp/ai/log/foo.txt, /tmp/ai/log/foo
 # allowed:  *.log files, the dir itself, and subdir paths ending in *.log
 #           e.g. /tmp/ai/log/foo.log, /tmp/ai/log/ , mkdir .../log
+# allowed:  glob patterns -- they name files that already exist, so they
+#           can't create a badly-named one. e.g. ls /tmp/ai/log/run-*
 #
 # NOTE: the path-safe char class stops at whitespace, quotes, and shell
 # punctuation (;)|&<>), so each extracted token is just the path. `$` is in
@@ -22,7 +24,7 @@ COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 # shellcheck disable=SC2016  # sed script, the $ are literal
 COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\$\([^)]*\)/\$X/g; s/\$\{[^}]*\}/\$X/g')
 
-PAT_LOGPATH='/tmp/ai/log/[A-Za-z0-9._/$-]*'
+PAT_LOGPATH='/tmp/ai/log/[A-Za-z0-9._/$*?-]*'
 
 # pull out every /tmp/ai/log/<path> token, flag any non-.log file.
 # while-read (not mapfile) for bash 3.2 / macos compatibility.
@@ -31,6 +33,7 @@ while IFS= read -r tok; do
     [[ -z "$tok" ]] && continue
     final="${tok##*/}"          # basename; empty if tok ends in '/'
     [[ -z "$final" ]] && continue   # dir reference, not a file write
+    [[ "$final" == *[*?]* ]] && continue   # glob, matches what's already there
     [[ "$final" == *.log ]] && continue
     bad+=("$tok")
 done < <(printf '%s' "$COMMAND" | grep -oE -- "$PAT_LOGPATH")
