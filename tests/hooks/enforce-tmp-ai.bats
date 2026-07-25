@@ -97,6 +97,106 @@ fire_patch() {
     [ "$status" -eq 0 ]
 }
 
+# -- Bash: quoted and wrapped redirect targets --------------------------
+
+@test "blocks double-quoted redirect target" {
+    run fire "cmd > \"/tmp/out.txt\""
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks single-quoted redirect target" {
+    run fire "cmd > '/tmp/out.txt'"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks quoted tee target" {
+    run fire "cmd | tee \"/tmp/out.txt\""
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a line-continued redirect" {
+    run fire "cmd > \\
+/tmp/out.txt"
+    [ "$status" -eq 2 ]
+}
+
+@test "allows a quoted target under /tmp/ai" {
+    run fire "cmd > \"/tmp/ai/out.txt\""
+    [ "$status" -eq 0 ]
+}
+
+# -- Bash: other commands that create files -----------------------------
+
+@test "blocks touch under /tmp" {
+    run fire "touch /tmp/out.txt"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks mkdir under /tmp" {
+    run fire "mkdir -p /tmp/scratch"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks cp destination under /tmp" {
+    run fire "cp notes.md /tmp/out.md"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks mv destination under /tmp" {
+    run fire "mv notes.md /tmp/out.md"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks curl -o under /tmp" {
+    run fire "curl -o /tmp/page.html https://example.com"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks dd of= under /tmp" {
+    run fire "dd if=/dev/zero of=/tmp/blob bs=1k count=1"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks tar -C extraction into /tmp" {
+    run fire "tar -xf pkg.tar -C /tmp"
+    [ "$status" -eq 2 ]
+}
+
+@test "allows touch under /tmp/ai" {
+    run fire "touch /tmp/ai/out.txt"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows mkdir of the ai log dir" {
+    run fire "mkdir -p /tmp/ai/log"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows copying out of /tmp into the project" {
+    run fire "cp /tmp/some-existing.txt ./notes.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows cp between project paths" {
+    run fire "cp a.md b.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows curl -o into the project" {
+    run fire "curl -o page.html https://example.com"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks a .. traversal back out of /tmp/ai" {
+    run fire "cmd > /tmp/ai/../out.txt"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a .. traversal in a write path" {
+    run fire_write "/tmp/ai/log/../../out.txt"
+    [ "$status" -eq 2 ]
+}
+
 # -- Bash: mktemp must target /tmp/ai -------------------------------
 
 @test "blocks bare mktemp" {
