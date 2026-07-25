@@ -20,6 +20,11 @@
 INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 
+# fold line wraps and whitespace runs -- `cmd |<newline>tail -5` is one
+# pipeline, but a line-based grep can't see it. same fold in the sibling
+# policies; kept inline so a missing helper can't turn this into a no-op.
+COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's/  +/ /g')
+
 # bad pattern 1: piped to tail/head. word boundary via [^[:alnum:]_] / EOL.
 # `[|]` (char class) for a literal pipe.
 PAT_PIPED='[|][[:space:]]*(tail|head)([^[:alnum:]_]|$)'
@@ -32,11 +37,25 @@ PAT_PROCSUB='(^|[^[:alnum:]_])(tail|head)[[:space:]][^|]*<[(]'
 # and multi-file tee where log dir is not the first arg.
 PAT_TEE_OK='tee[[:space:]]+[^|]*/tmp/ai/log/'
 
-if printf '%s' "$COMMAND" | grep -qE -- "$PAT_PIPED" ||
-   printf '%s' "$COMMAND" | grep -qE -- "$PAT_PROCSUB"; then
-    if printf '%s' "$COMMAND" | grep -qE -- "$PAT_TEE_OK"; then
-        exit 0
-    fi
+# the tee has to be in the SAME pipeline as the tail, so check per segment:
+# `cmd | tee log | tail && other | tail` leaves the second tail bare.
+# `;`, `&&` and `||` end a pipeline; a lone `|` continues it.
+SEGMENTS=${COMMAND//&&/$'\n'}
+SEGMENTS=${SEGMENTS//||/$'\n'}
+SEGMENTS=${SEGMENTS//;/$'\n'}
+
+bare=0
+while IFS= read -r seg; do
+    [[ -z "$seg" ]] && continue
+    printf '%s' "$seg" | grep -qE -- "$PAT_PIPED" ||
+        printf '%s' "$seg" | grep -qE -- "$PAT_PROCSUB" ||
+        continue
+    printf '%s' "$seg" | grep -qE -- "$PAT_TEE_OK" && continue
+    bare=1
+    break
+done <<< "$SEGMENTS"
+
+if ((bare)); then
     cat >&2 <<'EOF'
 BLOCKED: bare `| tail` / `| head` discards the full log. use tee so it persists:
 
