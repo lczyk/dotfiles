@@ -10,12 +10,19 @@
 #           e.g. /tmp/ai/log/foo.log, /tmp/ai/log/ , mkdir .../log
 #
 # NOTE: the path-safe char class stops at whitespace, quotes, and shell
-# punctuation (;)|&<>), so each extracted token is just the path.
+# punctuation (;)|&<>), so each extracted token is just the path. `$` is in
+# the class so a `$i` inside a name doesn't cut the token short and turn
+# /tmp/ai/log/run$i.log into a bogus suffix violation.
 
 INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 
-PAT_LOGPATH='/tmp/ai/log/[A-Za-z0-9._/-]*'
+# braced expansions and command substitutions carry chars the class stops on
+# (`}`, `)`, whitespace), so collapse them to a plain `$X` placeholder first.
+# shellcheck disable=SC2016  # sed script, the $ are literal
+COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\$\([^)]*\)/\$X/g; s/\$\{[^}]*\}/\$X/g')
+
+PAT_LOGPATH='/tmp/ai/log/[A-Za-z0-9._/$-]*'
 
 # pull out every /tmp/ai/log/<path> token, flag any non-.log file.
 # while-read (not mapfile) for bash 3.2 / macos compatibility.
