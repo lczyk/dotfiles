@@ -201,6 +201,57 @@ fire() {
     [ "$status" -eq 0 ]
 }
 
+# -- whitespace must not open a hole ------------------------------------
+# a stray double space or a wrapped line is a formatting slip, not an
+# evasion -- neither may drop the fence.
+
+@test "blocks git push with a double space" {
+    run fire "git  push"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git push with a tab" {
+    run fire "git$(printf '\t')push"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh pr create with double spaces" {
+    run fire "gh  pr  create --title x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks brew install with a double space" {
+    run fire "brew  install foo"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a line-continued git push" {
+    run fire "git \\
+push"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git push on the second line of a script" {
+    run fire "cd /tmp/ai
+git push"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks npm install --global (long flag)" {
+    run fire "npm install --global foo"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git push behind --exec-path" {
+    run fire "git --exec-path=/usr/bin push"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks autossh" {
+    run fire "autossh -M 0 host"
+    [ "$status" -eq 2 ]
+}
+
 # -- benign commands ----------------------------------------------------
 
 @test "allows ls" {
