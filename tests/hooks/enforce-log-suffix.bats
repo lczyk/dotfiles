@@ -88,6 +88,35 @@ fire() {
     [ "$status" -eq 0 ]
 }
 
+# -- allowed: .log names built with shell expansions ---------------------
+
+@test "allows \$var in the middle of a .log name" {
+    run fire "for i in 1 2 3; do cmd 2>&1 | tee \"/tmp/ai/log/run\$i.log\"; done"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows \${var} in the middle of a .log name" {
+    run fire "cmd > /tmp/ai/log/run-\${i}.log"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows command substitution in the middle of a .log name" {
+    run fire "cmd | tee /tmp/ai/log/run-\$(date +%s).log"
+    [ "$status" -eq 0 ]
+}
+
+# -- blocked: expansions that don't end in .log --------------------------
+
+@test "blocks a name ending in a bare expansion" {
+    run fire "cmd > /tmp/ai/log/run\$i"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a .txt name containing an expansion" {
+    run fire "cmd | tee /tmp/ai/log/run\$i.txt"
+    [ "$status" -eq 2 ]
+}
+
 # -- allowed: the dir itself --------------------------------------------
 
 @test "allows mkdir of the log dir" {
