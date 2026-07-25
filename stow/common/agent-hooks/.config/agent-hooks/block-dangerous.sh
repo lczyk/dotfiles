@@ -18,6 +18,14 @@
 INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 
+# fold line wraps and whitespace runs before matching. every pattern below is
+# a line-based grep with literal spaces in it, so a wrapped `git \<newline>
+# push` or a stray `git  push` would otherwise walk straight past the fence.
+# folding only joins what the shell would join anyway -- it can widen a
+# pattern's reach, never narrow it. (kept inline, not sourced: a policy that
+# can't find a helper file must not degrade into allowing everything.)
+COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's/  +/ /g')
+
 # normalise before matching, so `git <subcommand>` anchors can't be dodged:
 #   - `\git push` (backslash escape) -> `git push`
 #   - `git -C <path> push` / `-c k=v` / `--git-dir=<p>` etc -- strip the
@@ -29,7 +37,7 @@ COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 # quoted 'git', read-flag-first flag soup (git branch -v -f main).
 COMMAND=${COMMAND//\\git/git}
 while :; do
-    STRIPPED=$(printf '%s' "$COMMAND" | sed -E 's/(^|[ ;|&])git[[:space:]]+(-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace)[= ][^[:space:]]+|--no-pager|-P)[[:space:]]+/\1git /')
+    STRIPPED=$(printf '%s' "$COMMAND" | sed -E 's/(^|[ ;|&])git[[:space:]]+(-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)[= ][^[:space:]]+|--no-pager|-P)[[:space:]]+/\1git /')
     [[ "$STRIPPED" == "$COMMAND" ]] && break
     COMMAND=$STRIPPED
 done
@@ -160,9 +168,8 @@ INSTALL_PATTERNS=(
     "(^|[ ;|&])pipx install"
     "(^|[ ;|&])uv pip install"
     "(^|[ ;|&])uv tool install"
-    "(^|[ ;|&])npm install -g"
-    "(^|[ ;|&])npm i -g"
-    "(^|[ ;|&])pnpm add -g"
+    "(^|[ ;|&])npm (install|i) (-g|--global)"
+    "(^|[ ;|&])pnpm add (-g|--global)"
     "(^|[ ;|&])yarn global add"
     "(^|[ ;|&])cargo install"
     "(^|[ ;|&])go install"
@@ -172,6 +179,7 @@ INSTALL_REASON="user does not allow installing software / packages"
 # crossing the local boundary into remote envs.
 REMOTE_PATTERNS=(
     "(^|[ ;|&])ssh "
+    "(^|[ ;|&])autossh "
     "(^|[ ;|&])scp "
     "kubectl exec"
     "gcloud compute ssh"
