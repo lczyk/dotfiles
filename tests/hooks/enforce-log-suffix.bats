@@ -105,6 +105,28 @@ fire() {
     [ "$status" -eq 0 ]
 }
 
+# -- allowed: glob patterns match existing files, they aren't targets -----
+
+@test "allows a trailing glob" {
+    run fire "ls /tmp/ai/log/live-*"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a glob in front of a non-.log suffix" {
+    run fire "rm /tmp/ai/log/old-*.txt"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a single-char glob" {
+    run fire "cat /tmp/ai/log/run-?.log"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a brace expansion" {
+    run fire "cat /tmp/ai/log/{a,b}.log"
+    [ "$status" -eq 0 ]
+}
+
 # -- blocked: expansions that don't end in .log --------------------------
 
 @test "blocks a name ending in a bare expansion" {
