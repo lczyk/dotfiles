@@ -19,6 +19,7 @@ setup() {
 @test "instruction and skill shims point at canonical shared sources" {
     [ "$(readlink "$REPO/stow/common/claude/.claude/CLAUDE.md")" = "../../agent-guidance/.config/agent-guidance/workflow.md" ]
     [ "$(readlink "$REPO/stow/common/copilot/.copilot/copilot-instructions.md")" = "../../agent-guidance/.config/agent-guidance/workflow.md" ]
+    [ "$(readlink "$REPO/stow/common/opencode/.config/opencode/AGENTS.md")" = "../../../agent-guidance/.config/agent-guidance/workflow.md" ]
 
     for harness in claude codex copilot; do
         for skill in caveman caveman-commit grill-me lofi ponytail; do
@@ -39,7 +40,8 @@ setup() {
         "$TARGET/.codex/skills/caveman/SKILL.md" \
         "$TARGET/.copilot/copilot-instructions.md" \
         "$TARGET/.copilot/skills/caveman/SKILL.md" \
-        "$TARGET/.copilot/hooks/agent-hooks.json"; do
+        "$TARGET/.copilot/hooks/agent-hooks.json" \
+        "$TARGET/.config/opencode/AGENTS.md"; do
         [ -r "$path" ]
     done
 }
