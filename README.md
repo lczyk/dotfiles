@@ -61,6 +61,14 @@ claude, codex, and copilot skill paths are symlinks to `agent-skills`; opencode
 reads the same canonical caveman skill directly. status lines, hook
 definitions, and plugin implementations remain harness-specific.
 
+`workflow.md` reaches each harness through that harness's native instruction
+path: `~/.claude/CLAUDE.md`, `~/.copilot/copilot-instructions.md`, and
+`~/.config/opencode/AGENTS.md` are all symlinks to it. codex has no user-level
+instruction file, so its `SessionStart` hook `cat`s the same source. the
+opencode link is deliberate rather than redundant -- without it opencode falls
+back to reading `~/.claude/CLAUDE.md`, a migration-compat path that
+`OPENCODE_DISABLE_CLAUDE_CODE` switches off.
+
 safety policies use a harness-neutral request/verdict contract through
 `~/.config/agent-hooks/evaluate.sh`. each harness adapter normalizes its native
 tool payload, invokes the evaluator, then translates a denial into that
@@ -92,6 +100,11 @@ instructions and skills are symlinks to their canonical shared sources.
 copilot-specific hooks translate native `preToolUse` requests, inject lofi and
 default mode context at `sessionStart`, and update shared mode state on
 `userPromptSubmitted`.
+
+`userPromptSubmitted` only mutates state because the copilot cli documents that
+event as `Output processed: No` -- `sessionStart` is the sole context-injection
+point. the per-turn lofi digest claude and codex receive has no copilot
+equivalent, so nothing there should emit `additionalContext`.
 
 copilot owns the rest of `~/.copilot`: auth and installed-plugin state in
 `config.json`, permissions, sessions, logs, databases, and plugin data remain
