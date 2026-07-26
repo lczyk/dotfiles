@@ -6,7 +6,9 @@ setup() {
     SHIMDIR="$BATS_TEST_TMPDIR/bin"
     mkdir -p "$SHIMDIR"
     export PATH="$SHIMDIR:$PATH"
-    unset CLAUDECODE
+    # the suite runs from inside an agent session -- clear every marker so the
+    # human-path tests below aren't testing the agent path by accident.
+    unset CLAUDECODE AGENT_SESSION OPENCODE_PID
 }
 
 # fake git: control merge-base --is-ancestor via arg (0=is-ancestor=ff, 1=non-ff).
@@ -24,10 +26,20 @@ EOF
 
 Z=0000000000000000000000000000000000000000
 
-# -- CLAUDECODE block (preserved from original) --
+# -- agent block --
 
 @test "blocks push under CLAUDECODE=1" {
     CLAUDECODE=1 run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "blocks push under AGENT_SESSION" {
+    AGENT_SESSION=1 run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "blocks push under OPENCODE_PID" {
+    OPENCODE_PID=4242 run "$HOOK"
     [ "$status" -ne 0 ]
 }
 

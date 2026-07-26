@@ -8,6 +8,9 @@ setup() {
     SHIMDIR="$BATS_TEST_TMPDIR/bin"
     mkdir -p "$SHIMDIR"
     export PATH="$SHIMDIR:$PATH"
+    # the suite runs from inside an agent session, so clear the other markers
+    # explicitly -- the human-path tests below only unset CLAUDECODE.
+    unset AGENT_SESSION OPENCODE_PID
     export CLAUDECODE=1
 }
 
@@ -41,6 +44,20 @@ EOF
 @test "rejects em-dash in added line under CLAUDECODE" {
     fake_diff $'+hello \xe2\x80\x94 world\n'
     run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "AGENT_SESSION alone takes the strict path" {
+    unset CLAUDECODE
+    fake_diff $'+hello \xe2\x80\x94 world\n'
+    AGENT_SESSION=1 run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "OPENCODE_PID alone takes the strict path" {
+    unset CLAUDECODE
+    fake_diff $'+hello \xe2\x80\x94 world\n'
+    OPENCODE_PID=4242 run "$HOOK"
     [ "$status" -ne 0 ]
 }
 

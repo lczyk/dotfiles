@@ -4,6 +4,9 @@
 setup() {
     HOOK="$BATS_TEST_DIRNAME/../../stow/common/git/.config/git/hooks/commit-msg"
     MSG="$BATS_TEST_TMPDIR/msg"
+    # the suite runs from inside an agent session, so clear the other markers
+    # explicitly -- the human-path tests below only unset CLAUDECODE.
+    unset AGENT_SESSION OPENCODE_PID
     export CLAUDECODE=1
 }
 
@@ -196,7 +199,21 @@ write_msg() { printf '%s\n' "$1" > "$MSG"; }
     [ "$status" -ne 0 ]
 }
 
-# -- CLAUDECODE gating --------------------------------------------------
+# -- agent gating -------------------------------------------------------
+
+@test "AGENT_SESSION alone takes the strict path" {
+    unset CLAUDECODE
+    write_msg "update: nope"
+    AGENT_SESSION=1 run "$HOOK" "$MSG"
+    [ "$status" -ne 0 ]
+}
+
+@test "OPENCODE_PID alone takes the strict path" {
+    unset CLAUDECODE
+    write_msg "update: nope"
+    OPENCODE_PID=4242 run "$HOOK" "$MSG"
+    [ "$status" -ne 0 ]
+}
 
 @test "non-claude run warns but exits 0 on bad subject" {
     unset CLAUDECODE
