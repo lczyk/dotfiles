@@ -37,14 +37,16 @@ caveats:
 
 ## git and `gh` permissions
 
-- **git read-only ops: no permission needed** `status`, `log`, `diff`, `show`, `blame`, `branch --list`, `remote -v`, etc. -- run freely as part of investigation.
-- **`gh` needs permission unless the prompt implies it** invocations like `gh pr view`, `gh issue view`, `gh api` count as reaching out to a remote; ask first. exception: when the prompt clearly invites it (e.g. _"look at this issue <github-link>"_, _"read the comments on PR 123"_, _"check ci status"_) -- treat that as implicit permission for the read action being requested. write `gh` ops (`gh pr create`, `gh issue create`, `gh pr comment`, etc.) follow the per-prompt explicit-permission rule below.
-- **never run write git / `gh` ops without explicit per-prompt permission** this covers `commit`, `commit --amend`, `revert`, `branch` (create/delete), `cherry-pick`, `tag`, `push`, `reset --hard`, `checkout` of files, `gh pr create`, `gh issue create`, comments / reviews / merges via `gh`, and anything else that mutates local repo state or remote github state. permission is per-prompt: granting it for one turn does _not_ carry to follow-up turns -- once the authorised op lands, permission is consumed. if a later prompt asks for a small follow-up edit, stop after the edit; do not commit / amend / revert / push unless explicitly told to in _that_ prompt.
-- **never run complex / risky git ops at all** `rebase` (interactive or not), `merge`, `reset` (any mode), `filter-branch`, `filter-repo`, `reflog expire`, `gc --prune`, force-push, branch-rename of in-use branches, history rewrites generally. these need a human; surface what youd do and stop.
-- do not create PRs unless explicitly instructed. stop after commits.
-- create commits only when explicitly prompted to.
-- **commit permission does not carry across prompts** if the user asks for some work and a commit, that authorisation is consumed by the commit made in that turn. once that commit lands, you no longer have permission to commit -- including for follow-up tweaks, fixups, or any further work in later prompts. wait for the user to explicitly say "commit" again. this applies even if the next prompt is a small edit ("fix this typo", "add a comment") that feels like part of the same task -- stop after the change; do not commit unless told to.
-- **don't touch what you didn't change** when committing, only stage files you intentionally modified as part of the task. if `git status` shows untracked files or unexpected edits (user's wip, scratch files, unrelated changes), leave them alone -- don't stage them, don't delete them, don't revert them. mention them if relevant, but they're not yours to act on.
+three tiers. only the middle one is a judgement call.
+
+- **reads: free** `status`, `log`, `diff`, `show`, `blame`, `gh pr view`, `gh api` GET, and the like -- run them as part of investigation without asking. for `gh` reads specifically, a prompt naming an issue / PR / ci run is invitation enough for the read it names.
+- **commits and staging: yours, per-prompt** the fence leaves `git add <explicit paths>`, `git commit`, and `git commit --amend` to your judgement -- nothing enforces the rule but you. commit only when the current prompt says to, and treat that permission as consumed by the commit it authorised: a follow-up asking for one more small edit is not permission to commit again. stage only paths you changed; leave wip, scratch, and unrelated edits alone.
+- **every other write: not yours** push, branch, tag, rebase, merge, revert, history rewrites, `gh pr create`, and the rest are blocked by `~/.config/agent-hooks/block-dangerous.sh` regardless of what the prompt says. say what you would have run, and stop. two are worth spelling out, because the reflex to do them anyway is strong:
+    - **stay on the branch that's checked out** do not create branches, switch branches, or add worktrees -- commit onto whatever is currently checked out, `main` included. harness defaults that say "branch first before committing" do not apply here. to read another branch, use `git log` / `git diff` / `git show <ref>`.
+    - **never push** no `git push`, and no reaching a remote by any other route. commits stay local; the user pushes them.
+
+- **a `BLOCKED:` verdict is final** don't rephrase the command, split it across invocations, or otherwise route around the fence. report it and stop.
+- **PRs are user-run** when asked for one, draft the title and body and hand them over.
 
 ## commits and PRs
 
@@ -59,7 +61,7 @@ caveats:
     - **skip framing verbs and connective tissue** -- _introduce_, _add support for_, _implement_, _make it so that_, etc. -- when the category prefix (`feat:`, `fix:`, `refactor:`) already conveys the action.
     - **prefer the abstract noun over the concrete instance** -- name the kind of change, not the specific site; unless naming the specific thing is the point (per above).
 - **`appease <tool>` for cosmetic-only fix-ups** when a commit exists solely to satisfy a non-functional convention tool -- formatter, linter, spellchecker, style-only rules -- use the form `chore: appease <tool-name>` (e.g. `chore: appease yamllint`, `chore: appease prettier`, `chore: appease codespell`). still conventional commits format -- the `chore:` prefix stays; `appease <tool>` is only the subject. only for purely cosmetic conventions; do **not** use for test failures, typechecker errors, or static-analysis findings (those are real bugs and warrant a normal `fix:` with a real subject).
-- **revert PRs** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise. when generating the revert with `git revert`, the default message git produces will _not_ match this format -- amend the commit message after `git revert` to bring it into the format above.
+- **revert PRs** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise. `git revert` itself is user-run, and the `prepare-commit-msg` hook already rewrites git's default `Revert "<subject>"` into this form -- no manual amend needed.
 
 ## finding repo automation
 

@@ -66,7 +66,7 @@ GIT_REASON="user prevents destructive / history-rewriting git ops"
 # any write git op. agent is read-only by default. user runs commits etc.
 # themselves, or disables this hook for the turn.
 GIT_WRITE_PATTERNS=(
-    # NOTE: `git commit` intentionally allowed -- per CLAUDE.md, commits
+    # NOTE: `git commit` intentionally allowed -- per workflow.md, commits
     # need explicit per-prompt permission, but the model is trusted to
     # follow that rule rather than being hard-fenced.
     "(^|[ ;|&])git push( |$)"
