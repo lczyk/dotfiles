@@ -1,5 +1,9 @@
 approvals_reviewer = "user"
 
+# marks shell commands as agent-run, so the git hooks take their strict path.
+[shell_environment_policy]
+set = { AGENT_SESSION = "1" }
+
 [tui]
 status_line = [
     "model-with-reasoning",

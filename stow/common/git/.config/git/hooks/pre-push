@@ -6,7 +6,15 @@
 # git invokes pre-push with: <remote-name> <remote-url>
 # and feeds lines on stdin: <local-ref> <local-sha> <remote-ref> <remote-sha>
 
-if [ "$CLAUDECODE" = "1" ]; then
+# agent harnesses take the strict path. AGENT_SESSION is set by our own harness
+# configs; CLAUDECODE and OPENCODE_PID are native fallbacks. copilot exports
+# nothing usable into spawned shells, so it lands on the human path -- known
+# gap, and block-dangerous.sh still fences push there.
+is_agent() {
+    [ -n "$AGENT_SESSION" ] || [ "$CLAUDECODE" = "1" ] || [ -n "$OPENCODE_PID" ]
+}
+
+if is_agent; then
     printf 'rejected: agents are not allowed to push. hand off to the user.\n' >&2
     exit 1
 fi

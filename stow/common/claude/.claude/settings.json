@@ -7,6 +7,7 @@
     "rust-analyzer-lsp@claude-plugins-official": true
   },
   "env": {
+    "AGENT_SESSION": "1",
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
   },
   "extraKnownMarketplaces": {

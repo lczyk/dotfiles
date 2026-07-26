@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 
-if [ "$CLAUDECODE" = "1" ]; then
+# agent harnesses take the strict path. AGENT_SESSION is set by our own harness
+# configs; CLAUDECODE and OPENCODE_PID are native fallbacks. copilot exports
+# nothing usable into spawned shells, so it lands on the human path -- known gap.
+is_agent() {
+    [ -n "$AGENT_SESSION" ] || [ "$CLAUDECODE" = "1" ] || [ -n "$OPENCODE_PID" ]
+}
+
+if is_agent; then
     LABEL="rejected"
     FAIL=1
 else
