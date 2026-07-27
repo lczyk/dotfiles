@@ -71,24 +71,6 @@ default is **no comment**. comments exist for the reader who has the code in fro
 - **match the file** follow the surrounding comment density and voice. don't bulk-add comments to a sparse file; don't strip informative ones from a dense one.
 - **docstrings are separate** public api docs / docstrings follow the project's convention -- these rules are about inline comments.
 
-## finding repo automation
-
-most repos have a task runner -- `make`, `just`, `task`, `npm`/`pnpm`/`yarn` scripts, `uv` scripts, etc. before guessing at commands, find what's there.
-
-detect with explicit `ls` at repo root, not globs (fish errors on unmatched globs, and case varies):
-
-```
-ls Makefile makefile justfile Justfile Taskfile.yml taskfile.yml package.json pyproject.toml 2>/dev/null
-```
-
-once detected, list targets before invoking -- a `lint` target may chain tools (`nilaway`, `golangci-lint`) you wouldn't have invoked otherwise:
-
-- `make` -- `make help` iff defined; otherwise read the `Makefile`
-- `just` -- `just --list`
-- `task` -- `task --list`
-- `npm` / `pnpm` / `yarn` -- `npm run` / `pnpm run` / `yarn run`
-- `uv` -- `uv run --list`
-
 ## testing before commits
 
 before any commit, every check that should pass for a healthy commit must pass -- test, lint, typecheck, format-check, spellcheck, etc. (only the ones that exist; don't invent them). one exception: tdd (see below).
