@@ -11,12 +11,12 @@
 
 ## repo-resident instructions
 
-repo-resident instruction files (`AGENT.md`, `AGENTS.md`, repo-level `CLAUDE.md`, `.cursorrules`, contributor docs the project points at, etc.) generally win over this file for anything that lands in the repo -- code style, naming, comment conventions, commit/PR style, in-repo doc style. respect what the project asks for.
+repo-resident instruction files (`AGENT.md`, `AGENTS.md`, repo-level `CLAUDE.md`, `.cursorrules`, contributor docs the project points at, etc.) generally win over this file for anything that lands in the repo -- code style, naming, comment conventions, commit/PR style, in-repo doc style.
 
 caveats:
 
-- not blind. if a repo rule looks low-quality, internally inconsistent, or conflicts severely with the rules here (e.g. asks for behaviour that would be actively harmful, or demands wildly divergent conventions w/out apparent reason), stop and flag it to the user -- ask for resolution rather than just complying.
-- scope is committed artefacts only: code, comments, commit messages, PR titles/bodies merged into the repo, in-repo docs. does **not** apply when the user asks you to generate natural language _for them_ (a PR message they'll paste, an email, a chat reply, etc.) -- those follow the lofi style regardless of what repo the cwd happens to be in.
+- not blind. if a repo rule looks low-quality, internally inconsistent, or conflicts severely with the rules here, stop and flag it to the user for resolution.
+- scope is committed artefacts only: code, comments, commit messages, PR titles/bodies, in-repo docs. natural language the user asks you to generate _for them_ -- a PR message they'll paste, an email, a chat reply -- follows the lofi style instead.
 - does **not** override personal-workflow rules (git/`gh` permissions, session conventions, environment boundaries). those always apply.
 
 ## session conventions
@@ -44,18 +44,17 @@ three tiers. only the middle one is a judgement call.
 
 ## commits and PRs
 
-- **no self-attribution** don't add yourself as a co-author in PR bodies. (`Co-Authored-By:` in a commit message is rejected by the `commit-msg` hook.)
+- **no self-attribution** don't add yourself as a co-author in PR bodies. (the `commit-msg` hook already rejects `Co-Authored-By:`.)
 - **PR titles** same Conventional Commits prefix rule the `commit-msg` hook enforces on commit subjects.
 - **conventional-commit suffix markers** two extensions to the standard prefix:
-    - `!:` -- the commit is intentionally broken. signals known-bad state (failing tests, broken build, half-landed migration) committed on purpose -- e.g. tdd's failing tests landed before the impl (`test!:`), or a deliberate mid-refactor checkpoint. distinguishes intentional breakage from accidental.
-    - `?:` -- we _think_ the commit is valid but cannot fully verify locally; might fail ci, remote tests, or other remote validation. e.g. `fix?:`, `ci?:`. signals "best effort, watch ci".
-- **keep commit categories clean** one category per commit -- a `feat:` commit contains only the feature itself, and any docs changes describing that feature go in a separate `docs:` commit afterwards. same rule for `test:`, `refactor:`, `chore:`, etc. don't mix categories in one commit just because the changes were made together.
-- **commit subject lines: bare-minimum reminder, not a description** the subject is just a memory-jogger for what the commit is vaguely about; details live in the diff and (if needed) the body. principles:
-    - **avoid specific identifiers** -- function names, class names, test names, variable names. they bloat the subject and are easily found in the diff. exception: when the identifier _is_ the subject (e.g. introducing a single named flag/env var/constant, where naming it conveys the whole change).
-    - **skip framing verbs and connective tissue** -- _introduce_, _add support for_, _implement_, _make it so that_, etc. -- when the category prefix (`feat:`, `fix:`, `refactor:`) already conveys the action.
-    - **prefer the abstract noun over the concrete instance** -- name the kind of change, not the specific site; unless naming the specific thing is the point (per above).
-- **`appease <tool>` for cosmetic-only fix-ups** when a commit exists solely to satisfy a non-functional convention tool -- formatter, linter, spellchecker, style-only rules -- use the form `chore: appease <tool-name>` (e.g. `chore: appease yamllint`, `chore: appease prettier`, `chore: appease codespell`). still conventional commits format -- the `chore:` prefix stays; `appease <tool>` is only the subject. only for purely cosmetic conventions; do **not** use for test failures, typechecker errors, or static-analysis findings (those are real bugs and warrant a normal `fix:` with a real subject).
-- **revert PRs** title format: `revert: "<first-line-of-reverted-pr>"` (quote the original subject verbatim). body says this is a PR reverting PR `<hash>`, then `original body: ...` -- include the original body only if there was one; omit the line entirely otherwise. `git revert` itself is user-run, and the `prepare-commit-msg` hook already rewrites git's default `Revert "<subject>"` into this form -- no manual amend needed.
+    - `!:` -- committed known-bad on purpose: failing tests, broken build, half-landed migration, deliberate mid-refactor checkpoint. e.g. tdd's tests landing before the impl (`test!:`).
+    - `?:` -- we _think_ it's valid but can't fully verify locally; might fail ci or other remote validation. e.g. `fix?:`, `ci?:`. means "best effort, watch ci".
+- **keep commit categories clean** one category per commit -- docs describing a new feature go in a `docs:` commit after the `feat:`, not inside it. being made in the same sitting isn't a reason to merge them.
+- **commit subject lines: bare-minimum reminder, not a description** the subject is a memory-jogger; details live in the diff and (if needed) the body. principles:
+    - **name the kind of change, not the site** -- no function / class / test / variable names; they bloat the subject and are easily found in the diff. exception: when the identifier _is_ the change (a single named flag / env var / constant).
+    - **skip framing verbs** -- _introduce_, _add support for_, _implement_, _make it so that_ -- the category prefix already conveys the action.
+- **`appease <tool>` for cosmetic-only fix-ups** a commit existing solely to satisfy a formatter / linter / spellchecker / style-only rule gets `chore: appease <tool-name>` -- e.g. `chore: appease yamllint`, `chore: appease prettier`. not for test failures, typechecker errors, or static-analysis findings; those are real bugs and warrant a normal `fix:` with a real subject.
+- **revert PRs** title: `revert: "<first-line-of-reverted-pr>"`, quoting the original subject verbatim. body says it reverts PR `<hash>`, then `original body: ...` iff there was one. (the `prepare-commit-msg` hook already rewrites revert *commit* subjects into this form.)
 
 ## code comments
 
@@ -88,14 +87,12 @@ find the commands in this order:
 
 ## environment boundaries
 
-- **shell may be bash or fish** don't assume bash -- the user runs both interchangeably (and the active shell when you're invoked may be either). main pitfalls:
+- **shell may be bash or fish** don't assume bash -- the user runs both interchangeably, and the active shell when you're invoked may be either. main pitfalls:
     - **unmatched globs** fish aborts the command if a glob matches nothing; bash returns the literal. for file detection, list explicit names rather than `Taskfile*` etc.
-    - **env vars** `export FOO=bar` is bash-only. fish uses `set -x FOO bar`. for one-shot use prefer `env FOO=bar <cmd>` -- works in both.
-    - **command substitution** `$(...)` works in both; avoid backticks.
-    - **`&&` / `||` / `;`** all work in modern fish (3.x+) and bash, so chaining is fine.
-- **never install software or packages** if a tool is missing, stop and hand the user the command they could run. applies even when the install seems trivial or is the only way to finish the task, and regardless of guards (`command -v X || ...`) -- if the fallback path installs, it's an install.
-    - n/a for project-local dependency resolution that's part of normal build flow (e.g. `npm ci` / `uv sync` / `cargo build` pulling declared deps into the project's own lockfile-managed env) -- those are fine.
-    - writes to user-global tool dirs (`~/.local/bin`, `~/go/bin` / `$GOPATH/bin`, `~/.cargo/bin`, `~/.npm-global`, `~/.local/share/...`, homebrew prefix, etc.) count as installs even though they don't need sudo. "user-only" or "no root needed" is not a green light -- the test is whether the artefact persists outside the current project tree, not whether root was involved.
+    - **env vars** `export FOO=bar` is bash-only; fish uses `set -x FOO bar`. for one-shot use prefer `env FOO=bar <cmd>` -- works in both.
+    - `$(...)`, `&&`, `||` and `;` all work in both. avoid backticks.
+- **never install software or packages** if a tool is missing, hand the user the command and stop. the test is whether the artefact persists outside the current project tree, not whether root was involved -- so writes to `~/.local/bin`, `~/.cargo/bin`, homebrew prefix and the like are installs. a guard (`command -v X || ...`) doesn't help: if the fallback path installs, it's an install.
+    - n/a for project-local dependency resolution in a normal build flow -- `npm ci` / `uv sync` / `cargo build` pulling declared deps into the project's own lockfile-managed env are fine.
 - **never ssh or work in remote environments** unless explicitly instructed to. ask before doing anything that crosses the local boundary.
 
 ## tooling hygiene
