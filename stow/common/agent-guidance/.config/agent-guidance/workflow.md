@@ -76,7 +76,7 @@ before any commit, every check that exists must pass -- test, lint, typecheck, f
 
 find the commands in this order:
 
-1. **repo automation** -- see [finding repo automation](#finding-repo-automation). run every relevant target, not just the test one.
+1. **repo automation** -- `make` / `just` / `task` / `npm` scripts / `uv`. detect with an explicit `ls` (fish errors on unmatched globs), list the targets before invoking, and run every relevant one -- not just the test target.
 2. **ci config** -- `.github/workflows/`, `.gitlab-ci.yml`, `.circleci/`. mirror what ci runs on pr/push.
 3. **language defaults** -- only if neither exists: `go test ./...`, `cargo test`, `uvx pytest`. tests only in this fallback; don't guess at the rest.
 
