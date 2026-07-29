@@ -3,101 +3,67 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from contextlib import nullcontext
+from pathlib import Path
 
 from . import __version__, _log
 from .completions import SHELLS as COMPLETION_SHELLS
 from .completions import render as render_completion
-from .generate import DEFAULT_EFFORT, DEFAULT_MODEL, GenerateCancelled, GenerateError, generate_message
+from .generate import DEFAULT_MODEL, DEFAULT_VARIANT, GenerateCancelled, GenerateError, generate_message
 from .git import (
     GitError,
     add_all,
     commit,
+    preview_index,
     staged_binary_files,
     staged_diff_for,
     staged_files,
     staged_name_status,
+    worktree_dirty,
 )
-
-ENV_OPTS = "AC_DEFAULT_OPTS"
-ENV_MODEL = "AC_MODEL"
-ENV_EFFORT = "AC_EFFORT"
-_VALID_OPTS = {"all", "yes", "print"}
-
-
-def _parse_env_opts() -> dict[str, bool]:
-    raw = os.environ.get(ENV_OPTS, "")
-    tokens = [t.strip().lower() for t in raw.split(",") if t.strip()]
-    opts = {"all": False, "yes": False, "print": False}
-    for t in tokens:
-        if t not in _VALID_OPTS:
-            _log.error(f"{ENV_OPTS}: unknown token {t!r} (valid: {sorted(_VALID_OPTS)})")
-            raise SystemExit(2)
-        opts[t] = True
-    if opts["yes"] and opts["print"]:
-        _log.error(f"{ENV_OPTS}: 'yes' and 'print' are mutually exclusive")
-        raise SystemExit(2)
-    return opts
 
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="auto-commit",
         description="generate a conventional-commit message for staged changes using a cheap claude model",
-        epilog=(
-            "env vars:\n"
-            f"  {ENV_OPTS}  comma-separated default flags. tokens: all, yes, print.\n"
-            "                     'yes' is mutually exclusive with 'print'. cli flags override:\n"
-            "                     --staged cancels 'all', --print cancels 'yes',\n"
-            "                     --yes cancels 'print'.\n"
-            f"  {ENV_MODEL}           default model id (overridden by --model).\n"
-            f"  {ENV_EFFORT}          default effort level (overridden by --effort)."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--version", action="version", version=f"auto-commit {__version__}")
     p.add_argument(
         "--model",
-        default=os.environ.get(ENV_MODEL, DEFAULT_MODEL),
-        help=f"model id (default: {DEFAULT_MODEL}, env: {ENV_MODEL})",
+        default=DEFAULT_MODEL,
+        help=f"model id (default: {DEFAULT_MODEL})",
     )
     p.add_argument(
-        "--effort",
-        default=os.environ.get(ENV_EFFORT, DEFAULT_EFFORT),
-        help=f"effort level (default: {DEFAULT_EFFORT}, env: {ENV_EFFORT})",
+        "--variant",
+        default=DEFAULT_VARIANT,
+        help=f"model variant (default: {DEFAULT_VARIANT})",
     )
-    p.add_argument(
+    disposition = p.add_mutually_exclusive_group()
+    disposition.add_argument(
         "-p",
         "--print",
         action="store_true",
-        default=None,
-        help=f"print message instead of committing (overrides 'yes' in {ENV_OPTS})",
+        help="print message instead of committing",
     )
-    p.add_argument(
+    disposition.add_argument(
         "-y",
         "--yes",
         action="store_true",
-        default=None,
-        help=f"skip y/n confirmation (overrides 'print' in {ENV_OPTS})",
+        help="skip y/n confirmation",
     )
     p.add_argument(
         "-a",
         "--all",
         action="store_true",
-        default=None,
         help="stage everything (git add -A) before generating",
-    )
-    p.add_argument(
-        "--staged",
-        action="store_true",
-        default=None,
-        help=f"only use already-staged changes (overrides 'all' in {ENV_OPTS})",
     )
     p.add_argument(
         "-v",
         "--verbose",
         action="count",
         default=0,
-        help="-v: info logs, -vv: debug logs (incl. raw model i/o). all to stderr.",
+        help="repeatable, all to stderr. -v: progress, -vv: + model output, -vvv: + what we sent.",
     )
     p.add_argument(
         "--completion",
@@ -108,40 +74,11 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main() -> None:
-    args = _build_parser().parse_args()
-    _log.setup(verbose=args.verbose)
-
-    if args.completion:
-        cmd_name = os.environ.get("AC_INVOKED_AS") or os.path.basename(sys.argv[0]) or "auto-commit"
-        sys.stdout.write(render_completion(args.completion, cmd_name))
-        return
-
-    env_opts = _parse_env_opts()
-
-    if args.staged and args.all:
-        _log.error("--staged and --all are mutually exclusive")
-        raise SystemExit(2)
-    if args.print and args.yes:
-        _log.error("--print and --yes are mutually exclusive")
-        raise SystemExit(2)
-    do_all = (args.all is True) or (env_opts["all"] and not args.staged)
-    if args.print:
-        do_print, do_yes = True, False
-    elif args.yes:
-        do_print, do_yes = False, True
-    else:
-        do_print, do_yes = env_opts["print"], env_opts["yes"]
-    _log.info(f"resolved: all={do_all} yes={do_yes} print={do_print} model={args.model} effort={args.effort}")
-
-    if do_all:
-        try:
-            add_all()
-        except GitError as e:
-            _log.error(str(e))
-            raise SystemExit(2) from e
-
+def _compose(*, do_all: bool, model: str, variant: str) -> str:
+    """stage (if asked), read the index, and return the commit message."""
     try:
+        if do_all:
+            add_all()
         files = staged_files()
         binary = staged_binary_files()
         status = staged_name_status()
@@ -150,10 +87,10 @@ def main() -> None:
         raise SystemExit(2) from e
 
     if not files:
-        if do_all:
-            _log.error("working tree clean; nothing to commit.")
+        if not do_all and worktree_dirty():
+            _log.error("nothing staged. `git add` what you want committed, or pass -a to stage everything.")
         else:
-            _log.error("no staged changes. use `git add` first.")
+            _log.error("working tree clean; nothing to commit.")
         raise SystemExit(1)
 
     if binary:
@@ -165,8 +102,8 @@ def main() -> None:
             staged_diff_for,
             binary=binary,
             status=status,
-            model=args.model,
-            effort=args.effort,
+            model=model,
+            variant=variant,
         )
     except GenerateCancelled:
         print()
@@ -178,7 +115,25 @@ def main() -> None:
 
     # stitch tag prefix onto the first line of the body.
     first, _, rest = body.partition("\n")
-    message = f"{tag}: {first}" + (f"\n{rest}" if rest.strip() else "")
+    return f"{tag}: {first}" + (f"\n{rest}" if rest.strip() else "")
+
+
+def main() -> None:
+    args = _build_parser().parse_args()
+    _log.setup(verbose=args.verbose)
+
+    if args.completion:
+        cmd_name = os.environ.get("AC_INVOKED_AS") or Path(sys.argv[0]).name or "auto-commit"
+        sys.stdout.write(render_completion(args.completion, cmd_name))
+        return
+
+    do_all, do_print, do_yes = args.all, args.print, args.yes
+    _log.info(f"resolved: all={do_all} yes={do_yes} print={do_print} model={args.model} variant={args.variant}")
+
+    # -a is previewed against a copy of the index, so an abort anywhere below
+    # leaves the repo exactly as it was; the real staging happens post-confirm.
+    with preview_index() if do_all else nullcontext():
+        message = _compose(do_all=do_all, model=args.model, variant=args.variant)
 
     if do_print:
         print(message)
@@ -189,7 +144,7 @@ def main() -> None:
 
     if not do_yes:
         try:
-            reply = input("commit with this message? [Y/n] ").strip().lower()
+            reply = input(_log.blue("commit with this message? [Y/n]") + " ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print()
             _log.warn("aborted.")
@@ -199,6 +154,8 @@ def main() -> None:
             raise SystemExit(1)
 
     try:
+        if do_all:
+            add_all()
         commit(message)
     except GitError as e:
         _log.error(str(e))

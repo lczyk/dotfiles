@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import sys
 import threading
 import time
 from collections.abc import Callable, Iterable
+from tempfile import TemporaryFile
+from typing import NamedTuple
 
 from . import _log
-from .git import staged_blob
 
 DEFAULT_MODEL = "claude-haiku-4-5"
-DEFAULT_EFFORT = "none"
+DEFAULT_VARIANT = "none"
 
 # cap any single diff payload sent to the model.
 MAX_DIFF_CHARS = 50_000
@@ -23,19 +23,24 @@ MAX_DIFF_CHARS = 50_000
 # kill the cli if a single invocation runs longer than this.
 CLAUDE_TIMEOUT = 120
 
-VALID_TAGS = (
-    "feat",
-    "fix",
-    "docs",
-    "style",
-    "refactor",
-    "perf",
-    "test",
-    "build",
-    "ci",
-    "chore",
-    "revert",
-)
+# mirrors the HEADERS list in the commit-msg hook, in the same order -- a tag
+# this doesn't accept is a commit the hook will bounce. the glosses go into the
+# prompt; without them the model gets the bare words and has to guess.
+TAG_GLOSS: dict[str, str] = {
+    "feat": "new capability someone could use",
+    "fix": "corrects behaviour that was wrong",
+    "docs": "documentation or comments only",
+    "test": "tests only",
+    "refactor": "restructures code without changing what it does",
+    "chore": "anything else -- deps, tooling, config, formatting, build files",
+    "bench": "benchmarks only",
+    "revert": "undoes an earlier commit",
+    "ci": "ci config, pipelines, workflows",
+    "perf": "same behaviour, measurably faster or lighter",
+    "release": "version bump or release prep, nothing else",
+}
+
+VALID_TAGS = tuple(TAG_GLOSS)
 
 COMMIT_SCHEMA = {
     "type": "object",
@@ -47,18 +52,12 @@ COMMIT_SCHEMA = {
     "additionalProperties": False,
 }
 
-FILES_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "files": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["files"],
-    "additionalProperties": False,
-}
-
 # general conventional-commit rules -- sensible for anyone.
 _RULES_COMMON = (
-    "tag: one of " + "|".join(VALID_TAGS) + ". "
+    "tag: exactly one of --\n"
+    + "".join(f"  {tag}: {gloss}\n" for tag, gloss in TAG_GLOSS.items())
+    + "pick the narrowest one that covers the whole diff; `chore` is the fallback "
+    "when nothing narrower fits, not a tie-breaker. "
     "message: `<subject>` or `<subject>\\n\\n<body>`. "
     "subject: imperative, no trailing period, <= 72 chars. a terse reminder of what the "
     "change is about, not a description -- don't name specific functions/classes/variables, "
@@ -76,17 +75,6 @@ _RULES_STYLE = "write lowercase and casual, in british english."
 
 _RULES = _RULES_COMMON + " " + _RULES_STYLE
 
-PROMPT_PICK_FILES = """\
-the following files are staged. pick the subset whose diffs you need to read
-to write a meaningful commit message. return them as json
-{{"files": [...]}}. if all of them matter, return all. paths must be exact.
-files marked `(binary)` will not have their diff content sent in the next
-step -- only the path. pick them if their name alone is signal.
-
-files:
-{files}
-"""
-
 PROMPT_MULTI = """\
 write a commit message for the staged diff below.
 {rules}
@@ -99,6 +87,21 @@ diff:
 {diff}
 ```
 """
+
+
+# the cli is invoked with --tools "", so the only tool it should report is the
+# one the schema itself installs. bypassPermissions is only defensible while
+# that holds -- anything else in the list can be escalated into.
+ALLOWED_TOOLS = frozenset({"StructuredOutput"})
+
+
+class Stream(NamedTuple):
+    """what a single cli invocation told us about itself."""
+
+    result: dict | None
+    chars: int
+    init: dict | None = None
+    thinking_tokens: int = 0
 
 
 class GenerateError(RuntimeError):
@@ -131,17 +134,65 @@ def _reap(proc: subprocess.Popen[str], *, kill: bool) -> bool:
             _kill(proc)
 
 
-def _truncate(diff: str) -> str:
-    if len(diff) <= MAX_DIFF_CHARS:
+def _truncate(text: str, limit: int) -> str:
+    """keep the head, cut on a line boundary, say what was dropped."""
+    if len(text) <= limit:
+        return text
+    head = text[:limit].rsplit("\n", 1)[0]
+    return head + f"\n... [truncated, {len(text) - len(head)} chars omitted]\n"
+
+
+def _split_by_file(diff: str) -> list[str]:
+    """one chunk per file, header included. only a header sits at column 0 with
+    `diff --git `; body lines always carry a ' ', '+' or '-' prefix, so this
+    can't be fooled by a diff of a diff."""
+    chunks: list[list[str]] = []
+    for line in diff.splitlines(keepends=True):
+        if line.startswith("diff --git ") or not chunks:
+            chunks.append([])
+        chunks[-1].append(line)
+    return ["".join(c) for c in chunks]
+
+
+def _label(header: str, paths: list[str]) -> str:
+    """match a chunk back to the path that produced it. the header's last field
+    is `<prefix>/<path>` (the new name, for renames), so an exact suffix match
+    on `/<path>` survives spaces in filenames and near-identical names."""
+    first = header.partition("\n")[0]
+    return next((p for p in paths if first.endswith("/" + p)), first)
+
+
+def _allocate(sizes: list[int], budget: int) -> list[int]:
+    """max-min fair share: an equal slice each, and whatever a small file
+    doesn't need is handed back to be split among the ones still short."""
+    out = [0] * len(sizes)
+    remaining, left = budget, len(sizes)
+    for i in sorted(range(len(sizes)), key=lambda i: sizes[i]):
+        take = min(sizes[i], remaining // left)
+        out[i] = take
+        remaining -= take
+        left -= 1
+    return out
+
+
+def _fit(diff: str, paths: list[str], budget: int = MAX_DIFF_CHARS) -> str:
+    """trim a combined diff to `budget` chars by giving every file a fair share
+    of it. breadth over depth -- a commit subject summarises the whole change,
+    so every file should be represented even if none is represented fully."""
+    if len(diff) <= budget:
         return diff
-    head = diff[:MAX_DIFF_CHARS]
-    return head + f"\n... [truncated, {len(diff) - MAX_DIFF_CHARS} chars omitted]"
+    chunks = _split_by_file(diff)
+    allowances = _allocate([len(c) for c in chunks], budget)
+    kept = []
+    for chunk, allowance in zip(chunks, allowances, strict=True):
+        if len(chunk) > allowance:
+            _log.debug(f"trimmed {_label(chunk, paths)}: {len(chunk)} -> {allowance} chars")
+        kept.append(_truncate(chunk, allowance))
+    return "".join(kept)
 
 
-def _render_status(phase: str, chars: int, started: float, is_tty: bool) -> None:
-    """live single-line status on a tty; noop otherwise."""
-    if not is_tty:
-        return
+def _render_status(phase: str, chars: int, started: float) -> None:
+    """redraw the single-line live status in place."""
     elapsed = time.time() - started
     msg = f"[claude] {phase} ({elapsed:.0f}s"
     if chars:
@@ -152,22 +203,34 @@ def _render_status(phase: str, chars: int, started: float, is_tty: bool) -> None
     sys.stderr.flush()
 
 
-def _clear_status(is_tty: bool) -> None:
-    if is_tty:
-        sys.stderr.write("\r\x1b[2K")
-        sys.stderr.flush()
+def _clear_status() -> None:
+    sys.stderr.write("\r\x1b[2K")
+    sys.stderr.flush()
 
 
 def _consume(
     lines: Iterable[str],
     on_phase: Callable[[str, int], None] | None = None,
-) -> tuple[dict | None, int]:
-    """parse the cli's stream-json event lines. returns (result_event, chars).
-    `on_phase(phase, chars)` fires once per parsed line for live status. pure
-    apart from the callback -- feed it canned lines to test the state machine."""
+    on_block: Callable[[str, str], None] | None = None,
+) -> Stream:
+    """parse the cli's stream-json event lines.
+    `on_phase(phase, chars)` fires once per parsed line for live status.
+    `on_block(kind, text)` fires once per completed thinking/text block -- the
+    deltas are only buffered when it's supplied. pure apart from the callbacks
+    -- feed it canned lines to test the state machine."""
     phase = "connecting"
     chars = 0
     final: dict | None = None
+    init: dict | None = None
+    thinking_tokens = 0
+    kind = ""
+    buf: list[str] = []
+
+    def _flush() -> None:
+        if buf and on_block:
+            on_block(kind, "".join(buf))
+        buf.clear()
+
     for raw in lines:
         raw = raw.strip()
         if not raw:
@@ -177,43 +240,69 @@ def _consume(
         except json.JSONDecodeError:
             continue
 
-        t = ev.get("type")
-        if t == "system" and ev.get("subtype") == "status":
-            if ev.get("status") == "requesting":
+        # mapping patterns ignore keys we don't name, which is what you want
+        # against a stream whose events carry plenty we don't care about.
+        match ev:
+            case {"type": "system", "subtype": "init"}:
+                init = ev
+            case {"type": "system", "subtype": "status", "status": "requesting"}:
                 phase = "waiting for first token"
-        elif t == "stream_event":
-            evt = ev.get("event") or {}
-            et = evt.get("type")
-            if et == "message_start":
-                phase = "thinking"
-            elif et == "content_block_start":
-                cb = evt.get("content_block") or {}
-                cbt = cb.get("type")
-                if cbt == "thinking":
-                    phase = "thinking"
-                elif cbt == "text":
-                    phase = "responding"
-                elif cbt == "tool_use":
-                    phase = f"calling {cb.get('name', 'tool')}"
-            elif et == "content_block_delta":
-                delta = evt.get("delta") or {}
-                dt = delta.get("type")
-                if dt == "thinking_delta":
-                    chars += len(delta.get("thinking", ""))
-                elif dt == "text_delta":
-                    chars += len(delta.get("text", ""))
-                elif dt == "input_json_delta":
-                    chars += len(delta.get("partial_json", ""))
-        elif t == "result":
-            final = ev
-            phase = "done"
+            case {"type": "result"}:
+                final = ev
+                phase = "done"
+            case {"type": "stream_event", "event": dict(evt)}:
+                match evt:
+                    case {"type": "message_start"}:
+                        phase = "thinking"
+                    case {"type": "content_block_start", "content_block": {"type": "thinking"}}:
+                        phase = kind = "thinking"
+                    case {"type": "content_block_start", "content_block": {"type": "text"}}:
+                        phase, kind = "responding", "text"
+                    case {"type": "content_block_start", "content_block": {"type": "tool_use", **cb}}:
+                        phase, kind = f"calling {cb.get('name', 'tool')}", ""
+                    case {"type": "content_block_stop"}:
+                        _flush()
+                    case {"type": "content_block_delta", "delta": {"type": "thinking_delta", "thinking": str(s)}}:
+                        chars += len(s)
+                        if on_block:
+                            buf.append(s)
+                    case {"type": "content_block_delta", "delta": {"type": "text_delta", "text": str(s)}}:
+                        chars += len(s)
+                        if on_block:
+                            buf.append(s)
+                    case {"type": "content_block_delta", "delta": {"type": "input_json_delta", "partial_json": str(s)}}:
+                        # the tool call carries the structured output, which gets
+                        # logged whole once it's parsed. no point buffering it.
+                        chars += len(s)
+                    case {"type": "message_delta", "usage": {"output_tokens_details": {"thinking_tokens": int(n)}}}:
+                        # only lives here -- the result event reports it as null.
+                        thinking_tokens += n
 
         if on_phase:
             on_phase(phase, chars)
-    return final, chars
+    _flush()
+    return Stream(final, chars, init, thinking_tokens)
 
 
-def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
+def _check_sandbox(init: dict | None) -> None:
+    """the init event is the cli reporting the sandbox it actually built. a tool
+    we didn't ask for means --tools "" stopped working, which is what makes
+    bypassPermissions safe -- so that's a hard failure, not a warning."""
+    if init is None:
+        return
+    tools = init.get("tools") or []
+    _log.trace(
+        f"[claude sandbox] model={init.get('model')} tools={tools} "
+        f"mcp={init.get('mcp_servers')} permissions={init.get('permissionMode')}"
+    )
+    if extra := sorted(set(tools) - ALLOWED_TOOLS):
+        raise GenerateError(
+            f"claude cli exposed unexpected tools despite --tools '': {', '.join(extra)}. "
+            "refusing to continue under --permission-mode bypassPermissions."
+        )
+
+
+def _claude(prompt: str, schema: dict, *, model: str, variant: str) -> dict:
     if shutil.which("claude") is None:
         raise GenerateError("`claude` cli not found on PATH")
 
@@ -223,8 +312,14 @@ def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
         "--model",
         model,
     ]
-    if effort and effort != "none":
-        cmd += ["--effort", effort]
+    # the cli spells this --effort; `variant` is our generic name for the knob.
+    # asking for a variant and pinning thinking off contradict each other, so
+    # the default-off setting below is only applied when no variant is asked for.
+    wants_variant = bool(variant) and variant != "none"
+    if wants_variant:
+        cmd += ["--effort", variant]
+    else:
+        cmd += ["--settings", '{"alwaysThinkingEnabled": false}']
     # NOTE: these flags sandbox the model to a pure json producer: --tools ""
     # (no tools to run), empty+strict mcp, no slash-commands, no session
     # persistence. bypassPermissions is safe *because* --tools "" leaves nothing
@@ -241,8 +336,6 @@ def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
         "--disable-slash-commands",
         "--setting-sources",
         "project",
-        "--settings",
-        '{"alwaysThinkingEnabled": false}',
         "--no-session-persistence",
         "--permission-mode",
         "bypassPermissions",
@@ -255,63 +348,77 @@ def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
         prompt,
     ]
 
-    _log.debug(f"prompt ({len(prompt)} chars):\n{prompt}")
-    _log.debug(f"running: claude --model {model} --effort {effort} ...")
+    _log.debug(f"running: claude --model {model} --effort {variant} ...")
+    _log.trace(f"prompt ({len(prompt)} chars):\n{prompt}")
 
-    is_tty = sys.stderr.isatty()
+    # the in-place status line would trample the phase logs, so under -v the
+    # phases are logged instead, one line each.
+    live = sys.stderr.isatty() and not _log.verbose()
     started = time.time()
 
-    proc = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-    )
-    assert proc.stdout is not None and proc.stderr is not None
-    _render_status("connecting", 0, started, is_tty)
+    with TemporaryFile() as errf:
+        # stderr goes to a file rather than a pipe: nothing to drain, so a
+        # chatty child can't fill a buffer and deadlock the stdout read loop.
+        proc = subprocess.Popen(
+            cmd,
+            # the prompt is an argv item, so the child needs no stdin -- and
+            # letting it inherit ours lets it swallow the y/n answer typed after.
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=errf,
+            text=True,
+            bufsize=1,
+        )
+        assert proc.stdout is not None
+        if live:
+            _render_status("connecting", 0, started)
 
-    # drain stderr on a thread so a full pipe buffer can't deadlock the stdout
-    # read loop. timer kills a hung cli.
-    stderr_buf: list[str] = []
-    drain = threading.Thread(target=stderr_buf.extend, args=(proc.stderr,), daemon=True)
-    drain.start()
-    timed_out = threading.Event()
-    watchdog = threading.Timer(CLAUDE_TIMEOUT, lambda: (timed_out.set(), proc.kill()))
-    watchdog.start()
+        timed_out = threading.Event()
+        watchdog = threading.Timer(CLAUDE_TIMEOUT, lambda: (timed_out.set(), proc.kill()))
+        watchdog.start()
 
-    last_phase_logged: str | None = None
+        last_phase_logged: str | None = None
 
-    def _on_phase(phase: str, chars: int) -> None:
-        nonlocal last_phase_logged
-        if not is_tty and phase != last_phase_logged:
-            _log.info(f"[claude] {phase}")
-            last_phase_logged = phase
-        _render_status(phase, chars, started, is_tty)
+        def _on_phase(phase: str, chars: int) -> None:
+            nonlocal last_phase_logged
+            if live:
+                _render_status(phase, chars, started)
+            elif phase != last_phase_logged:
+                _log.info(f"[claude] {phase}")
+                last_phase_logged = phase
 
-    interrupted = False
-    try:
-        final, _ = _consume(proc.stdout, _on_phase)
-    except KeyboardInterrupt:
-        interrupted = True
-    finally:
-        watchdog.cancel()
-        interrupted = _reap(proc, kill=interrupted) or interrupted
+        def _on_block(kind: str, text: str) -> None:
+            _log.debug(f"[claude {kind}]\n{text.strip()}")
+
+        interrupted = False
+        stream = Stream(None, 0)
         try:
-            drain.join(timeout=1)
+            stream = _consume(proc.stdout, _on_phase, _on_block if _log.debugging() else None)
         except KeyboardInterrupt:
             interrupted = True
-        _clear_status(is_tty)
+        finally:
+            watchdog.cancel()
+            interrupted = _reap(proc, kill=interrupted) or interrupted
+            if live:
+                _clear_status()
 
-    if interrupted:
-        raise GenerateCancelled("aborted") from None
+        if interrupted:
+            raise GenerateCancelled("aborted") from None
 
-    if timed_out.is_set():
-        raise GenerateError(f"claude cli timed out after {CLAUDE_TIMEOUT}s")
+        if timed_out.is_set():
+            raise GenerateError(f"claude cli timed out after {CLAUDE_TIMEOUT}s")
 
-    if proc.returncode != 0:
-        stderr = "".join(stderr_buf)
-        raise GenerateError(f"claude cli failed (rc={proc.returncode}): {stderr.strip()}")
+        errf.seek(0)
+        stderr = errf.read().decode(errors="replace").strip()
+
+        if proc.returncode != 0:
+            raise GenerateError(f"claude cli failed (rc={proc.returncode}): {stderr}")
+
+        if stderr:
+            _log.trace(f"[claude stderr]\n{stderr}")
+
+    final = stream.result
+    _check_sandbox(stream.init)
 
     if final is None:
         raise GenerateError("no result event from claude cli")
@@ -336,6 +443,22 @@ def _claude(prompt: str, schema: dict, *, model: str, effort: str) -> dict:
     if cache_r:
         parts.append(f"{cache_r} cache read")
     _log.info(f"[claude] done in {elapsed:.1f}s ({in_tok} in [{', '.join(parts)}], {out_tok} out)")
+
+    stop = final.get("stop_reason")
+    if stop == "max_tokens":
+        # visible without -v: it's the likeliest cause of whatever fails next.
+        _log.warn("[claude] output hit the token cap; the message may be truncated")
+    if _log.debugging():
+        used = final.get("modelUsage") or {}
+        bits = [f"stop={stop}", f"resolved={', '.join(used) or '?'}"]
+        if (cost := final.get("total_cost_usd")) is not None:
+            bits.append(f"cost=${cost:.5f}")
+        if stream.thinking_tokens:
+            bits.append(f"thinking={stream.thinking_tokens} tok")
+        for key, label in (("ttft_ms", "ttft"), ("duration_api_ms", "api")):
+            if (ms := final.get(key)) is not None:
+                bits.append(f"{label}={ms}ms")
+        _log.debug("[claude] " + " ".join(bits))
     _log.debug(f"structured_output: {json.dumps(structured)}")
     return structured
 
@@ -373,7 +496,7 @@ def _write_commit(
     binary: set[str],
     status: dict[str, str],
     model: str,
-    effort: str,
+    variant: str,
 ) -> tuple[str, str]:
     """final step: send the chosen files + their (already-fetched) diff and get
     back the commit message."""
@@ -387,7 +510,7 @@ def _write_commit(
         binary_note=binary_note,
         diff=diff or "(no text-file diffs)",
     )
-    obj = _claude(commit_prompt, COMMIT_SCHEMA, model=model, effort=effort)
+    obj = _claude(commit_prompt, COMMIT_SCHEMA, model=model, variant=variant)
     return _parse_commit(obj)
 
 
@@ -398,7 +521,7 @@ def generate_message(
     binary: set[str] | None = None,
     status: dict[str, str] | None = None,
     model: str = DEFAULT_MODEL,
-    effort: str = DEFAULT_EFFORT,
+    variant: str = DEFAULT_VARIANT,
 ) -> tuple[str, str]:
     """returns (tag, message). `diff_for(paths)` is a callback to fetch the
     staged diff for a given list of paths. `binary` lists paths whose diff
@@ -409,48 +532,12 @@ def generate_message(
     binary = binary or set()
     status = status or {}
 
-    if len(files) == 1:
-        # single file: still send its diff so an edit isn't mistaken for a fresh
-        # add. one call; binary -> filename + status only.
-        f = files[0]
-        diff = "" if f in binary else _truncate(diff_for([f]))
-        _log.info(f"single file -> {f}")
-        return _write_commit(files, diff, binary=binary, status=status, model=model, effort=effort)
-
-    # fetch the whole diff up front. when it fits under the cap, skip the pick
-    # step and write the message in a single call -- the pick round-trip only
-    # earns its latency when the diff is too big to send whole and needs
-    # trimming. so the cap doubles as the skip/trim boundary.
     text_files = [p for p in files if p not in binary]
     full_diff = diff_for(text_files) if text_files else ""
+    diff = _fit(full_diff, text_files)
+    if len(diff) < len(full_diff):
+        _log.info(f"{len(files)} files, diff {len(full_diff)} chars > {MAX_DIFF_CHARS} -> trimmed to {len(diff)}")
+    else:
+        _log.info(f"{len(files)} files, diff {len(full_diff)} chars, sent whole")
 
-    if len(full_diff) <= MAX_DIFF_CHARS:
-        _log.info(f"{len(files)} files, diff {len(full_diff)} chars <= {MAX_DIFF_CHARS} -> single-call mode")
-        return _write_commit(files, full_diff, binary=binary, status=status, model=model, effort=effort)
-
-    # large diff: 2-step chain. step 1 picks the relevant subset, step 2 writes
-    # the commit from just those files' (truncated) diff.
-    _log.info(f"{len(files)} files, diff {len(full_diff)} chars > {MAX_DIFF_CHARS} -> picking relevant subset")
-    pick_prompt = PROMPT_PICK_FILES.format(files="\n".join(_fmt_file(f, binary, status) for f in files))
-    picked = _claude(pick_prompt, FILES_SCHEMA, model=model, effort=effort)
-
-    requested = picked.get("files") or []
-    # sanitise: keep only paths the model is actually allowed to see.
-    staged_set = set(files)
-    chosen = [p for p in requested if p in staged_set]
-    if not chosen:
-        # model picked nothing valid -- fall back to all files.
-        _log.warn("model picked no valid files; sending all")
-        chosen = files
-    _log.info(f"chosen ({len(chosen)}/{len(files)}): " + ", ".join(os.path.basename(p) for p in chosen))
-
-    text_chosen = [p for p in chosen if p not in binary]
-    binary_chosen = [p for p in chosen if p in binary]
-    for p in text_chosen:
-        head = "\n".join(staged_blob(p).splitlines()[:10])
-        _log.debug(f"--- {p} (head -n10) ---\n{head}")
-    if binary_chosen:
-        _log.info(f"skipping diff content for {len(binary_chosen)} binary file(s)")
-
-    diff = _truncate(diff_for(text_chosen)) if text_chosen else ""
-    return _write_commit(chosen, diff, binary=binary, status=status, model=model, effort=effort)
+    return _write_commit(files, diff, binary=binary, status=status, model=model, variant=variant)
