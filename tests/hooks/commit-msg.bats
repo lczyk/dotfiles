@@ -56,30 +56,6 @@ write_msg() { printf '%s\n' "$1" > "$MSG"; }
     [ "$status" -eq 0 ]
 }
 
-@test "accepts TODO: subject" {
-    write_msg "TODO: things"
-    run "$HOOK" "$MSG"
-    [ "$status" -eq 0 ]
-}
-
-@test "accepts TODO(scope): subject" {
-    write_msg "TODO(parser): parse"
-    run "$HOOK" "$MSG"
-    [ "$status" -eq 0 ]
-}
-
-@test "accepts FIXME: subject" {
-    write_msg "FIXME: broken"
-    run "$HOOK" "$MSG"
-    [ "$status" -eq 0 ]
-}
-
-@test "accepts FIXME(api): subject" {
-    write_msg "FIXME(api): null deref"
-    run "$HOOK" "$MSG"
-    [ "$status" -eq 0 ]
-}
-
 @test "accepts release:" {
     write_msg "release: v1.2.3"
     run "$HOOK" "$MSG"
@@ -90,6 +66,18 @@ write_msg() { printf '%s\n' "$1" > "$MSG"; }
 
 @test "rejects unknown type" {
     write_msg "update: nope"
+    run "$HOOK" "$MSG"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects TODO:" {
+    write_msg "TODO: things"
+    run "$HOOK" "$MSG"
+    [ "$status" -ne 0 ]
+}
+
+@test "rejects FIXME(api):" {
+    write_msg "FIXME(api): null deref"
     run "$HOOK" "$MSG"
     [ "$status" -ne 0 ]
 }
