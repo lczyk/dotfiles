@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "auto-commit"
 authors = [{ name = "Marcin Konowalczyk", email = "marcin.konow@lczyk.xyz" }]
-version = "0.1.0"
+version = "0.2.0"
 description = "tiny cli to generate conventional-commit messages with the cheapest claude model"
 readme = "README.md"
 requires-python = ">=3.13"
