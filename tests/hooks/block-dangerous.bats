@@ -155,10 +155,33 @@ fire() {
     [ "$status" -eq 2 ]
 }
 
-@test "blocks a graphql read that mentions mutation" {
-    # over-blocks on purpose: the word can't be told from the real keyword
-    # w/out parsing graphql, and fail-safe means blocking.
+@test "allows a graphql read via a full url endpoint" {
+    run fire "gh api https://api.github.com/graphql -f query='{ viewer { login } }'"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a read whose field name starts with mutation" {
     run fire "gh api graphql -f query='{ repository(owner: \"o\", name: \"r\") { mutationCount } }'"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows schema introspection" {
+    run fire "gh api graphql -f query='{ __schema { mutationType { name } } }'"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a read against a repo called mutation-testing" {
+    run fire "gh api graphql -f query='{ repository(owner: \"o\", name: \"mutation-testing\") { id } }'"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a graphql read piped into jq naming a mutation field" {
+    run fire "gh api graphql -f query='{ viewer { login } }' | jq '.data | select(.mutationCount == null)'"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks a mutation with no space before the brace" {
+    run fire "gh api graphql -f query='mutation{ deleteIssue(input: {}) { clientMutationId } }'"
     [ "$status" -eq 2 ]
 }
 

@@ -158,12 +158,16 @@ GH_API_GET_RE="(-X ?|--method[ =])GET"
 # equivalent (review-thread isResolved, say). let it through iff the query is
 # inline and mutation-free. `graphql` must be the endpoint, i.e. the first
 # token -- further along the line it is as likely a repo name or a string.
-GH_API_GRAPHQL_RE="gh api /?graphql( |$)"
+GH_API_GRAPHQL_RE="gh api (https?://[^ ]+/)?/?graphql( |$)"
 # query the hook can't read (@file, stdin, request body) or mustn't allow.
 # matched against the whole command, not the segment: segments split on
 # separators, so a quoted `|` inside the query would otherwise cut a mutation
-# out of the text being inspected while the shell still sends it.
-GH_API_OPAQUE_RE="mutation|--input|=@"
+# out of the text being inspected while the shell still sends it. the keyword
+# is the only way to write a mutation (there is no shorthand form the way
+# there is for a query), so a `mutation` glued to more word characters --
+# mutationType, clientMutationId, a repo called mutation-testing -- is a name
+# and stays readable.
+GH_API_OPAQUE_RE="(^|[^A-Za-z-])mutation[ ({]|--input|=@"
 GH_API_FIELD_REASON="agent is fenced to read-only gh -- \`gh api\` with field flags writes; run it yourself or disable the hook"
 
 # bypassing commit signing.
