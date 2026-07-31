@@ -186,12 +186,24 @@ REMOTE_PATTERNS=(
 )
 REMOTE_REASON="do not work in remote envs without explicit permission"
 
+# display-only truncation for BLOCKED messages -- matching always runs
+# against the full (untruncated) $COMMAND above.
+CMD_ABBREV_LEN=120
+_abbrev() {
+    local cmd="$1"
+    if [ "${#cmd}" -gt "$CMD_ABBREV_LEN" ]; then
+        printf '%s...' "${cmd:0:$CMD_ABBREV_LEN}"
+    else
+        printf '%s' "$cmd"
+    fi
+}
+
 check() {
     local reason="$1"
     shift
     for pat in "$@"; do
         if echo "$COMMAND" | grep -qE -- "$pat"; then
-            echo "BLOCKED: '$COMMAND' matches '$pat'. $reason" >&2
+            echo "BLOCKED: '$(_abbrev "$COMMAND")' matches '$pat'. $reason" >&2
             exit 2
         fi
     done
@@ -247,7 +259,7 @@ while IFS= read -r seg; do
         continue
     fi
     if ! paths_concrete "$args"; then
-        echo "BLOCKED: '$COMMAND' discards more than named files. \`git restore <explicit-file-paths>\` is allowed -- no \`.\`, globs, dirs, or --source." >&2
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' discards more than named files. \`git restore <explicit-file-paths>\` is allowed -- no \`.\`, globs, dirs, or --source." >&2
         exit 2
     fi
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git restore[^;|&]*")
@@ -258,7 +270,7 @@ done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git restore[^;|&]*")
 while IFS= read -r seg; do
     args="${seg#*git checkout}"
     if [[ "$args" != " -- "* ]] || ! paths_concrete "${args# -- }"; then
-        echo "BLOCKED: '$COMMAND' -- only \`git checkout -- <explicit-file-paths>\` is allowed (no branch switching, \`.\`, globs, or dirs). $BRANCH_REASON" >&2
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- only \`git checkout -- <explicit-file-paths>\` is allowed (no branch switching, \`.\`, globs, or dirs). $BRANCH_REASON" >&2
         exit 2
     fi
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
@@ -267,7 +279,7 @@ done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
 # `-n` / `--dry-run` (preview).
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git rm "; then
     if ! echo "$COMMAND" | grep -qE -- "(--cached|-n |--dry-run)"; then
-        echo "BLOCKED: '$COMMAND' deletes worktree files. $GIT_REASON" >&2
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' deletes worktree files. $GIT_REASON" >&2
         exit 2
     fi
 fi
@@ -277,7 +289,7 @@ fi
 # blocked) and dry-run inspection (--check/--stat/--numstat/--summary).
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git apply "; then
     if ! echo "$COMMAND" | grep -qE -- "--(cached|check|stat|numstat|summary)"; then
-        echo "BLOCKED: '$COMMAND' mutates worktree. $GIT_WRITE_REASON" >&2
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' mutates worktree. $GIT_WRITE_REASON" >&2
         exit 2
     fi
 fi
