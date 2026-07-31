@@ -236,6 +236,111 @@ gh api repos/o/r/issues -f title=x"
     [ "$status" -eq 2 ]
 }
 
+# -- gh subcommands: reads through, writes fenced ------------------------
+
+@test "allows gh issue develop --list" {
+    run fire "gh issue develop --list 123"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows gh issue develop -l" {
+    run fire "gh issue develop 123 -l"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks gh issue develop" {
+    run fire "gh issue develop 123"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh issue develop with a branch name ending in -l" {
+    run fire "gh issue develop 123 --name feature-l"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh issue develop chained after an unrelated -l" {
+    run fire "ls -l ; gh issue develop 123"
+    [ "$status" -eq 2 ]
+}
+
+@test "allows gh repo deploy-key list" {
+    run fire "gh repo deploy-key list"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks gh repo deploy-key add" {
+    run fire "gh repo deploy-key add key.pub"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh repo deploy-key delete" {
+    run fire "gh repo deploy-key delete 1"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh pr co (checkout alias)" {
+    run fire "gh pr co 32"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh co (top-level checkout alias)" {
+    run fire "gh co 32"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh pr revert" {
+    run fire "gh pr revert 123"
+    [ "$status" -eq 2 ]
+}
+
+@test "allows gh pr checks" {
+    run fire "gh pr checks 123"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows gh pr diff" {
+    run fire "gh pr diff 123"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows gh completion (not the co alias)" {
+    run fire "gh completion -s fish"
+    [ "$status" -eq 0 ]
+}
+
+# gated on purpose despite being reads: a token in agent context is an
+# exfil surface, and clone / sync mutate the worktree like git pull does.
+
+@test "blocks gh auth token" {
+    run fire "gh auth token"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh gist clone" {
+    run fire "gh gist clone 5b0e0062eb8e9654adad7bb1d81cc75f"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh repo sync" {
+    run fire "gh repo sync"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks gh pr checkout" {
+    run fire "gh pr checkout 32"
+    [ "$status" -eq 2 ]
+}
+
+@test "allows gh issue list" {
+    run fire "gh issue list --state open"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows gh secret list" {
+    run fire "gh secret list"
+    [ "$status" -eq 0 ]
+}
+
 # -- gpg bypass ---------------------------------------------------------
 
 @test "blocks --no-gpg-sign" {

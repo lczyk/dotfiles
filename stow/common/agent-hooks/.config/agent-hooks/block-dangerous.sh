@@ -121,10 +121,13 @@ GIT_ADD_REASON="stage explicit paths only -- wide \`git add\` may grab unrelated
 
 # any write `gh` op. read ops (view/list/status/api GET) are fine.
 GH_WRITE_PATTERNS=(
-    "(^|[ ;|&])gh pr (create|comment|edit|review|close|reopen|ready|checkout|lock|unlock|update-branch)"
-    "(^|[ ;|&])gh issue (create|comment|edit|close|reopen|lock|unlock|delete|develop|pin|unpin|transfer)"
+    "(^|[ ;|&])gh pr (create|comment|edit|review|revert|close|reopen|ready|checkout|lock|unlock|update-branch)"
+    # `co` is checkout under both its documented alias and gh's own top-level one
+    "(^|[ ;|&])gh (pr )?co( |$)"
+    "(^|[ ;|&])gh issue (create|comment|edit|close|reopen|lock|unlock|delete|pin|unpin|transfer)"
     "(^|[ ;|&])gh release (create|edit|delete|upload)"
-    "(^|[ ;|&])gh repo (create|delete|edit|archive|unarchive|fork|rename|sync|deploy-key)"
+    # deploy-key is a group, not a leaf -- `list` under it is a read
+    "(^|[ ;|&])gh repo (create|delete|edit|archive|unarchive|fork|rename|sync|deploy-key (add|delete))"
     "(^|[ ;|&])gh gist (create|edit|delete|clone)"
     "(^|[ ;|&])gh workflow (run|disable|enable)"
     "(^|[ ;|&])gh run (cancel|delete|rerun)"
@@ -231,6 +234,15 @@ check "$GIT_WRITE_REASON" "${GIT_WRITE_PATTERNS[@]}"
 check "$BRANCH_REASON"    "${BRANCH_PATTERNS[@]}"
 check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
+
+# `gh issue develop` creates a linked branch, but `--list` / `-l` only reads
+# the existing ones. the flag has to sit in the same segment to count.
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])gh issue develop"; then
+    if ! echo "$COMMAND" | grep -qE -- "gh issue develop[^;|&]* (--list|-l)( |$)"; then
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' creates a branch. $GH_WRITE_REASON" >&2
+        exit 2
+    fi
+fi
 
 # field-flag writes. per segment, not per command: a GET or a graphql read
 # earlier on the line must not vouch for a write later on it. each `gh api`
