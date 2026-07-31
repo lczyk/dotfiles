@@ -146,11 +146,24 @@ GH_WRITE_PATTERNS=(
 GH_WRITE_REASON="agent is fenced to read-only gh -- run write ops yourself or disable the hook"
 
 # `gh api` with a field flag (-f / -F / --field / --raw-field / --input)
-# forces a POST even w/out an explicit -X, so it's a write. exception: an
-# explicit -X GET / --method GET keeps it a read (fields become query params).
-GH_API_FIELD_PATTERNS=(
-    "(^|[ ;|&])gh api .*(-f |-F |--field |--raw-field |--input )"
-)
+# forces a POST even w/out an explicit -X, so it's a write. matched per
+# segment (see the loop below), and glued as well as spaced -- `-fbody=x`,
+# `--field=body=x` and `--input=f.json` are the same write as their spaced
+# forms.
+GH_API_FIELD_RE="(^| )(-[A-Za-z]*[fF]([ =]|[A-Za-z])|--(field|raw-field|input)([ =]|$))"
+# an explicit GET keeps it a read -- fields become query params.
+GH_API_GET_RE="(-X ?|--method[ =])GET"
+# graphql has no GET form: the v4 endpoint is POST-only and the query rides
+# in a field, so fencing on method alone blocks reads that have no REST
+# equivalent (review-thread isResolved, say). let it through iff the query is
+# inline and mutation-free. `graphql` must be the endpoint, i.e. the first
+# token -- further along the line it is as likely a repo name or a string.
+GH_API_GRAPHQL_RE="gh api /?graphql( |$)"
+# query the hook can't read (@file, stdin, request body) or mustn't allow.
+# matched against the whole command, not the segment: segments split on
+# separators, so a quoted `|` inside the query would otherwise cut a mutation
+# out of the text being inspected while the shell still sends it.
+GH_API_OPAQUE_RE="mutation|--input|=@"
 GH_API_FIELD_REASON="agent is fenced to read-only gh -- \`gh api\` with field flags writes; run it yourself or disable the hook"
 
 # bypassing commit signing.
@@ -215,10 +228,20 @@ check "$BRANCH_REASON"    "${BRANCH_PATTERNS[@]}"
 check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 
-# field-flag writes, unless an explicit GET method is present.
-if ! echo "$COMMAND" | grep -qE -- "(-X ?|--method[ =])GET"; then
-    check "$GH_API_FIELD_REASON" "${GH_API_FIELD_PATTERNS[@]}"
-fi
+# field-flag writes. per segment, not per command: a GET or a graphql read
+# earlier on the line must not vouch for a write later on it. each `gh api`
+# opens a segment of its own -- newlines were folded to spaces above, so a
+# separator is not guaranteed between two of them.
+while IFS= read -r seg; do
+    echo "$seg" | grep -qE -- "$GH_API_GET_RE" && continue
+    echo "$seg" | grep -qE -- "$GH_API_FIELD_RE" || continue
+    if echo "$seg" | grep -qE -- "$GH_API_GRAPHQL_RE" &&
+        ! echo "$COMMAND" | grep -qiE -- "$GH_API_OPAQUE_RE"; then
+        continue
+    fi
+    echo "BLOCKED: '$(_abbrev "$seg")' writes. $GH_API_FIELD_REASON" >&2
+    exit 2
+done < <(printf '%s' "$COMMAND" | sed -E 's/gh api/;gh api/g' | grep -oE -- "(^|[ ;|&])gh api[^;|&]*")
 # explicit-path discard (`git restore <file>`, `git checkout -- <file>`) is
 # allowed: the agent can already overwrite any single file via the Write
 # tool, so blocking it only forces a noisier `git show > tmp` + Write

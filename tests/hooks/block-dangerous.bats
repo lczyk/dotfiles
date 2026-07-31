@@ -80,6 +80,139 @@ fire() {
     [ "$status" -eq 0 ]
 }
 
+# -- gh api: reads through, writes fenced --------------------------------
+# `gh api` field flags force a POST, so they read as writes. two things are
+# reads regardless: an explicit GET method, and a graphql query -- the v4
+# endpoint is POST-only and the query rides in a field, so there is no GET
+# form of it. review-thread `isResolved` has no REST equivalent, so fencing
+# graphql out costs a capability with no workaround.
+
+@test "allows a rest read" {
+    run fire "gh api repos/o/r/pulls/1/comments"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows gh pr view" {
+    run fire "gh pr view 1 --json reviews"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows field flags behind an explicit GET" {
+    run fire "gh api -X GET search/issues -f q=foo"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a graphql read" {
+    run fire "gh api graphql -f query='{ viewer { login } }'"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a graphql read with typed variables" {
+    run fire "gh api graphql -F owner=o -F name=r -f query='query(\$owner: String!, \$name: String!) { repository(owner: \$owner, name: \$name) { pullRequest(number: 1) { reviewThreads(first: 50) { nodes { isResolved isOutdated } } } } }'"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a paginated graphql read" {
+    run fire "gh api graphql --paginate --slurp -f query='query(\$endCursor: String) { viewer { repositories(first: 100, after: \$endCursor) { nodes { name } pageInfo { hasNextPage endCursor } } } }'"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a graphql read piped into jq" {
+    run fire "gh api graphql -f query='{ viewer { login } }' | jq -r .data.viewer.login"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a graphql read with a leading slash" {
+    run fire "gh api /graphql -f query='{ viewer { login } }'"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks graphql behind a leading flag" {
+    # endpoint has to be the first token. telling `graphql`-the-endpoint from
+    # `graphql`-in-a-quoted-value needs a real parser, so the position is the
+    # tell -- reorder the flags to get through.
+    run fire "gh api --cache 1h graphql -f query='{ viewer { login } }'"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a graphql mutation" {
+    run fire "gh api graphql -f query='mutation { addComment(input: {subjectId: \"x\", body: \"hi\"}) { clientMutationId } }'"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a named graphql mutation with variables" {
+    run fire "gh api graphql -F id=x -f query='mutation Resolve(\$id: ID!) { resolveReviewThread(input: {threadId: \$id}) { thread { isResolved } } }'"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a graphql query read from a file" {
+    run fire "gh api graphql -F query=@thread.graphql"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a graphql body read from stdin" {
+    run fire "gh api graphql --input -"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a graphql read that mentions mutation" {
+    # over-blocks on purpose: the word can't be told from the real keyword
+    # w/out parsing graphql, and fail-safe means blocking.
+    run fire "gh api graphql -f query='{ repository(owner: \"o\", name: \"r\") { mutationCount } }'"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks graphql behind an explicit write method" {
+    run fire "gh api -X POST graphql -f query='{ viewer { login } }'"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a rest write chained after a graphql read" {
+    run fire "gh api graphql -f query='{ viewer { login } }' ; gh api repos/o/r/issues -f title=x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a rest write &&-chained after a graphql read" {
+    run fire "gh api graphql -f query='{ viewer { login } }' && gh api repos/o/r/issues -f title=x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a rest write on the line after a graphql read" {
+    run fire "gh api graphql -f query='{ viewer { login } }'
+gh api repos/o/r/issues -f title=x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a mutation hidden behind a quoted pipe" {
+    run fire "gh api graphql -f query='{ search(query: \"a|b\") { c } } mutation E { deleteIssue(input: {}) { clientMutationId } }'"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a rest write chained after a GET read" {
+    run fire "gh api -X GET search/issues -f q=foo ; gh api repos/o/r/issues -f title=x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a rest write whose path merely contains graphql" {
+    run fire "gh api repos/o/graphql-parser/issues -f title=x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a glued short field flag" {
+    run fire "gh api repos/o/r/issues -fbody=hi"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a glued long field flag" {
+    run fire "gh api repos/o/r/issues --field=body=hi"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a glued --input" {
+    run fire "gh api repos/o/r/rulesets --input=body.json"
+    [ "$status" -eq 2 ]
+}
+
 # -- gpg bypass ---------------------------------------------------------
 
 @test "blocks --no-gpg-sign" {
