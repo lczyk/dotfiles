@@ -128,7 +128,7 @@ GH_WRITE_PATTERNS=(
     "(^|[ ;|&])gh release (create|edit|delete|upload)"
     # deploy-key is a group, not a leaf -- `list` under it is a read
     "(^|[ ;|&])gh repo (create|delete|edit|archive|unarchive|fork|rename|sync|deploy-key (add|delete))"
-    "(^|[ ;|&])gh gist (create|edit|delete|clone)"
+    "(^|[ ;|&])gh gist (create|edit|delete)"
     "(^|[ ;|&])gh workflow (run|disable|enable)"
     "(^|[ ;|&])gh run (cancel|delete|rerun)"
     "(^|[ ;|&])gh label (create|delete|edit|clone)"

@@ -263,6 +263,16 @@ gh api repos/o/r/issues -f title=x"
     [ "$status" -eq 2 ]
 }
 
+@test "allows gh gist clone" {
+    run fire "gh gist clone 5b0e0062eb8e9654adad7bb1d81cc75f"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks gh gist create" {
+    run fire "gh gist create notes.txt"
+    [ "$status" -eq 2 ]
+}
+
 @test "allows gh repo deploy-key list" {
     run fire "gh repo deploy-key list"
     [ "$status" -eq 0 ]
@@ -309,15 +319,11 @@ gh api repos/o/r/issues -f title=x"
 }
 
 # gated on purpose despite being reads: a token in agent context is an
-# exfil surface, and clone / sync mutate the worktree like git pull does.
+# exfil surface, and the other two move the worktree off what is checked
+# out. gist clone is not one of them -- it only ever writes a new dir.
 
 @test "blocks gh auth token" {
     run fire "gh auth token"
-    [ "$status" -eq 2 ]
-}
-
-@test "blocks gh gist clone" {
-    run fire "gh gist clone 5b0e0062eb8e9654adad7bb1d81cc75f"
     [ "$status" -eq 2 ]
 }
 
