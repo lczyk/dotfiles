@@ -23,8 +23,8 @@ def count_tokens(text):
 
 
 def benchmark_pair(orig_path: Path, comp_path: Path):
-    orig_text = orig_path.read_text()
-    comp_text = comp_path.read_text()
+    orig_text = orig_path.read_text(encoding="utf-8", errors="ignore")
+    comp_text = comp_path.read_text(encoding="utf-8", errors="ignore")
 
     orig_tokens = count_tokens(orig_text)
     comp_tokens = count_tokens(comp_text)
@@ -38,7 +38,7 @@ def print_table(rows):
     print("\n| File | Original | Compressed | Saved % | Valid |")
     print("|------|----------|------------|---------|-------|")
     for r in rows:
-        print(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:.1f}% | {'✅' if r[4] else '❌'} |")
+        print(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:.1f}% | {'ok:' if r[4] else 'error:'} |")
 
 
 def main():
@@ -47,18 +47,20 @@ def main():
         orig = Path(sys.argv[1]).resolve()
         comp = Path(sys.argv[2]).resolve()
         if not orig.exists():
-            print(f"❌ Not found: {orig}")
+            print(f"error: Not found: {orig}")
             sys.exit(1)
         if not comp.exists():
-            print(f"❌ Not found: {comp}")
+            print(f"error: Not found: {comp}")
             sys.exit(1)
         print_table([benchmark_pair(orig, comp)])
         return
 
     # Glob mode: repo_root/tests/caveman-compress/
-    tests_dir = Path(__file__).parent.parent.parent / "tests" / "caveman-compress"
+    # __file__ lives at <repo_root>/skills/caveman-compress/scripts/benchmark.py
+    # Walk up four dirs: scripts -> caveman-compress -> skills -> repo_root.
+    tests_dir = Path(__file__).resolve().parents[3] / "tests" / "caveman-compress"
     if not tests_dir.exists():
-        print(f"❌ Tests dir not found: {tests_dir}")
+        print(f"error: Tests dir not found: {tests_dir}")
         sys.exit(1)
 
     rows = []

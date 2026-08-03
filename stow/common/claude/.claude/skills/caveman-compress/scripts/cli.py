@@ -9,7 +9,7 @@ Usage:
 import sys
 
 # Force UTF-8 on stdout/stderr before any code can print. Windows consoles
-# default to cp1252 and crash on the ❌ glyphs in error/validation branches,
+# default to cp1252 and crash on the error: glyphs in error/validation branches,
 # masking the real error and leaving the user with a half-compressed file.
 for _stream in (sys.stdout, sys.stderr):
     reconfigure = getattr(_stream, "reconfigure", None)
@@ -21,7 +21,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 from pathlib import Path
 
-from .compress import compress_file
+from .compress import backup_dir_for, compress_file
 from .detect import detect_file_type, should_compress
 
 
@@ -38,11 +38,11 @@ def main():
 
     # Check file exists
     if not filepath.exists():
-        print(f"❌ File not found: {filepath}")
+        print(f"error: File not found: {filepath}")
         sys.exit(1)
 
     if not filepath.is_file():
-        print(f"❌ Not a file: {filepath}")
+        print(f"error: Not a file: {filepath}")
         sys.exit(1)
 
     filepath = filepath.resolve()
@@ -64,12 +64,12 @@ def main():
 
         if success:
             print("\nCompression completed successfully")
-            backup_path = filepath.with_name(filepath.stem + ".original.md")
+            backup_path = backup_dir_for(filepath) / (filepath.stem + ".original.md")
             print(f"Compressed: {filepath}")
             print(f"Original:   {backup_path}")
             sys.exit(0)
         else:
-            print("\n❌ Compression failed after retries")
+            print("\nerror: Compression failed after retries")
             sys.exit(2)
 
     except KeyboardInterrupt:
@@ -77,7 +77,7 @@ def main():
         sys.exit(130)
 
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\nerror: Error: {e}")
         sys.exit(1)
 
 

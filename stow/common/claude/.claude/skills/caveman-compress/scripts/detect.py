@@ -17,6 +17,16 @@ SKIP_EXTENSIONS = {
     ".dockerfile", ".makefile", ".csv", ".ini", ".cfg",
 }
 
+# Well-known build/config files that carry no (or a misleading) extension --
+# `Dockerfile` has no suffix so `.dockerfile` above never matches it, and
+# `CMakeLists.txt` would ride the compressible `.txt` rule. Checked by
+# basename before any extension rule.
+KNOWN_CODE_FILENAMES = {
+    "dockerfile", "makefile", "gnumakefile", "jenkinsfile", "vagrantfile",
+    "rakefile", "gemfile", "justfile", "procfile", "brewfile",
+    "cmakelists.txt",
+}
+
 # Patterns that indicate a line is code
 CODE_PATTERNS = [
     re.compile(r"^\s*(import |from .+ import |require\(|const |let |var )"),
@@ -67,20 +77,28 @@ def detect_file_type(filepath: Path) -> str:
     """
     ext = filepath.suffix.lower()
 
+    # Known code filenames win over any extension rule
+    if filepath.name.lower() in KNOWN_CODE_FILENAMES:
+        return "code"
+
     # Extension-based classification
     if ext in COMPRESSIBLE_EXTENSIONS:
         return "natural_language"
     if ext in SKIP_EXTENSIONS:
         return "code" if ext not in {".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".env"} else "config"
 
-    # Extensionless files (like CLAUDE.md, TODO) — check content
+    # Extensionless files (like CLAUDE.md, TODO) -- check content
     if not ext:
         try:
-            text = filepath.read_text(errors="ignore")
+            text = filepath.read_text(encoding="utf-8", errors="ignore")
         except (OSError, PermissionError):
             return "unknown"
 
         lines = text.splitlines()[:50]
+
+        # Shebang means executable script, never prose
+        if text.startswith("#!"):
+            return "code"
 
         if _is_json_content(text[:10000]):
             return "config"

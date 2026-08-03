@@ -28,7 +28,7 @@ class ValidationResult:
 
 
 def read_file(path: Path) -> str:
-    return path.read_text(errors="ignore")
+    return path.read_text(encoding="utf-8")
 
 
 # ---------- Extractors ----------
@@ -77,7 +77,7 @@ def extract_code_blocks(text):
             i += 1
         if closed:
             blocks.append("\n".join(block_lines))
-        # Unclosed fences are silently skipped — they indicate malformed markdown
+        # Unclosed fences are silently skipped -- they indicate malformed markdown
         # and including them would cause false-positive validation failures.
     return blocks
 
@@ -95,8 +95,16 @@ def count_bullets(text):
 
 
 def extract_inline_codes(text):
-    text_without_fences = re.sub(r"^```[\s\S]*?^```", "", text, flags=re.MULTILINE)
-    text_without_fences = re.sub(r"^~~~[\s\S]*?^~~~", "", text_without_fences, flags=re.MULTILINE)
+    """Backtick-delimited inline spans, with fenced code blocks stripped first.
+
+    Previously used a column-0-anchored regex to strip fences, which misses
+    fences indented 1-3 spaces (valid CommonMark). Reuse extract_code_blocks
+    (FENCE_OPEN_REGEX-based, indentation-aware) instead so an indented fence's
+    body backticks don't leak into inline-code pairing.
+    """
+    text_without_fences = text
+    for block in extract_code_blocks(text):
+        text_without_fences = text_without_fences.replace(block, "", 1)
     return re.findall(r"`([^`]+)`", text_without_fences)
 
 

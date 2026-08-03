@@ -8,7 +8,11 @@ Usage:
 
 import os
 import re
+import shutil
+import stat
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import List
 
@@ -16,8 +20,29 @@ OUTER_FENCE_REGEX = re.compile(
     r"\A\s*(`{3,}|~{3,})[^\n]*\n(.*)\n\1\s*\Z", re.DOTALL
 )
 
+# YAML frontmatter: starts at file start with --- on its own line, ends with --- on its own line.
+# Captures the entire block (including delimiters and trailing newline) and the body after.
+FRONTMATTER_REGEX = re.compile(
+    r"\A(---\r?\n.*?\r?\n---\r?\n)(.*)", re.DOTALL
+)
+
+
+def split_frontmatter(text: str):
+    """Split YAML frontmatter from body. Returns (frontmatter, body).
+
+    Memory files (and many other markdown docs) start with a YAML frontmatter
+    block delimited by `---` lines. The compression LLM has a habit of stripping
+    or rewriting these despite preserve-structure rules in the prompt -- so we
+    surgically remove the frontmatter before compression and prepend it back
+    verbatim to the output. Files without frontmatter pass through unchanged.
+    """
+    m = FRONTMATTER_REGEX.match(text)
+    if m:
+        return m.group(1), m.group(2)
+    return "", text
+
 # Filenames and paths that almost certainly hold secrets or PII. Compressing
-# them ships raw bytes to the Anthropic API — a third-party data boundary that
+# them ships raw bytes to the Anthropic API -- a third-party data boundary that
 # developers on sensitive codebases cannot cross. detect.py already skips .env
 # by extension, but credentials.md / secrets.txt / ~/.aws/credentials would
 # slip through the natural-language filter. This is a hard refuse before read.
@@ -43,6 +68,30 @@ SENSITIVE_NAME_TOKENS = (
 )
 
 
+def backup_dir_for(filepath: Path) -> Path:
+    """Resolve the out-of-tree backup directory for a given source file.
+
+    Backups must live OUTSIDE the source directory so skill auto-loaders
+    (Claude Code rules/, opencode instructions/, etc.) stop re-ingesting the
+    `.original.md` copies as live files. Base dir is platform-aware:
+      - Windows: %LOCALAPPDATA%\\caveman-compress\\backups
+      - else:    $XDG_DATA_HOME/caveman-compress/backups if set,
+                 else ~/.local/share/caveman-compress/backups
+
+    The source file's parent-dir name is mirrored under the base to reduce
+    cross-project collisions (e.g. two `task.md` files in different repos).
+    """
+    if os.name == "nt" or sys.platform == "win32":
+        local_appdata = os.environ.get("LOCALAPPDATA")
+        base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
+        base = base / "caveman-compress" / "backups"
+    else:
+        xdg = os.environ.get("XDG_DATA_HOME")
+        base = Path(xdg) if xdg else Path.home() / ".local" / "share"
+        base = base / "caveman-compress" / "backups"
+    return base / filepath.parent.name
+
+
 def is_sensitive_path(filepath: Path) -> bool:
     """Heuristic denylist for files that must never be shipped to a third-party API."""
     name = filepath.name
@@ -63,6 +112,59 @@ def strip_llm_wrapper(text: str) -> str:
         return m.group(2)
     return text
 
+
+def write_text_atomic(path: Path, text: str) -> None:
+    """Write ``text`` to ``path`` atomically as UTF-8.
+
+    Path.write_text() truncates the destination before encoding the string --
+    a UnicodeEncodeError (or any other failure) partway through leaves a
+    0-byte file, destroying whatever was there before (issue #655). Encode
+    first, write the bytes to a sibling temp file, fsync, then os.replace()
+    so the destination only ever moves from one complete, valid file to
+    another. Preserves the original file's permission bits across the swap.
+    """
+    data = text.encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        if path.exists():
+            os.chmod(tmp_path, stat.S_IMODE(path.stat().st_mode))
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def first_nonblank_line(text: str) -> str:
+    """Return the first non-blank line, stripped -- used to detect a prose
+    preamble smuggled in ahead of the real content (issue #588)."""
+    for line in text.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def _write_target(filepath: Path, text: str, backup_path: Path) -> None:
+    """Write to the target file, surfacing the backup location if the write
+    itself fails. write_text_atomic already leaves the target untouched on
+    failure, but the caller still needs to know where the pre-compression
+    original lives instead of being left to guess (issue #652)."""
+    try:
+        write_text_atomic(filepath, text)
+    except Exception:
+        print(f"error: Write to {filepath} failed. Original preserved at backup: {backup_path}")
+        raise
+
+
 from .detect import should_compress
 from .validate import validate
 
@@ -73,6 +175,18 @@ MAX_RETRIES = 2
 
 
 def call_claude(prompt: str) -> str:
+    """Send a prompt to Claude.
+
+    Prefers the Anthropic SDK when ANTHROPIC_API_KEY is set; otherwise falls
+    back to the ``claude --print`` CLI (which handles desktop auth).
+
+    On Windows the CLI subprocess decoding defaults to the system codepage
+    (cp1251 / cp1252) and crashes on UTF-8 output -- see issue #152. Pinning
+    ``encoding="utf-8"`` with ``errors="replace"`` matches the CLI's actual
+    native I/O and prevents the UnicodeDecodeError before validation can
+    report. Windows users with non-ASCII content can also set
+    ``ANTHROPIC_API_KEY`` to route through the SDK and skip the subprocess.
+    """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if api_key:
         try:
@@ -87,14 +201,22 @@ def call_claude(prompt: str) -> str:
             return strip_llm_wrapper(msg.content[0].text.strip())
         except ImportError:
             pass  # anthropic not installed, fall back to CLI
-    # Fallback: use claude CLI (handles desktop auth)
+    # Fallback: use claude CLI (handles desktop auth).
+    # Resolve binary via shutil.which so Windows .cmd/.bat shims (e.g.
+    # %APPDATA%\npm\claude.CMD) work without shell=True. On POSIX,
+    # shutil.which returns the same absolute path as the implicit lookup,
+    # so this is a no-op there. Falls back to bare "claude" if not found
+    # on PATH so subprocess raises a clear FileNotFoundError.
+    claude_bin = shutil.which("claude") or "claude"
     try:
         result = subprocess.run(
-            ["claude", "--print"],
+            [claude_bin, "--print"],
             input=prompt,
             text=True,
             capture_output=True,
             check=True,
+            encoding="utf-8",
+            errors="replace",
         )
         return strip_llm_wrapper(result.stdout.strip())
     except subprocess.CalledProcessError as e:
@@ -111,7 +233,7 @@ STRICT RULES:
 - Preserve ALL URLs exactly
 - Preserve ALL headings exactly
 - Preserve file paths and commands
-- Return ONLY the compressed markdown body — do NOT wrap the entire output in a ```markdown fence or any other fence. Inner code blocks from the original stay as-is; do not add a new outer fence around the whole file.
+- Return ONLY the compressed markdown body -- do NOT wrap the entire output in a ```markdown fence or any other fence. Inner code blocks from the original stay as-is; do not add a new outer fence around the whole file.
 
 Only compress natural language.
 
@@ -126,7 +248,7 @@ def build_fix_prompt(original: str, compressed: str, errors: List[str]) -> str:
 
 CRITICAL RULES:
 - DO NOT recompress or rephrase the file
-- ONLY fix the listed errors — leave everything else exactly as-is
+- ONLY fix the listed errors -- leave everything else exactly as-is
 - The ORIGINAL is provided as reference only (to restore missing content)
 - Preserve caveman style in all untouched sections
 
@@ -162,7 +284,7 @@ def compress_file(filepath: Path) -> bool:
         raise ValueError(f"File too large to compress safely (max 500KB): {filepath}")
 
     # Refuse files that look like they contain secrets or PII. Compressing ships
-    # the raw bytes to the Anthropic API — a third-party boundary — so we fail
+    # the raw bytes to the Anthropic API -- a third-party boundary -- so we fail
     # loudly rather than silently exfiltrate credentials or keys. Override is
     # intentional: the user must rename the file if the heuristic is wrong.
     if is_sensitive_path(filepath):
@@ -179,50 +301,71 @@ def compress_file(filepath: Path) -> bool:
         print("Skipping (not natural language)")
         return False
 
-    original_text = filepath.read_text(errors="ignore")
-    backup_path = filepath.with_name(filepath.stem + ".original.md")
+    original_text = filepath.read_text(encoding="utf-8", errors="ignore")
+    # Store backup outside the source directory so skill auto-loaders don't
+    # re-ingest the `.original.md` copy as a live file. Mirror the source's
+    # parent-dir name + stem under a platform-aware base to reduce collisions.
+    backup_dir = backup_dir_for(filepath)
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / (filepath.stem + ".original.md")
 
     if not original_text.strip():
-        print("❌ Refusing to compress: file is empty or whitespace-only.")
+        print("error: Refusing to compress: file is empty or whitespace-only.")
         return False
 
     # Check if backup already exists to prevent accidental overwriting
     if backup_path.exists():
-        print(f"⚠️ Backup file already exists: {backup_path}")
+        print(f"warning: Backup file already exists: {backup_path}")
         print("The original backup may contain important content.")
         print("Aborting to prevent data loss. Please remove or rename the backup file if you want to proceed.")
         return False
 
-    # Step 1: Compress
-    print("Compressing with Claude...")
-    compressed = call_claude(build_compress_prompt(original_text))
+    # Split YAML frontmatter off before compression. Claude tends to strip or
+    # rewrite frontmatter despite preserve-structure rules; we keep it verbatim
+    # by removing it from the input and re-prepending it to the output.
+    frontmatter, body = split_frontmatter(original_text)
+    if frontmatter:
+        print(f"Detected YAML frontmatter ({len(frontmatter)} chars) -- preserving verbatim")
 
-    if compressed is None or not compressed.strip():
-        print("❌ Compression aborted: Claude returned an empty response.")
+    if not body.strip():
+        print("error: Refusing to compress: body is empty after frontmatter removal.")
+        return False
+
+    # Step 1: Compress (body only, frontmatter excluded)
+    print("Compressing with Claude...")
+    compressed_body = call_claude(build_compress_prompt(body))
+
+    if compressed_body is None or not compressed_body.strip():
+        print("error: Compression aborted: Claude returned an empty response.")
         print("   Original file is untouched (no backup created).")
         return False
 
-    if compressed.strip() == original_text.strip():
-        print("❌ Compression aborted: output is identical to input.")
+    # Compare the BODY (not the whole file) -- frontmatter is preserved verbatim
+    # and would never change, so identity must be judged on the compressible part.
+    if compressed_body.strip() == body.strip():
+        print("error: Compression aborted: output is identical to input.")
         print("   Likely causes: Claude refused, returned the prompt verbatim, or the file is")
         print("   already in caveman form. Original file is untouched (no backup created).")
         return False
+
+    # Reassemble: frontmatter (verbatim) + compressed body
+    compressed = frontmatter + compressed_body
 
     # Save original as backup, then verify the backup readback before
     # touching the input file. If the filesystem dropped bytes (encoding,
     # antivirus, disk full), unlink the bad backup and abort instead of
     # leaving the user with a corrupt backup + compressed primary.
-    backup_path.write_text(original_text)
-    backup_readback = backup_path.read_text(errors="ignore")
+    write_text_atomic(backup_path, original_text)
+    backup_readback = backup_path.read_text(encoding="utf-8", errors="ignore")
     if backup_readback != original_text:
-        print(f"❌ Backup write verification failed: {backup_path}")
+        print(f"error: Backup write verification failed: {backup_path}")
         print("   In-memory original differs from on-disk backup. Aborting before touching the input file.")
         try:
             backup_path.unlink()
         except OSError:
             pass
         return False
-    filepath.write_text(compressed)
+    _write_target(filepath, compressed, backup_path)
 
     # Step 2: Validate + Retry
     for attempt in range(MAX_RETRIES):
@@ -234,21 +377,38 @@ def compress_file(filepath: Path) -> bool:
             print("Validation passed")
             break
 
-        print("❌ Validation failed:")
+        print("error: Validation failed:")
         for err in result.errors:
             print(f"   - {err}")
 
         if attempt == MAX_RETRIES - 1:
             # Restore original on failure
-            filepath.write_text(original_text)
+            _write_target(filepath, original_text, backup_path)
             backup_path.unlink(missing_ok=True)
-            print("❌ Failed after retries — original restored")
+            print("error: Failed after retries -- original restored")
             return False
 
         print("Fixing with Claude...")
         compressed = call_claude(
             build_fix_prompt(original_text, compressed, result.errors)
         )
-        filepath.write_text(compressed)
+
+        if compressed is None or not compressed.strip():
+            print("error: Fix attempt aborted: Claude returned an empty response.")
+            print("   Skipping this attempt.")
+            continue
+
+        # Guard against a prose preamble smuggled in ahead of the real fixed
+        # content (issue #588). Only enforced when the original starts with a
+        # structural anchor (frontmatter `---` or a heading) -- plain-prose
+        # first lines get legitimately rewritten by compression, and requiring
+        # them verbatim would reject every valid fix.
+        anchor = first_nonblank_line(original_text)
+        if anchor.startswith(("---", "#")) and first_nonblank_line(compressed) != anchor:
+            print("error: Fix attempt aborted: output does not start with the original's first line.")
+            print("   Possible preamble leak. Skipping this attempt.")
+            continue
+
+        _write_target(filepath, compressed, backup_path)
 
     return True
