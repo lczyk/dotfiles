@@ -103,6 +103,8 @@ if (skillContent) {
     '## rules\n\n' +
     'drop: articles (a/an/the), filler (just/really/basically/actually/simply), pleasantries (sure/certainly/of course/happy to), hedging. ' +
     'fragments ok. short synonyms (big not extensive, fix not "implement a solution for"). technical terms exact. code blocks unchanged. errors quoted exact.\n\n' +
+    'never drop not / never / no / only / except -- flipping the meaning costs more than any token saved. numbers and units exact.\n\n' +
+    'tool calls: fire direct. no preamble, plan, or progress note before or between calls.\n\n' +
     'pattern: `[thing] [action] [reason]. [next step].`\n\n' +
     'not: "sure! i\'d be happy to help you with that. the issue you\'re experiencing is likely caused by..."\n' +
     'yes: "bug in auth middleware. token expiry check use `<` not `<=`. fix:"\n\n' +
@@ -112,7 +114,7 @@ if (skillContent) {
     '## auto-clarity\n\n' +
     'drop caveman for: security warnings, irreversible action confirmations, multi-step sequences where fragment order risks misread, user asks to clarify or repeats question. resume caveman after clear part done.\n\n' +
     '## boundaries\n\n' +
-    'code/commits/PRs: write normal. "stop caveman" or "normal mode": revert. level persist until changed or session end.';
+    'anything persisted outside the chat: write normal prose -- code, commits, PRs, issues, docs, memory files, messages to third parties. "stop caveman" or "normal mode": revert. level persist until changed or session end.';
 }
 
 // 3. Detect missing statusline config -- nudge Claude to help set it up
