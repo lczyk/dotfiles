@@ -13,13 +13,30 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { getDefaultMode, getSkillPath, getStatePath, safeWriteFlag } = require('./caveman-config');
+const { getDefaultMode, getSkillPath, getStatePath, safeWriteFlag, readFlag } = require('./caveman-config');
 
 const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 const flagPath = getStatePath();
 const settingsPath = path.join(claudeDir, 'settings.json');
 
-const mode = getDefaultMode();
+// SessionStart re-fires mid-conversation (resume, /clear, compaction), not just
+// at true session start, so only a real `startup` may reset to the configured
+// default -- otherwise whatever the user toggled mid-session wins, including a
+// deliberate `off` (which is an absent flag, not a mode value).
+// the sync stdin read assumes claude code writes the payload then closes the
+// pipe, which it does; a tty (manual run) skips it.
+let source = 'startup';
+try {
+  if (!process.stdin.isTTY) {
+    const raw = fs.readFileSync(0, 'utf8');
+    if (raw) {
+      const payload = JSON.parse(raw);
+      if (payload && typeof payload.source === 'string') source = payload.source;
+    }
+  }
+} catch (e) { /* no/bad stdin -- treat as startup */ }
+
+const mode = source === 'startup' ? getDefaultMode() : (readFlag(flagPath) || 'off');
 
 // "off" mode -- skip activation entirely, don't write flag or emit rules
 if (mode === 'off') {
