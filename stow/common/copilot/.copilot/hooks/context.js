@@ -17,11 +17,6 @@ const modes = {
     env: 'CAVEMAN_DEFAULT_MODE',
     valid: ['off', 'lite', 'full', 'ultra', 'commit', 'compress'],
   },
-  ponytail: {
-    defaultMode: 'full',
-    env: 'PONYTAIL_DEFAULT_MODE',
-    valid: ['off', 'lite', 'full', 'ultra'],
-  },
 };
 
 function exists(file) {
@@ -158,7 +153,6 @@ function sessionStart() {
   }
 
   activateMode('caveman', contexts);
-  activateMode('ponytail', contexts);
 
   process.stdout.write(JSON.stringify({
     additionalContext: contexts.join('\n\n---\n\n'),
@@ -194,14 +188,11 @@ function promptSubmitted() {
 
   if (deactivation === 'normal mode') {
     clearState('caveman');
-    clearState('ponytail');
     return;
   }
   if (deactivation === 'stop caveman') clearState('caveman');
-  if (deactivation === 'stop ponytail') clearState('ponytail');
 
   trackMode('caveman', prompt);
-  trackMode('ponytail', prompt);
 }
 
 function main() {

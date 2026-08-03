@@ -53,7 +53,7 @@ adapters around them:
 - `agent-guidance` -- workflow rules.
 - `agent-styles` -- lofi and language-specific style guides.
 - `agent-skills` -- portable skills and their licence notices.
-- `agent-modes` -- shared mode defaults.
+- `agent-modes` -- optional mode defaults, user-supplied and not tracked.
 - `agent-state` -- runtime mode state, created on demand and not tracked.
 - `agent-hooks` -- shared safety hooks.
 

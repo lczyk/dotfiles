@@ -78,7 +78,7 @@ function getDefaultMode() {
   return 'full';
 }
 
-// flag io is symlink-safe and shared with ponytail -- see ./flag-io.js.
+// flag io is symlink-safe -- see ./flag-io.js.
 function safeWriteFlag(flagPath, content) {
   sharedWriteFlag(flagPath, content);
 }

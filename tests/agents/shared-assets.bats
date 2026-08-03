@@ -10,8 +10,7 @@ setup() {
     for path in \
         "$REPO/stow/common/agent-guidance/.config/agent-guidance/workflow.md" \
         "$REPO/stow/common/agent-styles/.config/agent-styles/lofi.md" \
-        "$REPO/stow/common/agent-skills/.config/agent-skills/caveman/SKILL.md" \
-        "$REPO/stow/common/agent-modes/.config/agent-modes/ponytail.json"; do
+        "$REPO/stow/common/agent-skills/.config/agent-skills/caveman/SKILL.md"; do
         [ -f "$path" ]
     done
 }
@@ -22,7 +21,7 @@ setup() {
     [ "$(readlink "$REPO/stow/common/opencode/.config/opencode/AGENTS.md")" = "../../../agent-guidance/.config/agent-guidance/workflow.md" ]
 
     for harness in claude codex copilot; do
-        for skill in caveman caveman-commit grill-me lofi ponytail; do
+        for skill in caveman caveman-commit grill-me lofi; do
             [ "$(readlink "$REPO/stow/common/$harness/.${harness}/skills/$skill")" = "../../../agent-skills/.config/agent-skills/$skill" ]
         done
     done
@@ -103,28 +102,23 @@ setup() {
 
     run env COPILOT_HOME="$copilot_target/.copilot" copilot skill list
     [ "$status" -eq 0 ]
-    for skill in caveman caveman-commit grill-me lofi ponytail; do
+    for skill in caveman caveman-commit grill-me lofi; do
         [[ "$output" == *"$skill"* ]]
     done
 }
 
-@test "claude mode adapters resolve the shared config and state paths" {
+@test "claude mode adapter resolves the shared config and state paths" {
     config_home="$BATS_TEST_TMPDIR/config"
     state_dir="$BATS_TEST_TMPDIR/state"
     mkdir -p "$config_home/agent-modes"
     printf '{"defaultMode":"lite"}\n' > "$config_home/agent-modes/caveman.json"
-    printf '{"defaultMode":"ultra"}\n' > "$config_home/agent-modes/ponytail.json"
 
     run env XDG_CONFIG_HOME="$config_home" AGENT_STATE_DIR="$state_dir" node -e '
         const caveman = require(process.argv[1]);
-        const ponytail = require(process.argv[2]);
         console.log(caveman.getDefaultMode());
         console.log(caveman.getStatePath());
-        console.log(ponytail.getDefaultMode());
-        console.log(ponytail.getStatePath());
     ' \
-        "$REPO/stow/common/claude/.claude/hooks/caveman-config.js" \
-        "$REPO/stow/common/claude/.claude/hooks/ponytail-config.js"
+        "$REPO/stow/common/claude/.claude/hooks/caveman-config.js"
     [ "$status" -eq 0 ]
-    [ "$output" = $'lite\n'"$state_dir"$'/caveman-active\nultra\n'"$state_dir"'/ponytail-active' ]
+    [ "$output" = $'lite\n'"$state_dir"'/caveman-active' ]
 }

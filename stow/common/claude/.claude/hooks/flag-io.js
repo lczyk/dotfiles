@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// shared symlink-safe flag io for the caveman / ponytail mode flags.
+// symlink-safe flag io for the caveman mode flag.
 //
-// the flag path is predictable (~/.claude/.{caveman,ponytail}-active), so a
-// local attacker could pre-create it as a symlink to clobber another file.
+// the flag path is predictable (~/.claude/.caveman-active), so a local
+// attacker could pre-create it as a symlink to clobber another file.
 // writes go through a temp + atomic rename with O_NOFOLLOW and 0600; reads
 // refuse symlinks and cap the size. callers validate the contents themselves.
 

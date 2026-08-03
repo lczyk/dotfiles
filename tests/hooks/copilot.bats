@@ -11,7 +11,6 @@ setup() {
 
     mkdir -p "$CONFIG_HOME" "$STATE_DIR"
     ln -s "$REPO/stow/common/agent-hooks/.config/agent-hooks" "$CONFIG_HOME/agent-hooks"
-    ln -s "$REPO/stow/common/agent-modes/.config/agent-modes" "$CONFIG_HOME/agent-modes"
     ln -s "$REPO/stow/common/agent-skills/.config/agent-skills" "$CONFIG_HOME/agent-skills"
     ln -s "$REPO/stow/common/agent-styles/.config/agent-styles" "$CONFIG_HOME/agent-styles"
 }
@@ -86,9 +85,7 @@ fire_raw_tool() {
     [ "$status" -eq 0 ]
     [ "$(printf '%s' "$output" | jq -r '.additionalContext' | grep -c 'lofi -- personal writing style')" -eq 1 ]
     [ "$(printf '%s' "$output" | jq -r '.additionalContext' | grep -c 'CAVEMAN MODE ACTIVE -- level: full')" -eq 1 ]
-    [ "$(printf '%s' "$output" | jq -r '.additionalContext' | grep -c 'PONYTAIL MODE ACTIVE')" -eq 0 ]
     [ "$(cat "$STATE_DIR/caveman-active")" = "full" ]
-    [ ! -e "$STATE_DIR/ponytail-active" ]
 }
 
 @test "session start honors the shared lofi marker" {
@@ -107,16 +104,9 @@ fire_raw_tool() {
     [ "$(cat "$STATE_DIR/caveman-active")" = "ultra" ]
 
     run env XDG_CONFIG_HOME="$CONFIG_HOME" AGENT_STATE_DIR="$STATE_DIR" \
-        node "$CONTEXT" prompt <<<'{"prompt":"/ponytail full"}'
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
-    [ "$(cat "$STATE_DIR/ponytail-active")" = "full" ]
-
-    run env XDG_CONFIG_HOME="$CONFIG_HOME" AGENT_STATE_DIR="$STATE_DIR" \
         node "$CONTEXT" prompt <<<'{"prompt":"normal mode"}'
     [ "$status" -eq 0 ]
     [ ! -e "$STATE_DIR/caveman-active" ]
-    [ ! -e "$STATE_DIR/ponytail-active" ]
 }
 
 @test "caveman independent commands are tracked" {

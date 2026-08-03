@@ -49,12 +49,6 @@
             "type": "command"
           },
           {
-            "command": "node \"$HOME/.claude/hooks/ponytail-activate.js\"",
-            "statusMessage": "Loading ponytail mode...",
-            "timeout": 5,
-            "type": "command"
-          },
-          {
             "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
             "statusMessage": "Loading lofi style...",
             "timeout": 5,
@@ -75,12 +69,6 @@
           {
             "command": "node \"$HOME/.claude/hooks/caveman-mode-tracker.js\"",
             "statusMessage": "Tracking caveman mode...",
-            "timeout": 5,
-            "type": "command"
-          },
-          {
-            "command": "node \"$HOME/.claude/hooks/ponytail-mode-tracker.js\"",
-            "statusMessage": "Tracking ponytail mode...",
             "timeout": 5,
             "type": "command"
           },
