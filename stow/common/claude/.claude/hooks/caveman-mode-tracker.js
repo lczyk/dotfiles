@@ -17,10 +17,41 @@ const flagPath = getStatePath();
 
 let input = '';
 process.stdin.on('data', chunk => { input += chunk; });
+// an abnormal stdin close (broken pipe, parent crash) emits 'error'; without a
+// listener node rethrows it and the hook exits non-zero. hooks must exit 0.
+process.stdin.on('error', () => process.exit(0));
 process.stdin.on('end', () => {
   try {
     const data = JSON.parse(input);
-    const prompt = (data.prompt || '').trim().toLowerCase();
+    // collapse whitespace so the multiline slash-command envelope below and the
+    // whole-message deactivation match both see a single-line prompt.
+    const raw = (data.prompt || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+    // unattended scheduled-task runs must not be styled -- the reinforcement
+    // would hijack the task prompt. bail before touching flag or output.
+    if (/<scheduled-task\b/.test(raw)) return;
+
+    // claude code delivers slash commands as an envelope rather than the
+    // literal text:
+    //   <command-message>caveman</command-message>
+    //   <command-name>/caveman</command-name>
+    //   <command-args>ultra</command-args>
+    // reconstruct '<name> <args>' for our own commands so the switch below
+    // sees what the user selected. a foreign command's envelope is left alone,
+    // and deactivation matching is skipped for it so another command's args
+    // can't trip our triggers.
+    let prompt = raw;
+    let foreignCommand = false;
+    const envName = /<command-name>\s*([^<\s]+)\s*<\/command-name>/.exec(raw);
+    if (envName) {
+      if (envName[1].startsWith('/caveman')) {
+        const envArgs = /<command-args>\s*([^<]*?)\s*<\/command-args>/.exec(raw);
+        const args = envArgs ? envArgs[1].trim() : '';
+        prompt = args ? envName[1] + ' ' + args : envName[1];
+      } else {
+        foreignCommand = true;
+      }
+    }
 
     // Match /caveman commands
     if (prompt.startsWith('/caveman')) {
@@ -55,7 +86,7 @@ process.stdin.on('end', () => {
     // request that happens to mention "stop caveman" / "normal mode" mid-task
     // doesn't silently turn the mode off. toggling is `/caveman <mode>`.
     const deact = prompt.replace(/[.!?\s]+$/, '');
-    if (deact === 'stop caveman' || deact === 'normal mode') {
+    if (!foreignCommand && (deact === 'stop caveman' || deact === 'normal mode')) {
       try { fs.unlinkSync(flagPath); } catch (e) {}
     }
 
