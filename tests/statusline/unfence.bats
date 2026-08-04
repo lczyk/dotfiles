@@ -13,16 +13,16 @@ strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
 
 fire() { printf '{}' | "$BADGE"; }
 
-@test "silent when AGENT_UNFENCE is unset" {
+@test "[u] plain when AGENT_UNFENCE is unset" {
     run fire
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
+    [ "$output" = "[u]" ]
 }
 
-@test "silent when AGENT_UNFENCE is empty" {
+@test "[u] plain when AGENT_UNFENCE is empty" {
     AGENT_UNFENCE= run fire
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
+    [ "$output" = "[u]" ]
 }
 
 @test "shows a single capability" {
@@ -44,10 +44,10 @@ fire() { printf '{}' | "$BADGE"; }
     [ "$out" = "[U:branchrmx,meta]" ]
 }
 
-@test "silent when the value is only separators" {
+@test "[u] plain when the value is only separators" {
     AGENT_UNFENCE=',,,' run fire
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
+    [ "$output" = "[u]" ]
 }
 
 @test "squeezes and trims stray commas" {
