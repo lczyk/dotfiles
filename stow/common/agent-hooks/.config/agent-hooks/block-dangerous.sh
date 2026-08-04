@@ -49,8 +49,21 @@ COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's
 # (GIT_DIR=x git ...), $VAR / $(...) command construction, `git${IFS}push`,
 # quoted 'git', read-flag-first flag soup (git branch -v -f main).
 COMMAND=${COMMAND//\\git/git}
+
+# `-c key=val` / `--config-env` overrides that neutralise the git-hook and
+# signing layers. matched pre-strip -- the loop below erases exactly the
+# evidence being looked for. -i: config keys are case-insensitive. known
+# false positive: `git grep -c <key>` reads as an override.
+GIT_CFG_KEYS="core\.hookspath|commit\.gpgsign|tag\.gpgsign|gpg\.program"
+if echo "$COMMAND" | grep -qiE -- "(^|[ ;|&])git [^;|&]*(-c ?|--config-env[= ])[\"']?(${GIT_CFG_KEYS})"; then
+    echo "BLOCKED: '${COMMAND:0:120}' overrides hook / signing config -- ask the user if you really need to" >&2
+    exit 2
+fi
+
+# glued forms included (-C/path, -ckey=val) -- a spaced-only strip would
+# leave them sitting between `git` and the subcommand, dodging every anchor.
 while :; do
-    STRIPPED=$(printf '%s' "$COMMAND" | sed -E 's/(^|[ ;|&])git[[:space:]]+(-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)[= ][^[:space:]]+|--no-pager|-P)[[:space:]]+/\1git /')
+    STRIPPED=$(printf '%s' "$COMMAND" | sed -E 's/(^|[ ;|&])git[[:space:]]+(-C[[:space:]]*[^[:space:]]+|-c[[:space:]]*[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path|config-env)[= ][^[:space:]]+|--no-pager|-P)[[:space:]]+/\1git /')
     [[ "$STRIPPED" == "$COMMAND" ]] && break
     COMMAND=$STRIPPED
 done
@@ -92,9 +105,11 @@ GIT_WRITE_PATTERNS=(
     "(^|[ ;|&])git stash (drop|clear)"
     "(^|[ ;|&])git config (--add|--unset|--global|--system|--replace-all|--remove-section)"
     # `git config <key> <value>` (local write, no flag needed). the read form
-    # `git config <key>` has no trailing value token and doesn't match.
+    # `git config <key>` has no trailing value token and doesn't match; the
+    # key token stops at segment separators so a chained command after a read
+    # (`git config --get k; echo x`) isn't misread as the value.
     "(^|[ ;|&])git config (set|unset|rename-section|remove-section)"
-    "(^|[ ;|&])git config (--[a-z-]+ )*[A-Za-z][^ ]* [^-&|;<>[:space:]]"
+    "(^|[ ;|&])git config (--[a-z-]+ )*[A-Za-z][^ ;|&]* [^-&|;<>[:space:]]"
     # remote config writes -- set-url could silently redirect the user's own
     # future pushes.
     "(^|[ ;|&])git remote (add|remove|rm|rename|set-url|set-head|set-branches|prune)"
