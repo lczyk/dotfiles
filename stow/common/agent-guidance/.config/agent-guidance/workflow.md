@@ -41,6 +41,11 @@ three tiers. only the middle one is a judgement call.
 
 - **a `BLOCKED:` verdict is final** don't rephrase the command, split it across invocations, or otherwise route around the fence. report it and stop.
 - **PRs are user-run** when asked for one, draft the title and body and hand them over.
+- **capabilities the user can grant** the fence reads `AGENT_UNFENCE` -- comma-separated tokens -- from its own environment, set when the session is launched (`env AGENT_UNFENCE=branch claude`). two exist:
+    - `branch` lifts the branch / worktree category only: create branches, switch, `git checkout -b`, `git worktree add`. `git branch -D`, push, rebase and everything else stay blocked.
+    - `meta` lifts the fence on the hooks themselves -- see "the hooks are not yours" below.
+
+    you cannot grant yourself one. prefixing your own command with `AGENT_UNFENCE=...` reaches the policy as text on stdin, never as a variable. if the token isn't set, the `BLOCKED:` rule above applies as normal.
 
 ## commits and PRs
 
@@ -94,6 +99,7 @@ find the commands in this order:
 - **never install software or packages** if a tool is missing, hand the user the command and stop. the test is whether the artefact persists outside the current project tree, not whether root was involved -- so writes to `~/.local/bin`, `~/.cargo/bin`, homebrew prefix and the like are installs. a guard (`command -v X || ...`) doesn't help: if the fallback path installs, it's an install.
     - n/a for project-local dependency resolution in a normal build flow -- `npm ci` / `uv sync` / `cargo build` pulling declared deps into the project's own lockfile-managed env are fine.
 - **never ssh or work in remote environments** unless explicitly instructed to. ask before doing anything that crosses the local boundary.
+- **the hooks are not yours** `~/.config/agent-hooks/`, `~/.claude/hooks/`, `~/.codex/hooks*`, `~/.copilot/hooks/`, `~/.config/git/hooks/`, `~/.claude/settings*.json`, any repo's `.claude/settings*.json` (its env block feeds future sessions), and the `stow/` sources behind all of them are blocked by `protect-hooks.sh` -- a fence you can rewrite is not a fence. reading them is fine; editing, moving, deleting or chmod-ing them is not, and neither is disabling one by editing the settings that wire it in, unstowing it (`make unstow` / `stow -D`), or overriding it inline (`git -c core.hooksPath=...`). when a task needs a hook change, describe the change and stop -- the user relaunches with `env AGENT_UNFENCE=meta`.
 
 ## tooling hygiene
 
