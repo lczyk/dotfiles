@@ -39,6 +39,18 @@
         "matcher": "Write|Edit|NotebookEdit"
       }
     ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "node \"$HOME/.claude/hooks/hat-session-end.js\"",
+            "statusMessage": "Cleaning up hat...",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
@@ -59,6 +71,12 @@
             "statusMessage": "Loading subagent model policy...",
             "timeout": 5,
             "type": "command"
+          },
+          {
+            "command": "node \"$HOME/.claude/hooks/hat-activate.js\"",
+            "statusMessage": "Loading hat...",
+            "timeout": 5,
+            "type": "command"
           }
         ]
       }
@@ -75,6 +93,12 @@
           {
             "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi-reminder.md\"",
             "statusMessage": "lofi style reminder...",
+            "timeout": 5,
+            "type": "command"
+          },
+          {
+            "command": "node \"$HOME/.claude/hooks/hat-tracker.js\"",
+            "statusMessage": "Tracking hat...",
             "timeout": 5,
             "type": "command"
           }
