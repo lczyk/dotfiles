@@ -74,6 +74,7 @@ function main() {
     case "$operation" in
         (shell)
             policies=(
+                protect-hooks.sh
                 block-dangerous.sh
                 discourage-bare-tail.sh
                 enforce-log-suffix.sh
@@ -82,6 +83,7 @@ function main() {
             ;;
         (write)
             policies=(
+                protect-hooks.sh
                 enforce-tmp-ai.sh
             )
             ;;

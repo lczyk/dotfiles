@@ -18,6 +18,19 @@
 INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
 
+# capability opt-outs, comma-separated, read from this process's OWN
+# environment (`env AGENT_UNFENCE=branch claude`). an agent cannot grant
+# itself one: a command's env-prefix reaches this policy as text on stdin,
+# never as an actual variable. kept inline for the same reason as the fold
+# below -- a policy that can't find a helper file must not degrade into
+# allowing everything.
+_unfenced() {
+    case ",${AGENT_UNFENCE}," in
+        (*",$1,"*) return 0 ;;
+    esac
+    return 1
+}
+
 # fold line wraps and whitespace runs before matching. every pattern below is
 # a line-based grep with literal spaces in it, so a wrapped `git \<newline>
 # push` or a stray `git  push` would otherwise walk straight past the fence.
@@ -109,7 +122,7 @@ BRANCH_PATTERNS=(
     # read form too -- use git branch --show-current instead.
     "(^|[ ;|&])git symbolic-ref( |$)"
 )
-BRANCH_REASON="stay on the current branch -- don't create or switch branches / worktrees. you CAN commit on this branch (commits aren't blocked); just don't branch off it. to read other branches use git log / diff / show <ref>."
+BRANCH_REASON="stay on the current branch -- don't create or switch branches / worktrees. you CAN commit on this branch (commits aren't blocked); just don't branch off it. to read other branches use git log / diff / show <ref>. (the user can lift this for a session with env AGENT_UNFENCE=branch.)"
 
 # wide `git add` -- agent must stage explicit paths, not sweep the worktree.
 # blocks -A / --all / -u / --update / `.` / `*` (and combined short flags
@@ -231,7 +244,7 @@ check() {
 
 check "$GIT_REASON"       "${GIT_PATTERNS[@]}"
 check "$GIT_WRITE_REASON" "${GIT_WRITE_PATTERNS[@]}"
-check "$BRANCH_REASON"    "${BRANCH_PATTERNS[@]}"
+_unfenced branch || check "$BRANCH_REASON" "${BRANCH_PATTERNS[@]}"
 check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 
@@ -307,6 +320,7 @@ done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git restore[^;|&]*")
 # is allowed. branch switching, `-b`, `checkout <ref> -- <path>`, and bare
 # `checkout .` stay blocked.
 while IFS= read -r seg; do
+    _unfenced branch && break
     args="${seg#*git checkout}"
     if [[ "$args" != " -- "* ]] || ! paths_concrete "${args# -- }"; then
         echo "BLOCKED: '$(_abbrev "$COMMAND")' -- only \`git checkout -- <explicit-file-paths>\` is allowed (no branch switching, \`.\`, globs, or dirs). $BRANCH_REASON" >&2
