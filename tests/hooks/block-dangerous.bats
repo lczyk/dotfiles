@@ -3,6 +3,9 @@
 # the policy reads a harness-neutral shell request and exits 2 to deny.
 
 setup() {
+    # the suite must not inherit a capability from the session that launched
+    # it -- every case sets what it needs
+    unset AGENT_UNFENCE
     HOOK="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/block-dangerous.sh"
 }
 
@@ -529,4 +532,68 @@ git push"
 @test "allows echo" {
     run fire "echo hello"
     [ "$status" -eq 0 ]
+}
+
+# -- the branch capability ----------------------------------------------
+# AGENT_UNFENCE=branch lifts the branch / worktree category only. read from
+# the policy's own environment, so the user grants it at launch.
+
+@test "branch allows git branch <name>" {
+    AGENT_UNFENCE=branch run fire "git branch feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "branch allows git switch" {
+    AGENT_UNFENCE=branch run fire "git switch main"
+    [ "$status" -eq 0 ]
+}
+
+@test "branch allows git checkout -b" {
+    AGENT_UNFENCE=branch run fire "git checkout -b feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "branch allows git checkout of an existing branch" {
+    AGENT_UNFENCE=branch run fire "git checkout main"
+    [ "$status" -eq 0 ]
+}
+
+@test "branch allows git worktree add" {
+    AGENT_UNFENCE=branch run fire "git worktree add ../wt feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "branch does not lift the destructive category" {
+    AGENT_UNFENCE=branch run fire "git branch -D feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "branch does not lift push" {
+    AGENT_UNFENCE=branch run fire "git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "branch does not lift rebase" {
+    AGENT_UNFENCE=branch run fire "git rebase main"
+    [ "$status" -eq 2 ]
+}
+
+@test "an unrelated capability does not lift the branch fence" {
+    AGENT_UNFENCE=meta run fire "git switch main"
+    [ "$status" -eq 2 ]
+}
+
+@test "an empty AGENT_UNFENCE does not lift the branch fence" {
+    AGENT_UNFENCE= run fire "git switch main"
+    [ "$status" -eq 2 ]
+}
+
+@test "a substring of a capability name does not lift the branch fence" {
+    AGENT_UNFENCE=branchy run fire "git switch main"
+    [ "$status" -eq 2 ]
+}
+
+@test "the capability cannot be granted from inside the command text" {
+    run fire "env AGENT_UNFENCE=branch git switch main"
+    [ "$status" -eq 2 ]
 }
