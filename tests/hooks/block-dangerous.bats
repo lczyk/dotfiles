@@ -83,6 +83,84 @@ fire() {
     [ "$status" -eq 0 ]
 }
 
+# -- git config: reads through, writes fenced -----------------------------
+
+@test "allows git config --get" {
+    run fire "git config --get user.name"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows git config --get chained with another command" {
+    run fire "git config --get core.hooksPath; echo done"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a bare git config read chained with &&" {
+    run fire "git config user.email && echo ok"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks git config key value" {
+    run fire "git config user.name mallory"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git config key value chained after a read" {
+    run fire "git config --get user.name; git config user.name mallory"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git config --global" {
+    run fire "git config --global user.email x@example.com"
+    [ "$status" -eq 2 ]
+}
+
+# -- git config injection: -c / --config-env ------------------------------
+# checked pre-strip -- the global-option normalisation would otherwise erase
+# the override before any pattern sees it.
+
+@test "blocks -c core.hooksPath" {
+    run fire "git -c core.hooksPath=/dev/null commit -m x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a glued -ccore.hooksPath" {
+    run fire "git -ccore.hooksPath=/dev/null commit -m x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks -c commit.gpgsign=false" {
+    run fire "git -c commit.gpgsign=false commit -m x"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a --config-env hook override" {
+    run fire "git --config-env=core.hooksPath=EVIL commit -m x"
+    [ "$status" -eq 2 ]
+}
+
+@test "allows a benign -c" {
+    run fire "git -c color.ui=false log --oneline"
+    [ "$status" -eq 0 ]
+}
+
+# glued global options must not dodge the subcommand anchors
+
+@test "blocks git push behind a glued -c" {
+    run fire "git -cfoo=bar push"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git push behind a glued -C" {
+    run fire "git -C/tmp/repo push"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git push behind --config-env" {
+    run fire "git --config-env=user.name=U push"
+    [ "$status" -eq 2 ]
+}
+
 # -- gh api: reads through, writes fenced --------------------------------
 # `gh api` field flags force a POST, so they read as writes. two things are
 # reads regardless: an explicit GET method, and a graphql query -- the v4
