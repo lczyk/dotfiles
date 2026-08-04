@@ -19,7 +19,13 @@ end
 
 # Unpack recently downloaded archive here
 function urd
-    set P (find ~/Downloads -mindepth 1 -maxdepth 1 -type f -printf '%T@ %p\n' | sort -nr | string replace -r '^[^ ]+ ' '' | head -n1)
+    # files only, newest first. -printf is GNU-only, so fish carries the list
+    # and ls -t does the mtime sort (same idiom as the siblings above).
+    set P
+    set files (find ~/Downloads -mindepth 1 -maxdepth 1 -type f)
+    if test (count $files) -gt 0
+        set P (/usr/bin/env ls -td -- $files | head -n1)
+    end
     if test (count $P) -eq 0; or not test -f "$P"
         echo "no downloaded file found" >&2
         return 1
