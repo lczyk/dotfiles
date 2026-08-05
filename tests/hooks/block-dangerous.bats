@@ -43,6 +43,16 @@ fire() {
     [ "$status" -eq 2 ]
 }
 
+@test "blocks git cherry-pick" {
+    run fire "git cherry-pick abc1234"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git reset --soft" {
+    run fire "git reset --soft HEAD~1"
+    [ "$status" -eq 2 ]
+}
+
 @test "blocks git merge" {
     run fire "git merge feature"
     [ "$status" -eq 2 ]
@@ -673,5 +683,74 @@ git push"
 
 @test "the capability cannot be granted from inside the command text" {
     run fire "env AGENT_UNFENCE=branch git switch main"
+    [ "$status" -eq 2 ]
+}
+
+# -- the history capability -----------------------------------------------
+# AGENT_UNFENCE=history lifts rebase / cherry-pick / reset --soft only.
+# reset --hard, bare reset, and everything else stay blocked regardless.
+
+@test "history allows git rebase" {
+    AGENT_UNFENCE=history run fire "git rebase main"
+    [ "$status" -eq 0 ]
+}
+
+@test "history allows git cherry-pick" {
+    AGENT_UNFENCE=history run fire "git cherry-pick abc1234"
+    [ "$status" -eq 0 ]
+}
+
+@test "history allows git reset --soft" {
+    AGENT_UNFENCE=history run fire "git reset --soft HEAD~1"
+    [ "$status" -eq 0 ]
+}
+
+@test "history allows bare git reset --soft (no ref)" {
+    AGENT_UNFENCE=history run fire "git reset --soft"
+    [ "$status" -eq 0 ]
+}
+
+@test "history does not lift git reset --hard" {
+    AGENT_UNFENCE=history run fire "git reset --hard HEAD"
+    [ "$status" -eq 2 ]
+}
+
+@test "history does not lift git reset --mixed" {
+    AGENT_UNFENCE=history run fire "git reset --mixed HEAD~1"
+    [ "$status" -eq 2 ]
+}
+
+@test "history does not lift bare git reset" {
+    AGENT_UNFENCE=history run fire "git reset"
+    [ "$status" -eq 2 ]
+}
+
+@test "history does not lift push --force" {
+    AGENT_UNFENCE=history run fire "git push --force"
+    [ "$status" -eq 2 ]
+}
+
+@test "history does not lift the branch category" {
+    AGENT_UNFENCE=history run fire "git switch main"
+    [ "$status" -eq 2 ]
+}
+
+@test "an unrelated capability does not lift the history fence" {
+    AGENT_UNFENCE=branch run fire "git rebase main"
+    [ "$status" -eq 2 ]
+}
+
+@test "an empty AGENT_UNFENCE does not lift the history fence" {
+    AGENT_UNFENCE= run fire "git rebase main"
+    [ "$status" -eq 2 ]
+}
+
+@test "a substring of a capability name does not lift the history fence" {
+    AGENT_UNFENCE=historyish run fire "git rebase main"
+    [ "$status" -eq 2 ]
+}
+
+@test "the history capability cannot be granted from inside the command text" {
+    run fire "env AGENT_UNFENCE=history git rebase main"
     [ "$status" -eq 2 ]
 }

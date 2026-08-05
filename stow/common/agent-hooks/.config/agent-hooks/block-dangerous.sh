@@ -4,8 +4,9 @@
 # evaluate.sh translates that into a harness-neutral verdict.
 #
 # categories:
-#   - destructive / history-rewriting git
-#   - any write git op (commit, tag, branch creation, cherry-pick, ...)
+#   - destructive git (reset, force-push, filter-branch, ...)
+#   - history-mutating git (rebase, cherry-pick, reset --soft -- liftable, see AGENT_UNFENCE=history)
+#   - any write git op (commit, tag, branch creation, ...)
 #   - any write `gh` op (pr/issue/release create+comment+edit, api writes)
 #   - bypass of commit signing
 #   - software / package installs
@@ -68,14 +69,14 @@ while :; do
     COMMAND=$STRIPPED
 done
 
-# destructive / history-rewriting git ops. not recoverable.
+# destructive git ops. not recoverable, and not liftable by any capability.
+# `git reset` (past --soft) and `git rebase` are handled separately below --
+# see the history capability.
 GIT_PATTERNS=(
-    "git reset( |$)"
     # force / interactive clean deletes untracked files; -n / -nd dry-runs stay allowed.
     "git clean ((-[A-Za-z]*[fi])|--force|--interactive)"
     "git branch -D"
     "push --force"
-    "git rebase"
     "git merge( |$)"
     # pull = fetch + merge (or rebase) into the current branch
     "(^|[ ;|&])git pull( |$)"
@@ -97,7 +98,6 @@ GIT_WRITE_PATTERNS=(
     # follow that rule rather than being hard-fenced.
     "(^|[ ;|&])git push( |$)"
     "(^|[ ;|&])git tag( -[adfsmu]| [^-])"
-    "(^|[ ;|&])git cherry-pick( |$)"
     "(^|[ ;|&])git revert( |$)"
     "(^|[ ;|&])git am( |$)"
     # NOTE: `git apply` handled by a special-case below -- index-only
@@ -114,7 +114,7 @@ GIT_WRITE_PATTERNS=(
     # future pushes.
     "(^|[ ;|&])git remote (add|remove|rm|rename|set-url|set-head|set-branches|prune)"
 )
-GIT_WRITE_REASON="these git ops are user-run -- commits on the current branch ARE allowed, but run push / tag / cherry-pick / etc yourself or disable the hook"
+GIT_WRITE_REASON="these git ops are user-run -- commits on the current branch ARE allowed, but run push / tag / etc yourself or disable the hook"
 
 # branch / worktree creation+switching. the agent works ON the currently
 # checked-out branch -- it must not create or switch branches / worktrees.
@@ -138,6 +138,18 @@ BRANCH_PATTERNS=(
     "(^|[ ;|&])git symbolic-ref( |$)"
 )
 BRANCH_REASON="stay on the current branch -- don't create or switch branches / worktrees. you CAN commit on this branch (commits aren't blocked); just don't branch off it. to read other branches use git log / diff / show <ref>. (the user can lift this for a session with env AGENT_UNFENCE=branch.)"
+
+# history-mutating git ops -- rewrite or duplicate commits, distinct risk
+# class from branch nav (which never loses work). reflog-recoverable but
+# real risk: conflicts, duplicate commits, wrong base. `git reset --soft`
+# belongs here too but is handled as a special case below (it's the one
+# `reset` form that touches neither index nor worktree); --hard / --mixed /
+# bare `reset` stay in GIT_PATTERNS, ungated by any capability.
+HISTORY_PATTERNS=(
+    "git rebase"
+    "(^|[ ;|&])git cherry-pick( |$)"
+)
+HISTORY_REASON="git rebase / cherry-pick rewrite or duplicate commits -- user prevents this by default. (the user can lift this for a session with env AGENT_UNFENCE=history.)"
 
 # wide `git add` -- agent must stage explicit paths, not sweep the worktree.
 # blocks -A / --all / -u / --update / `.` / `*` (and combined short flags
@@ -259,7 +271,8 @@ check() {
 
 check "$GIT_REASON"       "${GIT_PATTERNS[@]}"
 check "$GIT_WRITE_REASON" "${GIT_WRITE_PATTERNS[@]}"
-_unfenced branch || check "$BRANCH_REASON" "${BRANCH_PATTERNS[@]}"
+_unfenced branch  || check "$BRANCH_REASON"  "${BRANCH_PATTERNS[@]}"
+_unfenced history || check "$HISTORY_REASON" "${HISTORY_PATTERNS[@]}"
 check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 
@@ -358,6 +371,18 @@ fi
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git apply "; then
     if ! echo "$COMMAND" | grep -qE -- "--(cached|check|stat|numstat|summary)"; then
         echo "BLOCKED: '$(_abbrev "$COMMAND")' mutates worktree. $GIT_WRITE_REASON" >&2
+        exit 2
+    fi
+fi
+
+# `git reset` -- ONLY `--soft` is conditionally allowed (under the history
+# capability): it moves the branch pointer but leaves index and worktree
+# untouched, fully reflog-recoverable. `--hard`, `--mixed`, and bare
+# `git reset` stay blocked always, capability or not -- they touch the
+# index and/or worktree and are a different risk class.
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git reset( |$)"; then
+    if ! { _unfenced history && echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git reset --soft( |$)"; }; then
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- \`git reset\` is destructive past --soft. $GIT_REASON. (\`--soft\` alone is liftable with env AGENT_UNFENCE=history.)" >&2
         exit 2
     fi
 fi

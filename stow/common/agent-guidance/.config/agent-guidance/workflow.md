@@ -41,8 +41,9 @@ three tiers. only the middle one is a judgement call.
 
 - **a `BLOCKED:` verdict is final** don't rephrase the command, split it across invocations, or otherwise route around the fence. report it and stop.
 - **PRs are user-run** when asked for one, draft the title and body and hand them over.
-- **capabilities the user can grant** the fence reads `AGENT_UNFENCE` -- comma-separated tokens -- from its own environment, set when the session is launched (`env AGENT_UNFENCE=branch claude`). two exist:
-    - `branch` lifts the branch / worktree category only: create branches, switch, `git checkout -b`, `git worktree add`. `git branch -D`, push, rebase and everything else stay blocked.
+- **capabilities the user can grant** the fence reads `AGENT_UNFENCE` -- comma-separated tokens -- from its own environment, set when the session is launched (`env AGENT_UNFENCE=branch claude`). three exist:
+    - `branch` lifts the branch / worktree category only: create branches, switch, `git checkout -b`, `git worktree add`. `git branch -D`, push, and everything else stay blocked.
+    - `history` lifts history-mutating git ops: `git rebase`, `git cherry-pick`, `git reset --soft`. `git reset --hard` / `--mixed` / bare `git reset`, force-push, and everything else stay blocked -- those touch the index/worktree or are otherwise a different risk class, not liftable at all.
     - `meta` lifts the fence on the hooks themselves -- see "the hooks are not yours" below.
 
     you cannot grant yourself one. prefixing your own command with `AGENT_UNFENCE=...` reaches the policy as text on stdin, never as a variable. if the token isn't set, the `BLOCKED:` rule above applies as normal.
