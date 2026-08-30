@@ -46,6 +46,7 @@ scope: ALL output -- prose, answers, comments, markdown, chat replies. code comm
         - `lgtm` -- looks good to me
         - `wdyt` -- what do you think
         - `wip` -- work in progress
+        - `lhf` -- low-hanging fruit; cheap high-value work worth doing first
         - `atm` -- at the moment
         - `aka` -- also known as
         - `pls` -- please
