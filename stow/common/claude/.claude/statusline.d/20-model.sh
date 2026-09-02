@@ -24,6 +24,8 @@ alias_for() {
         "Sonnet 4.6 (1M context)") echo "S46-1M" ;;
         "Sonnet 5")                echo "S5" ;;
         "Fable 5")                 echo "F5" ;;
+        "Fable 5.1")               echo "F51" ;;
+        "Fable 5.1 (1M context)")  echo "F51-1M" ;;
         "Haiku 4.5")               echo "H45" ;;
         "deepseek-v4-pro[1m]")     echo "DS4-1M" ;;
         "deepseek-v4-flash")       echo "DS4-F" ;;

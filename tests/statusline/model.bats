@@ -43,6 +43,11 @@ strip_ansi() {
     [ "$output" = $'\033[1;97;48;5;196m[F5]\033[0m' ]
 }
 
+@test "fable 5.1 aliases to F51" {
+    run bash -c "echo '{\"model\":{\"display_name\":\"Fable 5.1\"}}' | '$BADGE'"
+    [ "$output" = $'\033[1;97;48;5;196m[F51]\033[0m' ]
+}
+
 @test "fable badge fires on the raw model id too" {
     run bash -c "echo '{\"model\":{\"id\":\"claude-fable-5\"}}' | '$BADGE'"
     [[ "$output" == *$'\033[1;97;48;5;196m'* ]]
