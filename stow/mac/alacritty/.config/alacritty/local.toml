@@ -2,20 +2,20 @@
 size = 20.0
 
 [font.normal]
-family = "DejaVuSansM Nerd Font Mono"
+family = "Ubuntu Mono"
 style = "Regular"
 
 [font.bold]
-family = "DejaVuSansM Nerd Font Mono"
+family = "Ubuntu Mono"
 style = "Bold"
 
 [font.italic]
-family = "DejaVuSansM Nerd Font Mono"
-style = "Oblique"
+family = "Ubuntu Mono"
+style = "Italic"
 
 [font.bold_italic]
-family = "DejaVuSansM Nerd Font Mono"
-style = "Bold Oblique"
+family = "Ubuntu Mono"
+style = "Bold Italic"
 
 [font.offset]
 x = 0
