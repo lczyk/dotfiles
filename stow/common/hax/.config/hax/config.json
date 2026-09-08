@@ -1,0 +1,3 @@
+{
+  "system_prompt_append": "@../agent-guidance/workflow.md"
+}
