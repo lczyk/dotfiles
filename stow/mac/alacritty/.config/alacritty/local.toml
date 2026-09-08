@@ -45,19 +45,25 @@ key = "Key3"
 mods = "Alt"
 chars = "#"
 
-# cmd+s -> kitty CSI-u with Super modifier (param 9 = 1 + bit3-Super).
-# editor parses as genuine Cmd+S and matches its Save chord.
-[[keyboard.bindings]]
-key = "S"
-mods = "Command"
-chars = "\u001B[115;9u"
+# alacritty encodes Command as Super in the kitty protocol on its own, so any
+# cmd chord it does not claim for itself arrives intact with no binding at all.
+# only the ones alacritty claims need an entry here -- and a `chars` rewrite
+# that sends different bytes breaks the chord rather than forwarding it.
 
-# cmd+f -> send ctrl+f (0x06) to running program instead of alacritty's
-# built-in SearchForward. lets `edit` receive its find chord on macos.
+# cmd+f split per screen mode, same shape as cmd+c below:
+#   alt screen (TUI apps like `edit`) -> forward to program.
+#   normal screen (shell)             -> alacritty's own search.
 [[keyboard.bindings]]
 key = "F"
 mods = "Command"
-chars = "\u0006"
+mode = "Alt"
+action = "ReceiveChar"
+
+[[keyboard.bindings]]
+key = "F"
+mods = "Command"
+mode = "~Alt"
+action = "SearchForward"
 
 # cmd+c split per screen mode:
 #   alt screen (TUI apps like `edit`) -> forward to program.
