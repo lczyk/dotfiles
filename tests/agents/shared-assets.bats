@@ -25,6 +25,10 @@ setup() {
             [ "$(readlink "$REPO/stow/common/$harness/.${harness}/skills/$skill")" = "../../../agent-skills/.config/agent-skills/$skill" ]
         done
     done
+
+    for skill in caveman caveman-commit grill-me hat lofi to-issue to-pr; do
+        [ "$(readlink "$REPO/stow/common/hax/.config/hax/skills/$skill")" = "../../../../agent-skills/.config/agent-skills/$skill" ]
+    done
 }
 
 @test "stow resolves cross-package agent links" {
@@ -40,6 +44,9 @@ setup() {
         "$TARGET/.copilot/copilot-instructions.md" \
         "$TARGET/.copilot/skills/caveman/SKILL.md" \
         "$TARGET/.copilot/hooks/agent-hooks.json" \
+        "$TARGET/.config/hax/AGENTS.md" \
+        "$TARGET/.config/hax/config.json" \
+        "$TARGET/.config/hax/skills/hat/SKILL.md" \
         "$TARGET/.config/opencode/AGENTS.md"; do
         [ -r "$path" ]
     done
