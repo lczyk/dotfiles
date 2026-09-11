@@ -26,7 +26,7 @@ setup() {
         done
     done
 
-    for skill in caveman caveman-commit grill-me hat lofi to-issue to-pr; do
+    for skill in caveman caveman-commit grill-me lofi to-issue to-pr; do
         [ "$(readlink "$REPO/stow/common/hax/.config/hax/skills/$skill")" = "../../../../agent-skills/.config/agent-skills/$skill" ]
     done
 }
@@ -46,7 +46,7 @@ setup() {
         "$TARGET/.copilot/hooks/agent-hooks.json" \
         "$TARGET/.config/hax/AGENTS.md" \
         "$TARGET/.config/hax/config.json" \
-        "$TARGET/.config/hax/skills/hat/SKILL.md" \
+        "$TARGET/.config/hax/skills/lofi/SKILL.md" \
         "$TARGET/.config/opencode/AGENTS.md"; do
         [ -r "$path" ]
     done
