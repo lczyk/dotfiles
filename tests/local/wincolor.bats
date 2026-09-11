@@ -21,8 +21,12 @@ case $2 in
         if [ "$5" = --reset ]; then
             rm -f "$BGDIR/$4"
         else
-            v=${5#*=}
-            printf '%s' "${v//\"/}" > "$BGDIR/$4"
+            for opt in "${@:5}"; do
+                case $opt in (colors.primary.background=*)
+                    v=${opt#*=}
+                    printf '%s' "${v//\"/}" > "$BGDIR/$4" ;;
+                esac
+            done
         fi ;;
     (get-config)
         bg='#1c1c1c'
@@ -34,6 +38,10 @@ SHIM
     export PATH="$SHIMDIR:$PATH"
     export ALACRITTY_WINDOW_ID=42
     BG="$BGDIR/42"
+    # what conf.d/20_palette.fish exports (fish joins lists with spaces)
+    export PALETTE_LIGHT_BG=e3e3e3 PALETTE_LIGHT_FG=3c3836
+    export PALETTE_LIGHT_NORMAL='a89984 cc241d 98971a d79921 458588 b16286 689d6a 504945'
+    export PALETTE_LIGHT_BRIGHT='928374 9d0006 79740e b57614 076678 8f3f71 427b58 282828'
 }
 
 last_config_call() { grep '^msg config ' "$LOG" | sed -n '$p'; }
@@ -41,10 +49,11 @@ last_config_call() { grep '^msg config ' "$LOG" | sed -n '$p'; }
 @test "list prints every colour with its hex" {
     run "$WINCOLOR" list
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 7 ]
+    [ "${#lines[@]}" -eq 8 ]
     [[ "$output" == *"[b]lue"*"#0072bd"* ]]
     [[ "$output" == *"[o]range"*"#e95420"* ]]
     [[ "$output" == *"[a]ubergine"*"#772953"* ]]
+    [[ "$output" == *"[l]ight"*"#e3e3e3"* ]]
 }
 
 @test "list needs no window" {
@@ -66,6 +75,19 @@ last_config_call() { grep '^msg config ' "$LOG" | sed -n '$p'; }
     [ "$status" -eq 0 ]
     [ "$(last_config_call)" = 'msg config -w 42 colors.primary.background="#0072bd"' ]
     [ "$(cat "$BG")" = '#0072bd' ]
+}
+
+@test "light also swaps the text palette" {
+    run "$WINCOLOR" l
+    [ "$status" -eq 0 ]
+    call=$(last_config_call)
+    [[ "$call" == 'msg config -w 42 colors.primary.background="#e3e3e3" colors.primary.foreground="#3c3836" '* ]]
+    [[ "$call" == *' colors.normal.red="#cc241d" '* ]]
+    [[ "$call" == *' colors.bright.white="#282828"' ]]
+    [ "$(grep -o 'colors\.\(normal\|bright\)\.[a-z]*=' <<< "$call" | wc -l)" -eq 16 ]
+    [ "$(cat "$BG")" = '#e3e3e3' ]
+    run "$WINCOLOR" light
+    [ "$(last_config_call)" = 'msg config -w 42 --reset' ]
 }
 
 @test "same colour twice untoggles" {
@@ -98,10 +120,29 @@ last_config_call() { grep '^msg config ' "$LOG" | sed -n '$p'; }
     [ ! -e "$LOG" ]
 }
 
-@test "no argument picks a random palette colour" {
-    run "$WINCOLOR"
-    [ "$status" -eq 0 ]
-    [[ " #0072bd #e95420 #edb120 #772953 #77ac30 #4dbeee #a2142f " == *" $(cat "$BG") "* ]]
+@test "orange, yellow and cyan get the light text palette, blue does not" {
+    for c in orange yellow cyan; do
+        "$WINCOLOR" "$c"
+        [[ "$(last_config_call)" == *' colors.primary.foreground="#3c3836" '* ]]
+    done
+    "$WINCOLOR" blue
+    [ "$(last_config_call)" = 'msg config -w 42 colors.primary.background="#0072bd"' ]
+}
+
+@test "light needs the palette from fish" {
+    unset PALETTE_LIGHT_NORMAL
+    run "$WINCOLOR" light
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"PALETTE_LIGHT_"* ]]
+    ! grep -q '^msg config ' "$LOG"
+}
+
+@test "no argument picks a random palette colour, never light" {
+    for _ in $(seq 40); do
+        "$WINCOLOR"
+        [[ " #0072bd #e95420 #edb120 #772953 #77ac30 #4dbeee #a2142f " == *" $(cat "$BG") "* ]]
+        "$WINCOLOR" off
+    done
 }
 
 @test "no argument on a coloured window untoggles" {

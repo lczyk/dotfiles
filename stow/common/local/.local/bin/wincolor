@@ -9,14 +9,22 @@
 #
 # applied through alacritty's ipc socket, so only this window changes. the
 # current colour is read back the same way, so there is no state to keep.
-# names may be shortened to any unique prefix.
+# names may be shortened to any unique prefix. light backgrounds also swap
+# the text palette for the one fish exports as PALETTE_LIGHT_*.
 
 set -e
 
-# matlab `lines`, with its orange and purple swapped for ubuntu's.
-NAMES=(blue orange yellow aubergine green cyan red)
-HEXES=(0072bd e95420 edb120 772953 77ac30 4dbeee a2142f)
+# matlab `lines`, with its orange and purple swapped for ubuntu's, then the
+# light background from fish. light is last and never drawn at random.
+# INVERT marks the backgrounds that get the light text palette.
+NAMES=(blue orange yellow aubergine green cyan red light)
+HEXES=(0072bd e95420 edb120 772953 77ac30 4dbeee a2142f "${PALETTE_LIGHT_BG:-}")
+INVERT=(0 1 1 0 0 1 0 1)
+N_RANDOM=7
 RETRIES=5
+ANSI=(black red green yellow blue magenta cyan white)
+IFS=': ' read -ra LIGHT_NORMAL <<< "${PALETTE_LIGHT_NORMAL:-}"
+IFS=': ' read -ra LIGHT_BRIGHT <<< "${PALETTE_LIGHT_BRIGHT:-}"
 
 function _fatal() { printf 'wincolor: %s\n' "$*" >&2; exit 1; }
 
@@ -84,7 +92,21 @@ function _index_of() {
 
 function _apply() { _msg config -w "$ALACRITTY_WINDOW_ID" "$@" || exit 1; }
 
-function _set() { _apply "colors.primary.background=\"#${HEXES[$1]}\""; }
+function _set() {
+    local i opts=("colors.primary.background=\"#${HEXES[$1]}\"")
+    if [ "${INVERT[$1]}" = 1 ]; then
+        if [ -z "${PALETTE_LIGHT_BG:-}" ] || [ -z "${PALETTE_LIGHT_FG:-}" ] \
+            || [ "${#LIGHT_NORMAL[@]}" -ne 8 ] || [ "${#LIGHT_BRIGHT[@]}" -ne 8 ]; then
+            _fatal "PALETTE_LIGHT_* not exported by fish -- see conf.d/20_palette.fish"
+        fi
+        opts+=("colors.primary.foreground=\"#${PALETTE_LIGHT_FG}\"")
+        for ((i = 0; i < ${#ANSI[@]}; i++)); do
+            opts+=("colors.normal.${ANSI[$i]}=\"#${LIGHT_NORMAL[$i]}\"")
+            opts+=("colors.bright.${ANSI[$i]}=\"#${LIGHT_BRIGHT[$i]}\"")
+        done
+    fi
+    _apply "${opts[@]}"
+}
 
 function _off() { _apply --reset; }
 
@@ -105,7 +127,7 @@ function _random() {
     if [ -n "$current" ]; then
         _off
     else
-        _set $((RANDOM % ${#NAMES[@]}))
+        _set $((RANDOM % N_RANDOM))
     fi
 }
 
@@ -124,7 +146,7 @@ function _list() {
 
 function _help() {
     printf 'usage: wincolor [<name>|off|list]\n'
-    printf '  no argument: random colour, or off if the window is already coloured\n'
+    printf '  no argument: random colour (never light), or off if already coloured\n'
     printf '  <name>:      that colour, or off if the window already has it\n'
     printf '               any unique prefix works, e.g. a for aubergine\n'
     printf '  list:        colours, shortcut letter in brackets\n'
