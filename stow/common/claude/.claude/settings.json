@@ -82,6 +82,7 @@
       }
     ]
   },
+  "respondToBashCommands": false,
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
