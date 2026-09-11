@@ -1,7 +1,7 @@
 function logo -d "Draw a cute ascii fish"
-    set -q red; or set -l red ff0000
-    set -q grey; or set -l grey ffff00
-    set -q yellow; or set -l yellow ff7f00
+    set -q red; or set -l red red
+    set -q grey; or set -l grey yellow
+    set -q yellow; or set -l yellow bryellow
 
     if type -q __bobthefish_colors
         # Use repo colors for to color the fish
