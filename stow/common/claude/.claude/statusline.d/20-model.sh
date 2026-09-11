@@ -53,11 +53,10 @@ label=$(alias_for "$name")
 label=$(printf '%s' "$label" | tr -cd 'A-Za-z0-9 ._-' | head -c 20)
 [ -z "$label" ] && exit 0
 
-# fable gets a loud badge -- bold white on bright red -- so there's no missing
+# fable 5 gets a loud badge -- bold white on red -- so there's no missing
 # which model is driving. matched on the raw name so `claude-fable-5` (id
-# fallback, no alias) lights up too. it renders verbatim, never contrast-
-# adjusted: the whole point is that it looks the same everywhere.
+# fallback, no alias) lights up too. later fables (5.1 and up) are ordinary.
 case "$name" in
-    *[Ff]able*) printf '\033[1;97;48;5;196m[%s]\033[0m' "$label" ;;
-    *)          sl_paint '5;39' "[$label]" ;;
+    "Fable 5"|"Fable 5 ("*|*fable-5) printf '\033[1;%s;4%sm[%s]\033[0m' "$SL_BWHITE" "${SL_RED#3}" "$label" ;;
+    *)                               sl_paint "$SL_BLUE" "[$label]" ;;
 esac

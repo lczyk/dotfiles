@@ -14,7 +14,7 @@ if [ -n "$AGENT_UNFENCE" ]; then
 fi
 
 if [ -n "$caps" ]; then
-    sl_paint '5;208' "[U:${caps:0:40}]"
+    sl_paint "$SL_BRED" "[U:${caps:0:40}]"
 else
     printf '[u]'
 fi

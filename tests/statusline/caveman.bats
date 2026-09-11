@@ -2,9 +2,6 @@
 # tests for stow/common/claude/.claude/statusline.d/10-caveman.sh
 
 setup() {
-    # badge colours are contrast-adjusted against the terminal background;
-    # pin "unknown background" so assertions see the plain-foreground form.
-    unset ALACRITTY_WINDOW_ID CLAUDE_STATUSLINE_BG
     BADGE="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/statusline.d/10-caveman.sh"
     export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude"
     export AGENT_STATE_DIR="$BATS_TEST_TMPDIR/agent-state"

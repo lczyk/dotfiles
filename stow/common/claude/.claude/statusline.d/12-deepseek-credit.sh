@@ -69,9 +69,9 @@ esac
 
 # colour: green >= 5, yellow >= 1, red < 1
 if [ "$(printf '%.0f' "$balance" 2>/dev/null || echo 0)" -ge 5 ]; then
-    sl_paint '5;71' "[\$$balance]"
+    sl_paint "$SL_GREEN" "[\$$balance]"
 elif [ "$(printf '%.0f' "$balance" 2>/dev/null || echo 0)" -ge 1 ]; then
-    sl_paint '5;214' "[\$$balance]"
+    sl_paint "$SL_YELLOW" "[\$$balance]"
 else
-    sl_paint '5;196' "[\$$balance]"
+    sl_paint "$SL_RED" "[\$$balance]"
 fi

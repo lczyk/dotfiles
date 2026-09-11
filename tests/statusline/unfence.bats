@@ -2,9 +2,6 @@
 # tests for stow/common/claude/.claude/statusline.d/14-unfence.sh
 
 setup() {
-    # badge colours are contrast-adjusted against the terminal background;
-    # pin "unknown background" so assertions see the plain-foreground form.
-    unset ALACRITTY_WINDOW_ID CLAUDE_STATUSLINE_BG
     unset AGENT_UNFENCE
     BADGE="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/statusline.d/14-unfence.sh"
 }

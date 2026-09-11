@@ -20,7 +20,7 @@ SETTINGS="${CONFIG_DIR}/settings.json"
 . "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"
 
 
-badge() { sl_paint '5;172' "[$1]"; }
+badge() { sl_paint "$SL_YELLOW" "[$1]"; }
 
 _caveman_configured() {
     [ -f "$SETTINGS" ] || return 1

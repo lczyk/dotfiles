@@ -39,6 +39,6 @@ if [ -f "$FLAG" ] && [ ! -L "$FLAG" ]; then
 fi
 
 case "$hat" in
-    yolo) sl_paint '5;165' "[H:yolo]" ;;
+    yolo) sl_paint "$SL_BMAGENTA" "[H:yolo]" ;;
     *)    printf '[h]' ;;
 esac

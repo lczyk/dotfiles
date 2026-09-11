@@ -7,7 +7,6 @@
 # must never show session B's hat).
 
 setup() {
-    unset ALACRITTY_WINDOW_ID CLAUDE_STATUSLINE_BG
     BADGE="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/statusline.d/13-hat.sh"
     export AGENT_STATE_DIR="$BATS_TEST_TMPDIR/agent-state"
     HATS_DIR="$AGENT_STATE_DIR/hats"

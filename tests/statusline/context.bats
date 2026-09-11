@@ -2,9 +2,6 @@
 # tests for stow/common/claude/.claude/statusline.d/30-context.sh
 
 setup() {
-    # badge colours are contrast-adjusted against the terminal background;
-    # pin "unknown background" so assertions see the plain-foreground form.
-    unset ALACRITTY_WINDOW_ID CLAUDE_STATUSLINE_BG
     BADGE="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/statusline.d/30-context.sh"
 }
 
@@ -39,24 +36,24 @@ run_badge() {
 
 @test "low usage uses green colour" {
     run_badge '{"context_window":{"used_percentage":10}}'
-    [[ "$output" == *$'\x1b[38;5;71m'* ]]
+    [[ "$output" == *$'\x1b[32m'* ]]
 }
 
-@test "mid usage uses orange colour" {
+@test "mid usage uses yellow colour" {
     run_badge '{"context_window":{"used_percentage":60}}'
-    [[ "$output" == *$'\x1b[38;5;214m'* ]]
+    [[ "$output" == *$'\x1b[33m'* ]]
 }
 
 @test "high usage uses red colour" {
     run_badge '{"context_window":{"used_percentage":85}}'
-    [[ "$output" == *$'\x1b[38;5;196m'* ]]
+    [[ "$output" == *$'\x1b[31m'* ]]
 }
 
 @test "thresholds are inclusive at 50 and 80" {
     run_badge '{"context_window":{"used_percentage":50}}'
-    [[ "$output" == *$'\x1b[38;5;214m'* ]]
+    [[ "$output" == *$'\x1b[33m'* ]]
     run_badge '{"context_window":{"used_percentage":80}}'
-    [[ "$output" == *$'\x1b[38;5;196m'* ]]
+    [[ "$output" == *$'\x1b[31m'* ]]
 }
 
 @test "truncates fractional percentage" {

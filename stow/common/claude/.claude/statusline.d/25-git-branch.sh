@@ -53,7 +53,7 @@ done
 dirty=$(git -C "$cwd" status --porcelain 2>/dev/null | grep -c '^')
 
 if [ "$dirty" -gt 0 ]; then
-    sl_paint '5;139' "[$pwd_name/$branch($dirty)]"
+    sl_paint "$SL_WHITE" "[$pwd_name/$branch($dirty)]"
 else
-    sl_paint '5;139' "[$pwd_name/$branch]"
+    sl_paint "$SL_WHITE" "[$pwd_name/$branch]"
 fi

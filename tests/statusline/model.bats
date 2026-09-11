@@ -2,9 +2,6 @@
 # tests for stow/common/claude/.claude/statusline.d/20-model.sh
 
 setup() {
-    # badge colours are contrast-adjusted against the terminal background;
-    # pin "unknown background" so assertions see the plain-foreground form.
-    unset ALACRITTY_WINDOW_ID CLAUDE_STATUSLINE_BG
     BADGE="$BATS_TEST_DIRNAME/../../stow/common/claude/.claude/statusline.d/20-model.sh"
 }
 
@@ -38,24 +35,26 @@ strip_ansi() {
     [ "$out" = "[claude-opus-4-7]" ]
 }
 
-@test "fable badge is bold white on bright-red background" {
+@test "fable 5 badge is bold white on red background" {
     run bash -c "echo '{\"model\":{\"display_name\":\"Fable 5\"}}' | '$BADGE'"
-    [ "$output" = $'\033[1;97;48;5;196m[F5]\033[0m' ]
+    [ "$output" = $'\033[1;97;41m[F5]\033[0m' ]
 }
 
-@test "fable 5.1 aliases to F51" {
+@test "fable 5.1 aliases to F51 and is an ordinary badge" {
     run bash -c "echo '{\"model\":{\"display_name\":\"Fable 5.1\"}}' | '$BADGE'"
-    [ "$output" = $'\033[1;97;48;5;196m[F51]\033[0m' ]
+    [ "$output" = $'\033[34m[F51]\033[0m' ]
 }
 
-@test "fable badge fires on the raw model id too" {
+@test "fable 5 badge fires on the raw model id too, 5.1 does not" {
     run bash -c "echo '{\"model\":{\"id\":\"claude-fable-5\"}}' | '$BADGE'"
-    [[ "$output" == *$'\033[1;97;48;5;196m'* ]]
+    [[ "$output" == *$'\033[1;97;41m'* ]]
+    run bash -c "echo '{\"model\":{\"id\":\"claude-fable-5-1\"}}' | '$BADGE'"
+    [ "$output" = $'\033[34m[claude-fable-5-1]\033[0m' ]
 }
 
 @test "non-fable badge keeps the default blue" {
     run bash -c "echo '{\"model\":{\"display_name\":\"Opus 4.8\"}}' | '$BADGE'"
-    [ "$output" = $'\033[38;5;39m[O48]\033[0m' ]
+    [ "$output" = $'\033[34m[O48]\033[0m' ]
 }
 
 @test "silent on empty stdin" {
@@ -91,6 +90,6 @@ strip_ansi() {
     out=$(printf '%s' "$output" | strip_ansi)
     [ "$out" = "[31mevil]" ]
     # no real escape byte should appear anywhere in raw output beyond the badge's own colour codes
-    raw_no_colour=$(printf '%s' "$output" | sed 's/\x1b\[38;5;[0-9]*m//g; s/\x1b\[0m//g')
+    raw_no_colour=$(printf '%s' "$output" | sed 's/\x1b\[34m//g; s/\x1b\[0m//g')
     [[ "$raw_no_colour" != *$'\x1b'* ]]
 }

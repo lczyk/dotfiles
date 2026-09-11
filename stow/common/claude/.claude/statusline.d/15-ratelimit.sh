@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# usage badge. shows [N%] with progressive green->red gradient (rate-limit %
+# usage badge. shows [N%] stepping green->yellow->red (rate-limit %
 # or context-window %), falling back to [$N.NN] session cost when no % is
 # available (e.g. some non-Anthropic providers).
 
@@ -25,7 +25,7 @@ else
         | sed -n 's/.*"total_cost_usd"[[:space:]]*:[[:space:]]*\([0-9.]*\).*/\1/p')
 fi
 
-# -- percentage path: progressive green->yellow->red (0%=green, 50%=yellow, 100%=red)
+# -- percentage path: six palette steps, green through yellow to red
 case "$pct" in
     ''|*[!0-9.]) ;;
     *)
@@ -33,15 +33,14 @@ case "$pct" in
         if [ -n "$pct" ]; then
             [ "$pct" -gt 100 ] && pct=100
 
-            if [ "$pct" -le 50 ]; then
-                r=$(( pct * 255 / 50 ))
-                g=255
-            else
-                r=255
-                g=$(( (100 - pct) * 255 / 50 ))
+            if   [ "$pct" -le 16 ]; then colour=$SL_GREEN
+            elif [ "$pct" -le 33 ]; then colour=$SL_BGREEN
+            elif [ "$pct" -le 50 ]; then colour=$SL_YELLOW
+            elif [ "$pct" -le 66 ]; then colour=$SL_BYELLOW
+            elif [ "$pct" -le 83 ]; then colour=$SL_BRED
+            else                         colour=$SL_RED
             fi
-            b=0
-            sl_paint "2;$r;$g;$b" "$(printf '[%d%%]' "$pct")"
+            sl_paint "$colour" "$(printf '[%d%%]' "$pct")"
             exit 0
         fi
         ;;
@@ -55,4 +54,4 @@ esac
 printf -v cost_fmt '%.2f' "$cost" 2>/dev/null || cost_fmt="$cost"
 case "$cost_fmt" in ''|0|0.00) exit 0 ;; esac
 
-sl_paint '5;71' "[\$$cost_fmt]"
+sl_paint "$SL_GREEN" "[\$$cost_fmt]"

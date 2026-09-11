@@ -11,7 +11,7 @@ OFF_MARKER="${STATE_DIR}/lofi-off"
 . "$(dirname "${BASH_SOURCE[0]}")/../statusline-colour.sh"
 
 
-badge() { sl_paint '5;110' "[$1]"; }
+badge() { sl_paint "$SL_CYAN" "[$1]"; }
 
 if [ -f "$SETTINGS" ] && grep -q 'agent-styles/lofi' "$SETTINGS" 2>/dev/null && [ ! -f "$OFF_MARKER" ]; then
     badge "L"

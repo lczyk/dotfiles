@@ -34,11 +34,11 @@ used=${used%%.*}
 [ -z "$used" ] && exit 0
 
 if [ "$used" -ge 80 ]; then
-    colour='5;196'
+    colour=$SL_RED
 elif [ "$used" -ge 50 ]; then
-    colour='5;214'
+    colour=$SL_YELLOW
 else
-    colour='5;71'
+    colour=$SL_GREEN
 fi
 
 sl_paint "$colour" "$(printf '[ctx %d%%]' "$used")"
