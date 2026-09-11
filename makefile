@@ -137,8 +137,9 @@ lint-py:  ## ruff check auto-commit (no writes)
 	uv run --project $(AC_DIR) ruff format --check $(AC_DIR)
 
 .PHONY: lint-sh
-lint-sh:  ## shellcheck tracked shell scripts + git hooks
-	git ls-files '*.sh' 'stow/common/git/.config/git/hooks/*' | grep -v '\.md$$' | xargs shellcheck -x
+lint-sh:  ## shellcheck tracked shell scripts, git hooks + ~/.local/bin scripts
+	{ git ls-files '*.sh' 'stow/common/git/.config/git/hooks/*' | grep -v '\.md$$'; \
+	  git ls-files 'stow/*/local/.local/bin/*' | xargs grep -lE '^#!(/usr/bin/env |/bin/|/usr/bin/)(ba)?sh$$'; } | xargs shellcheck -x
 
 .PHONY: format
 format: $(addprefix format-,$(CARGO_BINS)) format-py  ## cargo fmt + ruff format
