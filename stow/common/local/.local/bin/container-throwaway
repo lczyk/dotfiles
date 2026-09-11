@@ -168,7 +168,7 @@ function run() {
         "$BACKEND" start "${container_name}"
     else
         info "Creating new container '${container_name}'"
-        create $ubuntu_version $architecture
+        create "$ubuntu_version" "$architecture"
     fi
 
     # reconnect bridge
@@ -236,6 +236,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y ${_TO_INSTALL[*]}
 ln -s batcat /usr/bin/bat
 EOF
     local list_of_deps=$(mktemp ~/list_of_deps.XXXXXX.txt)
+    # shellcheck disable=SC2064  # locals are gone by EXIT, expand now on purpose
     trap "rm -f ${apt_setup_script} ${list_of_deps}" EXIT
 
     printf "%s\n" "${_TO_INSTALL[@]}" > "${list_of_deps}"
