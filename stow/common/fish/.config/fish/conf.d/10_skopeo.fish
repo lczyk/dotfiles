@@ -1,6 +1,4 @@
 if type -q skopeo
-    skopeo completion fish | source
-
     # fish function to copy OCI images to Docker daemon
     # for example: skopeo-copy-rock ubuntu_24.04 
     function skopeo-copy-rock

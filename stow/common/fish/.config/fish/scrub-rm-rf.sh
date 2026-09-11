@@ -5,7 +5,7 @@
 # order, and occurrences inside pipelines / chains (`ls | xargs -r rm -rf`).
 # needing BOTH a recursive and a force flag spares innocuous `rm -f` / `rm -r`.
 #
-# single source of truth: the fish history hook (conf.d/scrub_history.fish)
+# single source of truth: the fish history hook (conf.d/20_scrub_history.fish)
 # calls this, and tests/fish/scrub-history.bats exercises it directly.
 cmd="${1-}"
 [[ -n $cmd ]] || exit 1
