@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+
+# wincolor -- tint the background of the current alacritty window.
+#
+#   wincolor          random colour, or off if already coloured
+#   wincolor <name>   that colour, or off if already that colour
+#   wincolor off      restore the configured background
+#   wincolor list     colour names and hex values
+#
+# applied through alacritty's ipc socket, so only this window changes. the
+# current colour is read back the same way, so there is no state to keep.
+# names may be shortened to any unique prefix.
+
+set -e
+
+# matlab `lines`, with its orange and purple swapped for ubuntu's.
+NAMES=(blue orange yellow aubergine green cyan red)
+HEXES=(0072bd e95420 edb120 772953 77ac30 4dbeee a2142f)
+RETRIES=5
+
+function _fatal() { printf 'wincolor: %s\n' "$*" >&2; exit 1; }
+
+function _require_window() {
+    [ -n "${ALACRITTY_WINDOW_ID:-}" ] || _fatal "not inside an alacritty window"
+}
+
+# alacritty's listener hands out nonblocking streams on macos and drops the
+# connection as soon as a read would block, so the client sees epipe or
+# enotconn and nothing was delivered. retrying is safe.
+function _msg() {
+    local i err
+    exec 3>&1
+    for ((i = 0; i < RETRIES; i++)); do
+        if err=$(alacritty msg "$@" 2>&1 1>&3); then
+            exec 3>&-
+            return 0
+        fi
+        case $err in
+            (*"Broken pipe"*|*"not connected"*) sleep 0.05 ;;
+            (*) break ;;
+        esac
+    done
+    exec 3>&-
+    printf 'wincolor: %s\n' "$err" >&2
+    return 1
+}
+
+# primary background of a window (-1 for the configured one), e.g. #1c1c1c.
+# an empty reply is the same dropped connection as above.
+function _background() {
+    local i json=
+    for ((i = 0; i < RETRIES; i++)); do
+        json=$(_msg get-config -w "$1") || return 1
+        [ -z "$json" ] || break
+    done
+    if [ -z "$json" ]; then
+        printf 'wincolor: alacritty returned no config\n' >&2
+        return 1
+    fi
+    json=${json#*\"primary\":\{}
+    json=${json#*\"background\":\"}
+    printf '%s\n' "${json%%\"*}"
+}
+
+# window background iff it differs from the configured one
+function _current() {
+    local bg base
+    bg=$(_background "$ALACRITTY_WINDOW_ID") || return 1
+    base=$(_background -1) || return 1
+    [ "$bg" = "$base" ] || printf '%s\n' "$bg"
+}
+
+function _index_of() {
+    local i match=
+    for ((i = 0; i < ${#NAMES[@]}; i++)); do
+        if [ "${NAMES[$i]}" = "$1" ]; then
+            printf '%s\n' "$i"
+            return 0
+        fi
+        case ${NAMES[$i]} in ("$1"*) [ -z "$match" ] || return 1; match=$i ;; esac
+    done
+    [ -n "$match" ] && printf '%s\n' "$match"
+}
+
+function _apply() { _msg config -w "$ALACRITTY_WINDOW_ID" "$@" || exit 1; }
+
+function _set() { _apply "colors.primary.background=\"#${HEXES[$1]}\""; }
+
+function _off() { _apply --reset; }
+
+function _toggle() {
+    local i current
+    i=$(_index_of "$1") || _fatal "unknown colour '$1' -- see 'wincolor list'"
+    current=$(_current) || exit 1
+    if [ "$current" = "#${HEXES[$i]}" ]; then
+        _off
+    else
+        _set "$i"
+    fi
+}
+
+function _random() {
+    local current
+    current=$(_current) || exit 1
+    if [ -n "$current" ]; then
+        _off
+    else
+        _set $((RANDOM % ${#NAMES[@]}))
+    fi
+}
+
+function _list() {
+    local i name hex swatch=
+    for ((i = 0; i < ${#NAMES[@]}; i++)); do
+        name=${NAMES[$i]}
+        hex=${HEXES[$i]}
+        if [ -t 1 ]; then
+            swatch=$(printf '\033[48;2;%d;%d;%dm  \033[0m ' \
+                "$((16#${hex:0:2}))" "$((16#${hex:2:2}))" "$((16#${hex:4:2}))")
+        fi
+        printf '%s[%s]%-9s #%s\n' "$swatch" "${name:0:1}" "${name:1}" "$hex"
+    done
+}
+
+function _help() {
+    printf 'usage: wincolor [<name>|off|list]\n'
+    printf '  no argument: random colour, or off if the window is already coloured\n'
+    printf '  <name>:      that colour, or off if the window already has it\n'
+    printf '               any unique prefix works, e.g. a for aubergine\n'
+    printf '  list:        colours, shortcut letter in brackets\n'
+}
+
+function main() {
+    local cmd=${1:-}
+    case $cmd in
+        (list)      _list ;;
+        (-h|--help) _help ;;
+        (off)       _require_window; _off ;;
+        ("")        _require_window; _random ;;
+        (*)         _require_window; _toggle "$cmd" ;;
+    esac
+}
+
+main "$@"
