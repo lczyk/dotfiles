@@ -34,7 +34,9 @@ function _require_window() {
 
 # alacritty's listener hands out nonblocking streams on macos and drops the
 # connection as soon as a read would block, so the client sees epipe or
-# enotconn and nothing was delivered. retrying is safe.
+# enotconn and nothing was delivered. retrying is safe. sometimes the write
+# lands but the message is still discarded with no error at all, so setters
+# read the background back and resend until it sticks.
 function _msg() {
     local i err
     exec 3>&1
@@ -90,7 +92,16 @@ function _index_of() {
     [ -n "$match" ] && printf '%s\n' "$match"
 }
 
-function _apply() { _msg config -w "$ALACRITTY_WINDOW_ID" "$@" || exit 1; }
+# _apply <expected background> <config options...>
+function _apply() {
+    local i expected=$1
+    shift
+    for ((i = 0; i < RETRIES; i++)); do
+        _msg config -w "$ALACRITTY_WINDOW_ID" "$@" || exit 1
+        [ "$(_background "$ALACRITTY_WINDOW_ID")" != "$expected" ] || return 0
+    done
+    _fatal "alacritty kept dropping the change"
+}
 
 function _set() {
     local i opts=("colors.primary.background=\"#${HEXES[$1]}\"")
@@ -105,10 +116,10 @@ function _set() {
             opts+=("colors.bright.${ANSI[$i]}=\"#${LIGHT_BRIGHT[$i]}\"")
         done
     fi
-    _apply "${opts[@]}"
+    _apply "#${HEXES[$1]}" "${opts[@]}"
 }
 
-function _off() { _apply --reset; }
+function _off() { _apply "$(_background -1)" --reset; }
 
 function _toggle() {
     local i current

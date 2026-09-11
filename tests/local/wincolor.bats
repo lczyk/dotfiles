@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # tests for stow/common/local/.local/bin/wincolor. alacritty is replaced by a
 # shim that logs its argv, keeps a per-window background and answers
-# get-config from it. FAIL_TIMES makes the first n calls die with epipe.
+# get-config from it. FAIL_TIMES makes the first n calls die with epipe;
+# DROP_TIMES makes the first n config calls succeed without applying.
 
 setup() {
     WINCOLOR="$BATS_TEST_DIRNAME/../../stow/common/local/.local/bin/wincolor"
@@ -18,6 +19,9 @@ if [ -n "$FAIL_TIMES" ] && [ "$(wc -l < "$LOG")" -le "$FAIL_TIMES" ]; then
 fi
 case $2 in
     (config)
+        if [ -n "$DROP_TIMES" ] && [ "$(grep -c '^msg config ' "$LOG")" -le "$DROP_TIMES" ]; then
+            exit 0
+        fi
         if [ "$5" = --reset ]; then
             rm -f "$BGDIR/$4"
         else
@@ -183,6 +187,16 @@ last_config_call() { grep '^msg config ' "$LOG" | sed -n '$p'; }
         FAIL_TIMES=4 run "$WINCOLOR" red
     [ "$status" -eq 0 ]
     [ "$(cat "$BG")" = '#a2142f' ]
+}
+
+@test "resends a change alacritty silently dropped" {
+    DROP_TIMES=2 run "$WINCOLOR" blue
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '^msg config ' "$LOG")" -eq 3 ]
+    [ "$(cat "$BG")" = '#0072bd' ]
+    DROP_TIMES=1 run "$WINCOLOR" off
+    [ "$status" -eq 0 ]
+    [ ! -e "$BG" ]
 }
 
 @test "gives up on other errors" {
