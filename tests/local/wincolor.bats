@@ -107,6 +107,16 @@ last_config_call() { grep '^msg config ' "$LOG" | sed -n '$p'; }
     run "$WINCOLOR" red
     [ "$status" -eq 0 ]
     [ "$(cat "$BG")" = '#a2142f' ]
+    ! grep -q -- '--reset' "$LOG"
+}
+
+@test "switching off a light text palette resets it first" {
+    "$WINCOLOR" yellow
+    run "$WINCOLOR" green
+    [ "$status" -eq 0 ]
+    [ "$(grep '^msg config ' "$LOG" | sed -n '2p')" = 'msg config -w 42 --reset' ]
+    [ "$(last_config_call)" = 'msg config -w 42 colors.primary.background="#77ac30"' ]
+    [ "$(cat "$BG")" = '#77ac30' ]
 }
 
 @test "unique prefix selects a colour" {
