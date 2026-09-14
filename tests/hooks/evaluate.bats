@@ -57,3 +57,10 @@ fire_write() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"invalid request"* ]]
 }
+
+@test "truncation returns allow with a hint" {
+    run fire_shell "cmd | tail"
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.decision')" = "allow" ]
+    [[ "$(printf '%s' "$output" | jq -r '.hints[0]')" == HINT:* ]]
+}

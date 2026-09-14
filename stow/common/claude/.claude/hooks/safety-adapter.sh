@@ -55,6 +55,10 @@ function _evaluate() {
     decision=$(printf '%s' "$verdict" | jq -er '.decision')
     case "$decision" in
         (allow)
+            printf '%s' "$verdict" | jq -c '
+                select((.hints // [] | length) > 0)
+                | {hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: (.hints | join("\n\n"))}}
+            '
             return
             ;;
         (deny)

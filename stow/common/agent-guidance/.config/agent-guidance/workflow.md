@@ -40,6 +40,7 @@ three tiers. only the middle one is a judgement call.
     - **never push** no `git push`, and no reaching a remote by any other route. commits stay local; the user pushes them.
 
 - **a `BLOCKED:` verdict is final** don't rephrase the command, split it across invocations, or otherwise route around the fence. report it and stop.
+- **a `HINT:` is advisory** it does not deny permission or require stopping. consider the suggestion and continue the task; quoted shell text can trigger heuristic hints.
 - **PRs are user-run** when asked for one, draft the title and body and hand them over.
 - **capabilities the user can grant** the fence reads `AGENT_UNFENCE` -- comma-separated tokens -- from its own environment, set when the session is launched (`env AGENT_UNFENCE=branch claude`). three exist:
     - `branch` lifts the branch / worktree category only: create branches, switch, `git checkout -b`, `git worktree add`. `git branch -D`, push, and everything else stay blocked.

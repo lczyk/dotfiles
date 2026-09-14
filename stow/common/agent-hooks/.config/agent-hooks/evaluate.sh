@@ -14,6 +14,7 @@
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" && pwd -P)
 INPUT=$(cat)
+HINTS='[]'
 
 function _fail() {
     printf 'agent hook evaluator: %s\n' "$1" >&2
@@ -48,6 +49,9 @@ function _run_policy() {
 
     case "$status" in
         (0)
+            if [ -n "$reason" ]; then
+                HINTS=$(printf '%s' "$HINTS" | jq -c --arg reason "$reason" '. + [$reason]')
+            fi
             return
             ;;
         (2)
@@ -96,7 +100,7 @@ function main() {
         _run_policy "$policy"
     done
 
-    printf '{"decision":"allow"}\n'
+    jq -cn --argjson hints "$HINTS" '{decision: "allow"} + (if ($hints | length) > 0 then {hints: $hints} else {} end)'
 }
 
 main "$@"

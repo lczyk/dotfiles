@@ -114,6 +114,8 @@ function evaluate(request) {
     emitDenial(verdict.reason || 'blocked by safety policy');
   } else if (verdict.decision !== 'allow') {
     throw new Error('safety evaluator returned an invalid verdict');
+  } else if (verdict.hints?.length) {
+    process.stderr.write(`${verdict.hints.join('\n\n')}\n`);
   }
 }
 

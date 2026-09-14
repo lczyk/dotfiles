@@ -72,3 +72,12 @@ fire_codex_patch() {
     [ "$status" -eq 2 ]
     [[ "$output" == *"safety evaluator failed"* ]]
 }
+
+@test "adapters return hints without permission overrides" {
+    for adapter in "$CLAUDE" "$CODEX"; do
+        run fire_shell "$adapter" "cmd | tail"
+        [ "$status" -eq 0 ]
+        [[ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')" == HINT:* ]]
+        [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')" = "null" ]
+    done
+}

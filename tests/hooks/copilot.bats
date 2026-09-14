@@ -115,3 +115,10 @@ fire_raw_tool() {
     [ "$status" -eq 0 ]
     [ "$(cat "$STATE_DIR/caveman-active")" = "commit" ]
 }
+
+@test "Copilot truncation hint does not deny permission" {
+    run fire_tool bash '{"command":"cmd | tail"}'
+    [ "$status" -eq 0 ]
+    [[ "$output" == HINT:* ]]
+    [[ "$output" != *permissionDecision* ]]
+}
