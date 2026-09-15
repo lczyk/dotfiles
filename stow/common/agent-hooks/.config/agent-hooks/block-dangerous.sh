@@ -10,7 +10,7 @@
 #   - any write `gh` op (pr/issue/release create+comment+edit, api writes)
 #   - bypass of commit signing
 #   - software / package installs
-#   - remote envs (ssh, scp, kubectl exec, ...)
+#   - remote envs (ssh, scp, kubectl exec, ... -- liftable, see AGENT_UNFENCE=remote)
 #
 # the agent is fenced to read-only git/gh by default. when the user
 # wants a commit / push / PR, they run it themselves or temporarily
@@ -236,7 +236,8 @@ INSTALL_PATTERNS=(
 )
 INSTALL_REASON="user does not allow installing software / packages"
 
-# crossing the local boundary into remote envs.
+# crossing the local boundary into remote envs. lifted as one category by
+# the remote capability; git push is its own category and stays fenced.
 REMOTE_PATTERNS=(
     "(^|[ ;|&])ssh "
     "(^|[ ;|&])autossh "
@@ -244,7 +245,7 @@ REMOTE_PATTERNS=(
     "kubectl exec"
     "gcloud compute ssh"
 )
-REMOTE_REASON="do not work in remote envs without explicit permission"
+REMOTE_REASON="do not work in remote envs without explicit permission. (the user can lift this for a session with env AGENT_UNFENCE=remote.)"
 
 # display-only truncation for BLOCKED messages -- matching always runs
 # against the full (untruncated) $COMMAND above.
@@ -389,6 +390,6 @@ fi
 
 check "$GPG_REASON"       "${GPG_PATTERNS[@]}"
 check "$INSTALL_REASON"   "${INSTALL_PATTERNS[@]}"
-check "$REMOTE_REASON"    "${REMOTE_PATTERNS[@]}"
+_unfenced remote  || check "$REMOTE_REASON"  "${REMOTE_PATTERNS[@]}"
 
 exit 0
