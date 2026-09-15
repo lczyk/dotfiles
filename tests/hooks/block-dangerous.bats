@@ -754,3 +754,88 @@ git push"
     run fire "env AGENT_UNFENCE=history git rebase main"
     [ "$status" -eq 2 ]
 }
+
+# -- the remote capability ------------------------------------------------
+# AGENT_UNFENCE=remote lifts the remote-env category as a whole: ssh, scp,
+# autossh, kubectl exec, gcloud compute ssh. git push is its own category
+# and stays blocked regardless.
+
+@test "remote allows ssh" {
+    AGENT_UNFENCE=remote run fire "ssh host whoami"
+    [ "$status" -eq 0 ]
+}
+
+@test "remote allows ssh with a user@host target" {
+    AGENT_UNFENCE=remote run fire "ssh lczyk@cantril.local uptime"
+    [ "$status" -eq 0 ]
+}
+
+@test "remote allows scp" {
+    AGENT_UNFENCE=remote run fire "scp file host:/tmp/"
+    [ "$status" -eq 0 ]
+}
+
+@test "remote allows autossh" {
+    AGENT_UNFENCE=remote run fire "autossh -M 0 host"
+    [ "$status" -eq 0 ]
+}
+
+@test "remote allows kubectl exec" {
+    AGENT_UNFENCE=remote run fire "kubectl exec pod -- ls"
+    [ "$status" -eq 0 ]
+}
+
+@test "remote allows gcloud compute ssh" {
+    AGENT_UNFENCE=remote run fire "gcloud compute ssh my-vm"
+    [ "$status" -eq 0 ]
+}
+
+@test "remote does not lift push" {
+    AGENT_UNFENCE=remote run fire "git push origin main"
+    [ "$status" -eq 2 ]
+}
+
+@test "remote does not lift the branch category" {
+    AGENT_UNFENCE=remote run fire "git switch main"
+    [ "$status" -eq 2 ]
+}
+
+@test "remote does not lift the history category" {
+    AGENT_UNFENCE=remote run fire "git rebase main"
+    [ "$status" -eq 2 ]
+}
+
+@test "remote does not lift installs" {
+    AGENT_UNFENCE=remote run fire "brew install jq"
+    [ "$status" -eq 2 ]
+}
+
+@test "remote does not lift a chained push after an ssh" {
+    AGENT_UNFENCE=remote run fire "ssh host uptime && git push origin main"
+    [ "$status" -eq 2 ]
+}
+
+@test "remote composes with other capabilities" {
+    AGENT_UNFENCE=branch,remote run fire "ssh host whoami"
+    [ "$status" -eq 0 ]
+}
+
+@test "an unrelated capability does not lift the remote fence" {
+    AGENT_UNFENCE=branch run fire "ssh host whoami"
+    [ "$status" -eq 2 ]
+}
+
+@test "an empty AGENT_UNFENCE does not lift the remote fence" {
+    AGENT_UNFENCE= run fire "ssh host whoami"
+    [ "$status" -eq 2 ]
+}
+
+@test "a substring of a capability name does not lift the remote fence" {
+    AGENT_UNFENCE=remotely run fire "ssh host whoami"
+    [ "$status" -eq 2 ]
+}
+
+@test "the remote capability cannot be granted from inside the command text" {
+    run fire "env AGENT_UNFENCE=remote ssh host whoami"
+    [ "$status" -eq 2 ]
+}
