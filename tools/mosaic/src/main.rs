@@ -14,16 +14,16 @@ use eframe::egui;
 use funnel::{ALLOW_TOKENS, Glob, walk, watch_root};
 use notify::{RecursiveMode, Watcher};
 
-// thumbnails are decoded to a fixed pixel box and displayed scaled, so zoom
-// only re-lays-out -- it never re-decodes.
-const THUMB_PX: u32 = 256;
-// single mode decodes its one image to the window's physical pixel size so it
-// isn't upscaled. clamp that to a sane ceiling to bound texture size / decode
-// cost on huge windows or hidpi displays.
-const SINGLE_MAX_PX: u32 = 8192;
-// quantise the single-mode decode box to this step so a slow drag-resize doesn't
-// re-decode on every pixel -- only when it crosses a step boundary.
-const SINGLE_STEP_PX: u32 = 256;
+// images are decoded to the physical pixel size they're shown at (cell or
+// window, x dpi scale) so they're never upscaled / blurred, and re-decoded
+// bigger (only bigger) as zoom or the window grows. clamp that to a sane
+// ceiling to bound texture size / decode cost on huge windows or hidpi
+// displays.
+const DECODE_MAX_PX: u32 = 8192;
+// quantise the decode box to this step so a slow drag-resize / zoom doesn't
+// re-decode on every pixel -- only when it crosses a step boundary. also the
+// floor, so the first grid pass is cheap.
+const DECODE_STEP_PX: u32 = 256;
 const N_WORKERS: usize = 4;
 
 const HELP: &str = r#"Usage: mosaic <glob> [OPTIONS]
@@ -211,7 +211,7 @@ fn expand_tilde(pat: &str) -> String {
 
 // ----------------------------------------------------------------------
 // decode workers: a fixed pool pulls paths off a shared queue, decodes +
-// downscales to a THUMB_PX box, and ships the cpu-side rgba back to the ui
+// downscales to a pixel box, and ships the cpu-side rgba back to the ui
 // thread (only the ui thread may touch the egui context to upload textures).
 
 // a unit of work for a decode worker. the SystemTime is the source file's mtime
@@ -219,11 +219,11 @@ fn expand_tilde(pat: &str) -> String {
 // since-overwritten file can be dropped instead of clobbering the live version.
 enum Job {
     // decode just the first frame (fast) + detect whether it's a gif. the u32 is
-    // the decode box: THUMB_PX for grid cells, the window's physical pixel size
-    // for single mode (so the maximised image isn't upscaled / blurred).
+    // the decode box in physical pixels (see `decode_box`).
     Thumb(PathBuf, SystemTime, u32),
-    // decode every frame of a gif (on demand, when a gif is hovered).
-    Frames(PathBuf, SystemTime),
+    // decode every frame of a gif (on demand, when a gif is hovered), to the
+    // same box its still was decoded at.
+    Frames(PathBuf, SystemTime, u32),
 }
 
 struct DecodeResult {
@@ -231,9 +231,9 @@ struct DecodeResult {
     // the mtime the job was dispatched against; matched against the thumb's
     // current mtime to reject results for a stale version of the file.
     mtime: SystemTime,
-    // the decode box this job was dispatched at (the `Thumb` job's u32). single
-    // mode reads it back to know whether the result is already as detailed as
-    // the source can give, vs capped and worth re-decoding bigger.
+    // the decode box this job was dispatched at (the `Thumb` job's u32). read
+    // back to know whether the result is already as detailed as the source can
+    // give, vs capped and worth re-decoding bigger.
     box_px: u32,
     payload: Payload,
 }
@@ -280,6 +280,15 @@ fn to_color_image(rgba: &image::RgbaImage) -> egui::ColorImage {
     egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], rgba.as_raw())
 }
 
+// the decode box for something shown `points` wide on a display scaled by
+// `ppp`: its longer side in physical pixels, quantised + clamped. that's the
+// most detail the display can show, so decoding to it avoids upscaling
+// without overshooting.
+fn decode_box(points: f32, ppp: f32) -> u32 {
+    let phys = (points * ppp).ceil() as u32;
+    (phys.div_ceil(DECODE_STEP_PX) * DECODE_STEP_PX).clamp(DECODE_STEP_PX, DECODE_MAX_PX)
+}
+
 // fast path: decode only the first frame + the colour swatch, and flag whether
 // the file is a gif (so the grid can show a play badge / preload on hover).
 fn decode_thumb(path: &Path, max_px: u32) -> Option<ThumbData> {
@@ -300,7 +309,7 @@ fn decode_thumb(path: &Path, max_px: u32) -> Option<ThumbData> {
 
 // slow path: decode all gif frames + their delays. only run when a gif is
 // actually hovered, so the initial grid load stays fast.
-fn decode_gif_frames(path: &Path) -> Option<FramesData> {
+fn decode_gif_frames(path: &Path, max_px: u32) -> Option<FramesData> {
     use image::AnimationDecoder as _;
     let file = std::fs::File::open(path).ok()?;
     let frames = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file))
@@ -320,7 +329,7 @@ fn decode_gif_frames(path: &Path) -> Option<FramesData> {
         // clamp absurdly fast / zero delays to keep playback sane.
         delays.push(ms.max(20.0) / 1000.0);
         let rgba =
-            downscale_only(image::DynamicImage::ImageRgba8(f.into_buffer()), THUMB_PX).to_rgba8();
+            downscale_only(image::DynamicImage::ImageRgba8(f.into_buffer()), max_px).to_rgba8();
         imgs.push(to_color_image(&rgba));
     }
     Some(FramesData {
@@ -473,12 +482,12 @@ fn spawn_workers(ctx: egui::Context) -> (Sender<Job>, Receiver<DecodeResult>) {
                             payload,
                         }
                     }
-                    Job::Frames(path, mtime) => {
-                        let payload = Payload::Frames(decode_gif_frames(&path));
+                    Job::Frames(path, mtime, max_px) => {
+                        let payload = Payload::Frames(decode_gif_frames(&path, max_px));
                         DecodeResult {
                             path,
                             mtime,
-                            box_px: 0,
+                            box_px: max_px,
                             payload,
                         }
                     }
@@ -528,12 +537,36 @@ struct Thumb {
     gif_load: GifLoad,
     mtime: SystemTime,
     // the decode box the current frames came back at (0 until first decode).
-    // single mode compares it against the window size to decide whether a
-    // bigger re-decode would actually buy more detail. unused by the grid.
+    // compared against the displayed size to decide whether a bigger re-decode
+    // would actually buy more detail (see `wants_decode`).
     decoded_px: u32,
     // dominant fg/bg colours, set once the image decodes. drives the window
     // tint (avg bg) + the hover glow colour.
     swatch: Option<Swatch>,
+}
+
+impl Thumb {
+    // whether to (re)decode at a `want` px box. cases:
+    //  - New / Stale: first sight or overwritten -> decode (any old frame stays
+    //    up meanwhile so the tile updates in place, no placeholder).
+    //  - upgrade: the display now wants more pixels than we have, and the
+    //    source wasn't the limiting factor last time (decoded long side hit the
+    //    box we asked for -> it was capped, so a bigger box buys detail).
+    // never while a decode is already in flight.
+    fn wants_decode(&self, want: u32) -> bool {
+        match self.state {
+            State::New | State::Stale => true,
+            State::Ready => {
+                let have = self
+                    .frames
+                    .first()
+                    .map(|f| f.size().into_iter().max().unwrap_or(0) as u32)
+                    .unwrap_or(0);
+                have > 0 && want > have && have >= self.decoded_px
+            }
+            State::Requested | State::Failed => false,
+        }
+    }
 }
 
 struct Mosaic {
@@ -678,40 +711,12 @@ impl Mosaic {
         };
 
         let area = ui.max_rect();
-        // the box we want: the window's longer side in *physical* pixels (points
-        // x dpi scale), quantised + clamped. that's the most detail the display
-        // can show, so decoding to it avoids upscaling without overshooting.
-        let phys = area.width().max(area.height()) * ui.ctx().pixels_per_point();
-        let want = ((phys.ceil() as u32).div_ceil(SINGLE_STEP_PX) * SINGLE_STEP_PX)
-            .clamp(SINGLE_STEP_PX, SINGLE_MAX_PX);
-
-        // decide whether to (re)decode. cases:
-        //  - New / Stale: first sight or overwritten -> decode (keep any old
-        //    frame up meanwhile so the view updates in place, no placeholder).
-        //  - upgrade: the window now wants more pixels than we have, and the
-        //    source wasn't the limiting factor last time (decoded long side hit
-        //    the box we asked for -> it was capped, so a bigger box buys detail).
-        let info = self.thumbs.get(&path).map(|t| {
-            let have = t
-                .frames
-                .first()
-                .map(|f| f.size().into_iter().max().unwrap_or(0) as u32)
-                .unwrap_or(0);
-            (
-                matches!(t.state, State::New | State::Stale),
-                t.mtime,
-                have,
-                t.decoded_px,
-            )
-        });
-        if let Some((fresh, mtime, have, decoded)) = info {
-            let upgrade = have > 0 && want > have && have >= decoded;
-            if fresh || upgrade {
-                if let Some(t) = self.thumbs.get_mut(&path) {
-                    t.state = State::Requested;
-                }
-                let _ = self.job_tx.send(Job::Thumb(path.clone(), mtime, want));
-            }
+        let want = decode_box(area.width().max(area.height()), ui.ctx().pixels_per_point());
+        if let Some(t) = self.thumbs.get_mut(&path)
+            && t.wants_decode(want)
+        {
+            t.state = State::Requested;
+            let _ = self.job_tx.send(Job::Thumb(path.clone(), t.mtime, want));
         }
 
         let Some(t) = self.thumbs.get(&path) else {
@@ -1367,6 +1372,7 @@ impl eframe::App for Mosaic {
                     t.swatch = Some(d.swatch);
                     t.is_gif = d.is_gif;
                     t.decoded_px = res.box_px;
+                    t.gif_load = GifLoad::Unloaded;
                     t.state = State::Ready;
                 }
                 Payload::Thumb(None) => t.state = State::Failed,
@@ -1384,6 +1390,7 @@ impl eframe::App for Mosaic {
                         })
                         .collect();
                     t.delays = d.delays;
+                    t.decoded_px = res.box_px;
                     t.gif_load = GifLoad::Loaded;
                 }
                 // a gif that turned out to be a single frame (or failed to load
@@ -1451,6 +1458,12 @@ impl eframe::App for Mosaic {
                 let avail = ui.available_width();
                 let n = self.paths.len();
                 let layout = Layout::compute(avail, self.thumb_size, self.user_cols, n);
+                // a lifted cell is the biggest a thumb ever shows, so size the
+                // decode box to that: no re-decode on hover.
+                let want = decode_box(
+                    layout.cell_size * (1.0 + HOVER_LIFT),
+                    ctx.pixels_per_point(),
+                );
                 let dt = ctx.input(|i| i.stable_dt).min(0.1);
                 // the top-left readout, drawn in-shader over the grid.
                 let status = format!(
@@ -1539,7 +1552,7 @@ impl eframe::App for Mosaic {
                             && t.gif_load == GifLoad::Unloaded
                         {
                             t.gif_load = GifLoad::Loading;
-                            let _ = job_tx.send(Job::Frames(hp.clone(), t.mtime));
+                            let _ = job_tx.send(Job::Frames(hp.clone(), t.mtime, t.decoded_px));
                         }
 
                         // advance the playing gif's clock.
@@ -1594,16 +1607,16 @@ impl eframe::App for Mosaic {
 
                                 match thumbs.get_mut(path) {
                                     Some(t) => {
-                                        // queue a decode when first visible (New)
-                                        // or after an overwrite (Stale). a Stale
-                                        // tile keeps its old frames on screen
-                                        // (drawn below) until the new ones land.
-                                        if t.state == State::New || t.state == State::Stale {
+                                        // queue a decode when first visible, after
+                                        // an overwrite, or when zoom outgrew the
+                                        // current texture. old frames stay on
+                                        // screen (drawn below) until new ones land.
+                                        if t.wants_decode(want) {
                                             t.state = State::Requested;
                                             let _ = job_tx.send(Job::Thumb(
                                                 path.to_path_buf(),
                                                 t.mtime,
-                                                THUMB_PX,
+                                                want,
                                             ));
                                         }
                                         if t.frames.is_empty() {
@@ -1854,6 +1867,17 @@ fn egui_extras_install(_cc: &eframe::CreationContext<'_>) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decode_box_is_physical_quantised_clamped() {
+        // 192pt at 2x = 384px -> next 256 step up = 512.
+        assert_eq!(decode_box(192.0, 2.0), 512);
+        // exact multiples don't round up.
+        assert_eq!(decode_box(256.0, 1.0), 256);
+        // floor + ceiling.
+        assert_eq!(decode_box(10.0, 1.0), DECODE_STEP_PX);
+        assert_eq!(decode_box(100_000.0, 2.0), DECODE_MAX_PX);
+    }
 
     #[test]
     fn cols_from_base_zoom() {
