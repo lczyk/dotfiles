@@ -38,7 +38,7 @@ setup() {
 
     for path in \
         "$TARGET/.claude/CLAUDE.md" \
-        "$TARGET/.claude/styles/lofi.md" \
+        "$TARGET/.config/agent-styles/lofi.md" \
         "$TARGET/.claude/skills/caveman/SKILL.md" \
         "$TARGET/.codex/skills/caveman/SKILL.md" \
         "$TARGET/.copilot/copilot-instructions.md" \

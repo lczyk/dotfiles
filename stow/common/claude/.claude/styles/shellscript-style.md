@@ -1,1 +1,0 @@
-../../../agent-styles/.config/agent-styles/shellscript-style.md
