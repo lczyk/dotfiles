@@ -253,9 +253,11 @@ def wait_for_actionable(repo, run_id, poll, cancel, deadline)
     return :timeout if deadline && Time.now >= deadline
 
     label = "#{data['status']} (#{running} running, #{failed} failed)"
-    info "status: #{label}" if label != last
-    last = label
-    info "checking again in #{poll}s"
+    if label != last
+      info "status: #{label}"
+      info "rechecking every #{poll}s ..."
+      last = label
+    end
     sleep poll
   end
 end
