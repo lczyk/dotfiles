@@ -1,6 +1,6 @@
 ## config-file style
 
-applies to `toml`, `yaml`, `json`, `ini`, and friends -- `pyproject.toml`, `tox.ini`, `package.json`, ci workflow files, and so on.
+applies to `toml`, `yaml`, `json`, `ini`, and friends -- `pyproject.toml`, `tox.ini`, `package.json`, ci workflow files, and so on. the comment-based rules (`#` sentinel, inline `# what-it-is`) apply only where the format has `#` comments (toml, yaml, ini); plain json has no comments, so there it's just one item per line.
 
 ### lists
 
