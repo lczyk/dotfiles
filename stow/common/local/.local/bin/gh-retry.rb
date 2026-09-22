@@ -15,10 +15,6 @@ require "open3"
 
 # clean ctrl+c: don't dump the open3 reader-thread backtrace.
 Thread.report_on_exception = false
-Signal.trap("INT") do
-  warn "\ngh-retry: interrupted"
-  exit 130
-end
 
 # --- config / defaults ------------------------------------------------------
 
@@ -43,6 +39,9 @@ parser = OptionParser.new do |o|
       OWNER/REPO/RUN_ID          e.g. canonical/chisel-releases/29429492601
     or a github url (anything with .../actions/runs/RUN_ID in it), e.g.
       https://github.com/canonical/chisel-releases/actions/runs/29429492601/job/8756?pr=1046
+    or a pull request (latest failed actions run on that PR; else the latest run):
+      https://github.com/canonical/sd-tools/pull/4261
+      canonical/sd-tools#4261
 
     examples:
       gh-retry canonical/chisel-releases/29429492601
@@ -53,20 +52,22 @@ parser = OptionParser.new do |o|
     options:
   USAGE
 
-  o.on("-n", "--retries N", Integer, "max reruns after first failure (default #{retries})") { |v| retries = v }
+  o.on("-N", "--retries N", Integer, "max reruns after first failure (default #{retries}); -9 is short for -N 9") { |v| retries = v }
   o.on("-d", "--delay SECONDS", Integer, "delay between reruns (default #{delay})") { |v| delay = v }
   o.on("-p", "--poll SECONDS", Integer, "status poll interval while watching (default #{poll})") { |v| poll = v }
   o.on("-t", "--timeout SECONDS", Integer, "overall wall-clock deadline; abort if exceeded, e.g. when a job wedges in_progress (default: none)") { |v| timeout = v }
   o.on("-s", "--stop-on PATTERN", "give up immediately if PATTERN appears in the failed logs, even if a retry pattern also matches (repeatable)") { |v| stop_patterns << v }
   o.on("-i", "--ignore-case", "case-insensitive pattern matching") { ignore_case = true }
   o.on("-c", "--cancel", "if nothing is running but queued jobs keep the run open, cancel it to force a rerun (gh can't rerun an in-progress run)") { cancel = true }
-  o.on("--dry-run", "watch and report what would happen, but stop before the first write action (rerun/cancel)") { dry_run = true }
+  o.on("-n", "--dry-run", "watch and report what would happen, but stop before the first write action (rerun/cancel)") { dry_run = true }
   o.on("-h", "--help", "show this help") do
     puts o
     exit 0
   end
 end
 
+# -9 means -N 9 (same idea as nice/kill numeric shorts).
+ARGV.replace(ARGV.flat_map { |arg| arg =~ /\A-(\d+)\z/ ? ["-N", $1] : [arg] })
 parser.parse!(ARGV)
 
 if ARGV.empty?
@@ -74,25 +75,29 @@ if ARGV.empty?
   exit 2
 end
 
-# parse a target into [repo, run_id]. accepts either OWNER/REPO/RUN_ID or a
-# github url containing .../actions/runs/RUN_ID.
+# parse a target into [:run, repo, run_id] or [:pr, repo, number].
+# run forms: OWNER/REPO/RUN_ID, or a url containing .../actions/runs/RUN_ID.
+# pr forms:  OWNER/REPO#N, OWNER/REPO/pull/N, or a .../pull/N url.
 def parse_target(target)
   if target =~ %r{github\.com/([^/]+)/([^/]+)/actions/runs/(\d+)}
-    ["#{$1}/#{$2}", $3]
+    [:run, "#{$1}/#{$2}", $3]
+  elsif target =~ %r{github\.com/([^/]+)/([^/]+)/pull/(\d+)}
+    [:pr, "#{$1}/#{$2}", $3]
+  elsif target =~ %r{\A([^/\s]+)/([^/\s]+)#(\d+)\z}
+    [:pr, "#{$1}/#{$2}", $3]
+  elsif target =~ %r{\A([^/\s]+)/([^/\s]+)/pull/(\d+)\z}
+    [:pr, "#{$1}/#{$2}", $3]
   elsif target =~ %r{\A([^/\s]+)/([^/\s]+)/(\d+)\z}
-    ["#{$1}/#{$2}", $3]
+    [:run, "#{$1}/#{$2}", $3]
   end
 end
 
 target = ARGV.shift
-repo, run_id = parse_target(target)
-if repo.nil?
-  warn "gh-retry: could not parse target #{target.inspect} -- expected OWNER/REPO/RUN_ID or a github run url"
+parsed = parse_target(target)
+if parsed.nil?
+  warn "gh-retry: could not parse target #{target.inspect} -- expected OWNER/REPO/RUN_ID, a github run url, or a pull request"
   exit 2
 end
-
-# first line: the resolved run url, plain and copy-pasteable.
-warn "https://github.com/#{repo}/actions/runs/#{run_id}"
 
 patterns = ARGV.dup
 
@@ -100,8 +105,11 @@ patterns = ARGV.dup
 
 USE_COLOR = $stdout.tty? && !ENV.key?("NO_COLOR")
 
-def colorize(code, str)
-  USE_COLOR ? "\e[#{code}m#{str}\e[0m" : str
+# basic 8-color SGR only (30-37). bold black is the usual terminal gray;
+# no 256-color (38;5;N) and no aixterm brights (90-97).
+def colorize(code, str, bold: false)
+  attr = bold ? "1;#{code}" : code
+  USE_COLOR ? "\e[#{attr}m#{str}\e[0m" : str
 end
 
 def info(msg)  warn(colorize("34", "[gh-retry] ") + msg) end  # blue
@@ -109,11 +117,71 @@ def good(msg)  warn(colorize("32", "[gh-retry] ") + msg) end  # green
 def warn_(msg) warn(colorize("33", "[gh-retry] ") + msg) end  # yellow
 def bad(msg)   warn(colorize("31", "[gh-retry] ") + msg) end  # red
 
+def color_status(status)
+  code = case status
+         when "success", "neutral" then "32"
+         when "failure", "cancelled", "timed_out", "startup_failure", "action_required" then "31"
+         when "in_progress", "queued", "pending", "waiting" then "33"
+         when "skipped" then "30"
+         end
+  # bold so black reads as gray; prefix stays unbolded.
+  code ? colorize(code, status, bold: true) : status
+end
+
+Signal.trap("INT") do
+  warn
+  warn_ "interrupted"
+  exit 130
+end
+
 # --- gh helpers -------------------------------------------------------------
 
 def gh_capture(repo, *args)
   out, status = Open3.capture2e("gh", *args, "--repo", repo)
   [out, status.success?]
+end
+
+# a pull request is not a run. pick one actions run from its checks: a failed
+# one if any (latest by completed/started time), otherwise the latest run so
+# the watcher can wait or report success. multiple failed runs: warn, take latest.
+def resolve_pr_run(repo, number)
+  out, ok = gh_capture(repo, "pr", "view", number, "--json", "statusCheckRollup")
+  unless ok
+    bad "failed to look up #{repo}##{number}:\n#{out}"
+    exit 1
+  end
+
+  rollup = JSON.parse(out)["statusCheckRollup"] || []
+  runs = {}
+  rollup.each do |check|
+    url = check["detailsUrl"] || check["targetUrl"] || ""
+    next unless url =~ %r{/actions/runs/(\d+)}
+
+    id = $1
+    stamp = check["completedAt"] || check["startedAt"] || ""
+    entry = runs[id] ||= { "id" => id, "stamp" => stamp, "failed" => false, "checks" => [] }
+    entry["stamp"] = stamp if stamp > entry["stamp"]
+    conclusion = check["conclusion"].to_s.downcase
+    status = conclusion.empty? ? check["status"].to_s.downcase : conclusion
+    status = "unknown" if status.empty?
+    entry["checks"] << [check["name"], status] if check["name"]
+    entry["failed"] = true if %w[failure cancelled timed_out].include?(conclusion)
+  end
+
+  if runs.empty?
+    bad "no actions runs found on #{repo}##{number}"
+    exit 1
+  end
+
+  failed = runs.values.select { |r| r["failed"] }
+  chosen = (failed.empty? ? runs.values : failed).max_by { |r| r["stamp"] }
+  others = failed.map { |r| r["id"] } - [chosen["id"]]
+  unless others.empty?
+    warn_ "#{repo}##{number} has other failed runs (#{others.join(", ")}); watching #{chosen["id"]}"
+  end
+  info "resolved #{repo}##{number} -> run #{chosen["id"]}"
+  chosen["checks"].uniq.each { |name, status| info "  #{name}  #{color_status(status)}" }
+  chosen["id"]
 end
 
 def gh_stream(repo, *args)
@@ -187,6 +255,7 @@ def wait_for_actionable(repo, run_id, poll, cancel, deadline)
     label = "#{data['status']} (#{running} running, #{failed} failed)"
     info "status: #{label}" if label != last
     last = label
+    info "checking again in #{poll}s"
     sleep poll
   end
 end
@@ -235,6 +304,14 @@ def match_pattern(logs, patterns, ignore_case)
     hay.include?(needle)
   end
 end
+
+# --- resolve target ---------------------------------------------------------
+
+kind, repo, ident = parsed
+run_id = kind == :pr ? resolve_pr_run(repo, ident) : ident
+
+# first line: the resolved run url, plain and copy-pasteable.
+warn "https://github.com/#{repo}/actions/runs/#{run_id}"
 
 # --- main loop --------------------------------------------------------------
 
