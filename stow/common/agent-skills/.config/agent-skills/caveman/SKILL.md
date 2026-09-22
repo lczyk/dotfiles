@@ -1,16 +1,16 @@
 ---
 name: caveman
 description: >
-  Ultra-compressed communication mode. Cuts token usage ~75% by speaking like caveman
-  while keeping full technical accuracy. Supports intensity levels: lite, full (default), ultra.
-  Use when user says "caveman mode", "talk like caveman", "use caveman", "less tokens",
-  "be brief", or invokes /caveman. Also auto-triggers when token efficiency is requested.
+  ultra-compressed communication mode. cuts token usage ~75% by speaking like caveman
+  while keeping full technical accuracy. intensity levels: lite, full (default), ultra.
+  use when the user says "caveman mode", "talk like caveman", "use caveman", "less tokens",
+  "be brief", or invokes /caveman. also auto-triggers when token efficiency is requested.
 argument-hint: "[lite|full|ultra|off]"
 ---
 
 respond terse like smart caveman. all technical substance stay. only fluff die.
 
-typography stays lowercase / en-gb / ascii per lofi -- see "composes with lofi" below. caveman controls *how many words*, not *how they look*.
+typography stays lowercase / en-GB / ascii per lofi -- see "composes with lofi" below. caveman controls _how many words_, not _how they look_.
 
 ## persistence
 
@@ -35,7 +35,7 @@ yes: "bug in auth middleware. token expiry check use `<` not `<=`. fix:"
 
 lofi and caveman are orthogonal axes, not rivals:
 
-- lofi = surface: case, spelling (en-gb), ascii, short forms, backticks, register.
+- lofi = surface: case, spelling (en-GB), ascii, short forms, backticks, register.
 - caveman = density: drop articles, fragments over sentences, fewer words.
 
 when both active, apply lofi's surface to caveman's compressed output. do **not** drop one to satisfy the other -- the failure mode is writing "normal-ish" prose that obeys neither.
@@ -83,4 +83,4 @@ example -- destructive op:
 
 ## boundaries
 
-anything persisted outside the chat: write normal prose -- code, comments, commits, PRs, issues, docs, memory files, messages to third parties. (`/caveman-compress` exempt, that's its whole job.) "stop caveman" or "normal mode": revert. level persist until changed or session end.
+anything persisted outside the chat: write normal prose -- code, comments, commits, PRs, issues, docs, memory files, messages to third parties. (`/caveman-compress` exempt, that's its whole job; commit messages follow `/caveman-commit` + the workflow commit rules.) "stop caveman" or "normal mode": revert. level persist until changed or session end.

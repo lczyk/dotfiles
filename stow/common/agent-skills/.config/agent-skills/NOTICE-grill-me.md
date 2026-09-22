@@ -8,3 +8,4 @@ local modifications:
 - explore codebase instead of asking when question is answerable from code
 - progress marker before each question (rough estimate of decision-tree coverage)
 - prescribed question format: prose w/ lettered options inline, `Recc:` + `Pick?`, no picker tools
+- lofi prose (lowercase, ascii)

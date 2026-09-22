@@ -11,8 +11,7 @@ translate harness-specific names by capability:
 
 - `Bash` means codex's shell-command tools.
 - `Write`, `Edit`, and `NotebookEdit` mean `apply_patch`, codex's file-edit
-  tool. (if codex grows another file-edit tool, add a matcher for it in
-  `hooks.json` -- only `Bash` and `apply_patch` are hooked today.)
+  tool.
 - claude-only settings, plugins, statusline behaviour, and hook setup notes are
   descriptive context, not instructions to modify the claude installation.
 - codex system and developer instructions win when a claude-specific mechanism
