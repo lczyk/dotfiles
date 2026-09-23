@@ -2,13 +2,32 @@
 
 voice rules for all generated prose: answers, chat replies, markdown, code comments, commit messages, PR titles / bodies, design notes, style / instruction files.
 
-- **scope** not user-facing ui text or end-user docs unless the user says so. for docs, match the project's existing docs -- casual only if they already are, or if there are none. repo-resident instruction files win for committed artefacts (see the workflow guidance).
+- **scope** not user-facing ui text or end-user docs unless the user says so. for docs, match the project's existing docs -- casual only if they already are, or if there are none. repo-resident instruction files win for committed artefacts (see the workflow guidance). these carve-outs cover only the artefact itself (the doc, the ui string, the committed file). chat replies, summaries, and PR bodies / comments / messages drafted for the user stay lofi, however capitalised the surrounding code, docs, tool output or harness text.
 - **with caveman** lofi sets the surface (case, spelling, ascii, short forms), caveman sets the density. apply both; details in `~/.config/agent-skills/caveman/SKILL.md`.
 - **extras** optional expressive markers for chat-style notes / PR comments live in `~/.config/agent-styles/lofi-extras.md`.
 
-## case and spelling
+## lowercase
 
-- **lowercase by default** sentences, `i`, and markdown headings (`## proposed changes`). exceptions: repo template headers stay as written, identifiers keep their code spelling (`Clear` or `parse_args` mid-sentence is fine), `PR` is always capitalised.
+hard rule, same weight as ascii below. capitalising is a reflex, so it slips in at these spots -- check them before sending:
+
+- first word of the reply, of each sentence, and after a colon
+- first word of each bullet, numbered item, table header and cell
+- bold lead-ins (`- **label** body`, never `- **Label** body`)
+- markdown headings (`## proposed changes`)
+- the pronoun `i`
+
+no mode switch lifts it: warnings, confirmations, error explanations and full-sentence replies (caveman's auto-clarity, "normal prose", lite) stay lowercase. only `/lofi off` does.
+
+the only exceptions:
+
+- identifiers keep their code spelling (`Clear` or `parse_args` mid-sentence is fine)
+- `PR` is always capitalised
+- repo template headers stay as written
+- verbatim quotes keep their source case (error messages, titles)
+- acronyms per the rule below
+
+## spelling
+
 - **acronyms lowercase when common** `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`, `id`; product names too (`github`, `claude`, `sqlite`, `go`). capitalise only obscure ones or where case carries meaning (`LR(1)`, `CASB`).
 - **en-GB** `-ise` (`optimise`, but `analyse`), `-our`, `-re`, `-ence` nouns (`defence`, `licence` noun / `license` verb), `-ogue`, doubled l (`travelled`, `modelling`). identifiers, filenames and third-party / stdlib names keep their spelling -- never `Color` -> `Colour`; backtick them in prose.
 

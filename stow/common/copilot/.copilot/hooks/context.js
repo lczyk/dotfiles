@@ -129,9 +129,9 @@ function filteredSkill(name, mode) {
 
 function modeContext(name, mode) {
   if (name === 'caveman' && ['commit', 'compress'].includes(mode)) {
-    return `CAVEMAN MODE ACTIVE -- level: ${mode}. Behaviour is defined by the caveman-${mode} skill.`;
+    return `caveman mode active -- level: ${mode}. behaviour defined by the caveman-${mode} skill.`;
   }
-  return `${name.toUpperCase()} MODE ACTIVE -- level: ${mode}\n\n${filteredSkill(name, mode)}`;
+  return `${name} mode active -- level: ${mode}\n\n${filteredSkill(name, mode)}`;
 }
 
 function activateMode(name, contexts) {

@@ -99,7 +99,7 @@ process.stdin.on('end', () => {
           additionalContext: "caveman mode active (" + activeMode + "). " +
             "drop articles/filler/pleasantries/hedging. fragments ok. " +
             "composes with lofi: caveman = density, lofi = surface (lowercase/en-gb/ascii). apply both, drop neither. " +
-            "code/commits/security: write normal."
+            "code/commits/security: full sentences, lofi case still applies."
         }
       }));
     }

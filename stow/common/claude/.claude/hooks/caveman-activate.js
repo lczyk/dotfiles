@@ -52,7 +52,7 @@ safeWriteFlag(flagPath, mode);
 const INDEPENDENT_MODES = new Set(['commit', 'compress']);
 
 if (INDEPENDENT_MODES.has(mode)) {
-  process.stdout.write('CAVEMAN MODE ACTIVE -- level: ' + mode + '. Behavior defined by /caveman-' + mode + ' skill.');
+  process.stdout.write('caveman mode active -- level: ' + mode + '. behaviour defined by /caveman-' + mode + ' skill.');
   process.exit(0);
 }
 
@@ -91,11 +91,11 @@ if (skillContent) {
     return acc;
   }, []);
 
-  output = 'CAVEMAN MODE ACTIVE -- level: ' + mode + '\n\n' + filtered.join('\n');
+  output = 'caveman mode active -- level: ' + mode + '\n\n' + filtered.join('\n');
 } else {
   // Fallback when SKILL.md is not found
   output =
-    'CAVEMAN MODE ACTIVE -- level: ' + mode + '\n\n' +
+    'caveman mode active -- level: ' + mode + '\n\n' +
     'respond terse like smart caveman. all technical substance stay. only fluff die.\n\n' +
     '## persistence\n\n' +
     'active every response. no revert after many turns. no filler drift. still active if unsure. off only: "stop caveman" / "normal mode".\n\n' +
@@ -114,7 +114,7 @@ if (skillContent) {
     '## auto-clarity\n\n' +
     'drop caveman for: security warnings, irreversible action confirmations, multi-step sequences where fragment order risks misread, user asks to clarify or repeats question. resume caveman after clear part done.\n\n' +
     '## boundaries\n\n' +
-    'anything persisted outside the chat: write normal prose -- code, commits, PRs, issues, docs, memory files, messages to third parties. "stop caveman" or "normal mode": revert. level persist until changed or session end.';
+    'anything persisted outside the chat: write full sentences, not caveman fragments (lofi case and spelling still apply) -- code, commits, PRs, issues, docs, memory files, messages to third parties. "stop caveman" or "normal mode": revert. level persist until changed or session end.';
 }
 
 // 3. Detect missing statusline config -- nudge Claude to help set it up
@@ -133,11 +133,11 @@ try {
     const statusLineSnippet =
       '"statusLine": { "type": "command", "command": ' + JSON.stringify(command) + ' }';
     output += "\n\n" +
-      "STATUSLINE SETUP NEEDED: The caveman plugin includes a statusline badge showing active mode " +
-      "(e.g. [CAVEMAN], [CAVEMAN:ULTRA]). It is not configured yet. " +
-      "To enable, add this to " + path.join(claudeDir, 'settings.json') + ": " +
+      "statusline setup needed: the caveman plugin includes a statusline badge showing active mode " +
+      "(e.g. [CAVEMAN], [CAVEMAN:ULTRA]). it is not configured yet. " +
+      "to enable, add this to " + path.join(claudeDir, 'settings.json') + ": " +
       statusLineSnippet + " " +
-      "Proactively offer to set this up for the user on first interaction.";
+      "proactively offer to set this up for the user on first interaction.";
   }
 } catch (e) {
   // Silent fail -- don't block session start over statusline detection

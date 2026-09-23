@@ -157,5 +157,5 @@ flag() {
 @test "the emitted ruleset names the active level" {
     fire "/caveman ultra" >/dev/null
     run activate resume
-    [[ "$output" == *"CAVEMAN MODE ACTIVE -- level: ultra"* ]]
+    [[ "$output" == *"caveman mode active -- level: ultra"* ]]
 }

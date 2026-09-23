@@ -44,7 +44,7 @@ function ruleset(mode: Mode): string {
   try {
     body = fs.readFileSync(SKILL, "utf8").replace(/^---[\s\S]*?---\s*/, "");
   } catch {
-    return `CAVEMAN MODE ACTIVE (${mode}). Drop articles/filler/pleasantries/hedging. Fragments OK. Code/commits/security: write normal.`;
+    return `caveman mode active (${mode}). drop articles/filler/pleasantries/hedging. fragments ok. code/commits/security: full sentences, lofi case still applies.`;
   }
   const kept = body.split("\n").filter((line) => {
     const row = line.match(/^\|\s*\*\*(\S+?)\*\*\s*\|/);
@@ -53,7 +53,7 @@ function ruleset(mode: Mode): string {
     if (ex) return ex[1] === mode;
     return true;
   });
-  return `CAVEMAN MODE ACTIVE -- level: ${mode}\n\n${kept.join("\n")}`;
+  return `caveman mode active -- level: ${mode}\n\n${kept.join("\n")}`;
 }
 
 function text(parts: any[]): string {

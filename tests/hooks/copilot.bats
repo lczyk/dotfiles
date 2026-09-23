@@ -84,7 +84,7 @@ fire_raw_tool() {
         node "$CONTEXT" session-start <<<'{"source":"startup"}'
     [ "$status" -eq 0 ]
     [ "$(printf '%s' "$output" | jq -r '.additionalContext' | grep -c 'lofi -- personal writing style')" -eq 1 ]
-    [ "$(printf '%s' "$output" | jq -r '.additionalContext' | grep -c 'CAVEMAN MODE ACTIVE -- level: full')" -eq 1 ]
+    [ "$(printf '%s' "$output" | jq -r '.additionalContext' | grep -c 'caveman mode active -- level: full')" -eq 1 ]
     [ "$(cat "$STATE_DIR/caveman-active")" = "full" ]
 }
 

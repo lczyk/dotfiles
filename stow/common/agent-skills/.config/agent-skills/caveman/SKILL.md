@@ -83,4 +83,4 @@ example -- destructive op:
 
 ## boundaries
 
-anything persisted outside the chat: write normal prose -- code, comments, commits, PRs, issues, docs, memory files, messages to third parties. (`/caveman-compress` exempt, that's its whole job; commit messages follow `/caveman-commit` + the workflow commit rules.) "stop caveman" or "normal mode": revert. level persist until changed or session end.
+anything persisted outside the chat: write full sentences, not caveman fragments (lofi case and spelling still apply) -- code, comments, commits, PRs, issues, docs, memory files, messages to third parties. (`/caveman-compress` exempt, that's its whole job; commit messages follow `/caveman-commit` + the workflow commit rules.) "stop caveman" or "normal mode": revert. level persist until changed or session end.
