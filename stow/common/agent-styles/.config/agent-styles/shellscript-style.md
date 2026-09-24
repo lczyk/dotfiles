@@ -51,3 +51,4 @@
 ### other
 
 - **alternatives in `(...)`** case patterns and array values: `case "$1" in (add|remove|list) ...`, `_TO_INSTALL=(...)`.
+- **`-n` / `--dry-run` for dry runs** any script with outward-facing or hard-to-undo side effects (push, PR creation, delete, deploy, remote writes) takes both spellings and prints what it _would_ do without touching anything. parse it in `main` with the same `case` that handles `-h`/`--help`, and exit non-zero on an unknown argument. an env var (`DRY_RUN=1`) may back it, but the flag is the interface.
