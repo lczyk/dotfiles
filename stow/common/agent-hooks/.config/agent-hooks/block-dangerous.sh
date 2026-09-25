@@ -6,8 +6,10 @@
 # categories:
 #   - destructive git (reset, force-push, filter-branch, ...)
 #   - history-mutating git (rebase, cherry-pick, reset --soft -- liftable, see AGENT_UNFENCE=history)
-#   - any write git op (commit, tag, branch creation, ...)
-#   - any write `gh` op (pr/issue/release create+comment+edit, api writes)
+#   - git push (liftable, see AGENT_UNFENCE=push; force / delete / bulk forms never)
+#   - any write git op (tag, revert, config, ...)
+#   - gh pr create (liftable, see AGENT_UNFENCE=pr)
+#   - any write `gh` op (pr/issue/release comment+edit, api writes)
 #   - bypass of commit signing
 #   - software / package installs
 #   - remote envs (ssh, scp, kubectl exec, ... -- liftable, see AGENT_UNFENCE=remote)
@@ -52,12 +54,37 @@ COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's
 COMMAND=${COMMAND//\\git/git}
 
 # `-c key=val` / `--config-env` overrides that neutralise the git-hook and
-# signing layers. matched pre-strip -- the loop below erases exactly the
-# evidence being looked for. -i: config keys are case-insensitive. known
-# false positive: `git grep -c <key>` reads as an override.
-GIT_CFG_KEYS="core\.hookspath|commit\.gpgsign|tag\.gpgsign|gpg\.program"
-if echo "$COMMAND" | grep -qiE -- "(^|[ ;|&])git [^;|&]*(-c ?|--config-env[= ])[\"']?(${GIT_CFG_KEYS})"; then
-    echo "BLOCKED: '${COMMAND:0:120}' overrides hook / signing config -- ask the user if you really need to" >&2
+# signing layers, or define a one-shot alias that hides a subcommand from
+# every anchor below (`git -c alias.p=push p`). `--exec-path=<dir>` swaps
+# the remote helpers git runs. matched pre-strip -- the loop below erases
+# exactly the evidence being looked for. -i: config keys are case-insensitive.
+# known false positive: `git grep -c <key>` reads as an override.
+GIT_CFG_KEYS="core\.hookspath|commit\.gpgsign|tag\.gpgsign|gpg\.program|alias\."
+if echo "$COMMAND" | grep -qiE -- "(^|[ ;|&])git [^;|&]*((-c ?|--config-env[= ])[\"']?(${GIT_CFG_KEYS})|--exec-path=)"; then
+    echo "BLOCKED: '${COMMAND:0:120}' overrides hook / signing / alias / exec-path config -- ask the user if you really need to" >&2
+    exit 2
+fi
+
+# the same layers, reached through the environment: config file locations,
+# the repo location, the exec path, the ssh / proxy commands git runs, and
+# PATH itself when git or gh is on the line (a shadowing git binary).
+GIT_ENV_VARS="GIT_CONFIG[A-Z_]*|GIT_DIR|GIT_WORK_TREE|GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_PROXY_COMMAND|GIT_NAMESPACE|GIT_CEILING_DIRECTORIES|XDG_CONFIG_HOME|HOME"
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])((env|export) [^;|&]*)?(${GIT_ENV_VARS})="; then
+    echo "BLOCKED: '${COMMAND:0:120}' overrides git's config / repo / exec environment -- ask the user if you really need to" >&2
+    exit 2
+fi
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])((env|export) [^;|&]*)?PATH=" && echo "$COMMAND" | grep -qE -- "(^|[ ;|&/])(git|gh)( |$)"; then
+    echo "BLOCKED: '${COMMAND:0:120}' rewrites PATH around a git / gh call -- ask the user if you really need to" >&2
+    exit 2
+fi
+
+# one-shot config that redirects or widens a push: remote.<r>.pushurl,
+# url.<base>.pushInsteadOf, push.default=matching, branch.<b>.pushRemote.
+# remotes are fixed for the agent (git remote / git config writes are fenced),
+# so this stays fenced under every capability. matched pre-strip, same reason.
+PUSH_CFG_KEYS="remote\.|url\.|push\.|branch\."
+if echo "$COMMAND" | grep -qiE -- "(^|[ ;|&])git [^;|&]*(-c ?|--config-env[= ])[\"']?(${PUSH_CFG_KEYS})[^;|&]* push( |$)"; then
+    echo "BLOCKED: '${COMMAND:0:120}' pushes under a one-shot remote / push config -- not liftable; push to a configured remote by name" >&2
     exit 2
 fi
 
@@ -76,7 +103,6 @@ GIT_PATTERNS=(
     # force / interactive clean deletes untracked files; -n / -nd dry-runs stay allowed.
     "git clean ((-[A-Za-z]*[fi])|--force|--interactive)"
     "git branch -D"
-    "push --force"
     "git merge( |$)"
     # pull = fetch + merge (or rebase) into the current branch
     "(^|[ ;|&])git pull( |$)"
@@ -95,8 +121,8 @@ GIT_REASON="user prevents destructive / history-rewriting git ops"
 GIT_WRITE_PATTERNS=(
     # NOTE: `git commit` intentionally allowed -- per workflow.md, commits
     # need explicit per-prompt permission, but the model is trusted to
-    # follow that rule rather than being hard-fenced.
-    "(^|[ ;|&])git push( |$)"
+    # follow that rule rather than being hard-fenced. `git push` has its own
+    # special-case below -- see the push capability.
     "(^|[ ;|&])git tag( -[adfsmu]| [^-])"
     "(^|[ ;|&])git revert( |$)"
     "(^|[ ;|&])git am( |$)"
@@ -161,7 +187,8 @@ GIT_ADD_REASON="stage explicit paths only -- wide \`git add\` may grab unrelated
 
 # any write `gh` op. read ops (view/list/status/api GET) are fine.
 GH_WRITE_PATTERNS=(
-    "(^|[ ;|&])gh pr (create|comment|edit|review|revert|close|reopen|ready|checkout|lock|unlock|update-branch)"
+    # `gh pr create` has its own special-case below -- see the pr capability.
+    "(^|[ ;|&])gh pr (comment|edit|review|revert|close|reopen|ready|checkout|lock|unlock|update-branch)"
     # `co` is checkout under both its documented alias and gh's own top-level one
     "(^|[ ;|&])gh (pr )?co( |$)"
     "(^|[ ;|&])gh issue (create|comment|edit|close|reopen|lock|unlock|delete|pin|unpin|transfer)"
@@ -386,6 +413,156 @@ if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git reset( |$)"; then
         echo "BLOCKED: '$(_abbrev "$COMMAND")' -- \`git reset\` is destructive past --soft. $GIT_REASON. (\`--soft\` alone is liftable with env AGENT_UNFENCE=history.)" >&2
         exit 2
     fi
+fi
+
+# `git push` -- liftable with the push capability, minus the forms that rewrite
+# or delete remote refs, skip the pre-push hook, push in bulk, or name a url or
+# path instead of a configured remote. those stay fenced under every capability
+# (pre-push draws the same line for aliases and scripts the text match misses).
+# git takes any unambiguous prefix of a long option, so each flag is matched
+# from its shortest accepted spelling: --force-w(ith-lease), --force-i(f-includes),
+# --de(lete), --m(irror), --pru(ne), --al(l), --b(ranches), --ta(gs),
+# --no-veri(fy), --rece(ive-pack), --e(xec), --rep(o). --for[a-z-]* also
+# swallows the ambiguous --for / --forc, which git rejects anyway.
+PUSH_HARD_FLAG_RE=" --(for[a-z-]*|de[a-z]*|m[a-z]*|pru[a-z]*|al[a-z]*|b[a-z]*|ta[a-z]*|no-veri[a-z]*|rece[a-z-]*|e[a-z]*|rep[a-z]*)(=[^ ]*)?( |$)"
+PUSH_HARD_SHORT_RE=" -[A-Za-z]*[fd][A-Za-z]*( |$)"
+# `+ref` forces one refspec, a leading `:` deletes the remote ref, and a bare
+# `:` is the old push-everything-matching form.
+PUSH_HARD_REFSPEC_RE=" (\+[^ ]+|:[^ ]*)( |$)"
+# a substituted or variable target could be anything, a url included; git
+# push origin HEAD names the current branch without one.
+PUSH_SUBST_RE='\$\(|`|\$\{|\$[A-Za-z_]|\$'"'"
+PUSH_HARD_REASON="force / delete / bulk / hook-skipping pushes and url targets are user-run under every capability"
+PUSH_REASON="git push is user-run. (the user can lift fast-forward pushes to a configured remote for a session with env AGENT_UNFENCE=push.)"
+
+# plumbing that pushes without running pre-push, and the transport helpers
+# `git push` drives underneath.
+PUSH_PLUMBING_PATTERNS=(
+    "(^|[ ;|&])git (send-pack|http-push)( |$)"
+    "(^|[ ;|&])git(-| )remote-[a-z]+( |$)"
+)
+PUSH_PLUMBING_REASON="push plumbing bypasses the pre-push hook -- push through git push"
+
+# the git hooks read the agent markers from the environment; unsetting or
+# rewriting them for a child would hand the hooks a human session.
+MARKER_PATTERNS=(
+    "(CLAUDECODE|AGENT_SESSION|OPENCODE_PID)="
+    "(^|[ ;|&])unset [^;|&]*(CLAUDECODE|AGENT_SESSION|OPENCODE_PID)"
+    "(-u|--unset)[ =](CLAUDECODE|AGENT_SESSION|OPENCODE_PID)"
+    "(^|[ ;|&])env( [^;|&]*)? (-i|--ignore-environment)( |$)"
+)
+MARKER_REASON="agent session markers are not yours to unset or rewrite -- the git hooks read them"
+
+# a url or path where a remote name belongs. remotes are fixed for the agent
+# (git remote / git config writes are fenced), so a literal target is the only
+# way left to push somewhere the user did not configure. redirect targets are
+# files, not remotes -- skipped.
+_push_names_url() {
+    local tok toks skip=0
+    read -ra toks <<< "$1"
+    for tok in "${toks[@]}"; do
+        if ((skip)); then skip=0; continue; fi
+        case "$tok" in
+            (\>|\>\>|[0-9]\>|[0-9]\>\>|\<|[0-9]\<) skip=1; continue ;;
+            (*\>*|\<*) continue ;;
+            (*://*|*@*:*|/*|./*|../*|"~"*|*.git) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+check "$PUSH_PLUMBING_REASON" "${PUSH_PLUMBING_PATTERNS[@]}"
+check "$MARKER_REASON"        "${MARKER_PATTERNS[@]}"
+
+while IFS= read -r seg; do
+    args="${seg#*git push}"
+    if echo "$args" | grep -qE -- "${PUSH_HARD_FLAG_RE}|${PUSH_HARD_SHORT_RE}|${PUSH_HARD_REFSPEC_RE}" || _push_names_url "$args"; then
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- $PUSH_HARD_REASON" >&2
+        exit 2
+    fi
+    if ! _unfenced push; then
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- $PUSH_REASON" >&2
+        exit 2
+    fi
+    if echo "$args" | grep -qE -- "$PUSH_SUBST_RE"; then
+        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- git push arguments must be literal (no \$(...), backticks or variables); git push origin HEAD names the current branch" >&2
+        exit 2
+    fi
+done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git push( [^;|&]*|$)")
+
+# `gh pr create` -- liftable with the pr capability. the PR targets the current
+# repo (no -R / --repo, no GH_REPO), an inline title carries a conventional
+# commits prefix, and the body -- inline or a file -- is ascii with no agent
+# attribution: the line commit-msg draws, drawn here because no git hook sees
+# a PR body. text reaches gh only as literal command text or as an absolute
+# regular file this policy can read too -- a substitution or a variable would
+# hand gh content it never saw. the inline heredoc is the one allowed
+# substitution, since its text is in the command.
+#
+# gh's short flags glue their value (-tfoo) and stack behind the booleans
+# (-dwt foo), hence -[dfw]* before each one.
+PR_CREATE_RE="(^|[ ;|&])gh pr create( |$)"
+PR_REASON="gh pr create is user-run. (the user can lift it for a session with env AGENT_UNFENCE=pr.)"
+PR_TYPES="feat|fix|docs|test|refactor|chore|bench|revert|ci|perf|release"
+PR_REPO_FLAG_RE=" (-[dfw]*R|--repo)"
+PR_TITLE_FLAG_RE=" (-[dfw]*t|--title)"
+PR_TITLE_RE="(^| )(-[dfw]*t[ =]?|--title[= ])[\"']?(${PR_TYPES})(\([a-z0-9._-]+\))?(!|\?)?: "
+PR_BODYFILE_FLAG_RE=" (-[dfw]*F|--body-file)"
+PR_ATTRIBUTION_RE="co-authored-by|generated with"
+PR_NON_ASCII_RE=$'[^\t -~]'
+PR_HEREDOC_RE='\$\(cat <<-?["'"'"']?[A-Za-z_]+["'"'"']?'
+# $'...' is in the list: its escapes rebuild a banned string byte by byte.
+PR_SUBST_RE='\$\(|`|\$\{|\$[A-Za-z_]|\$'"'"
+PR_ENV_RE="GH_(REPO|HOST|TOKEN|ENTERPRISE_TOKEN|CONFIG_DIR)="
+PR_QUOTED_HEREDOC_RE="\\\$\\(cat <<-?('([A-Za-z_]+)'|\"([A-Za-z_]+)\"|\\\\([A-Za-z_]+))"
+
+_pr_block() {
+    echo "BLOCKED: '$(_abbrev "$COMMAND")' -- $1" >&2
+    exit 2
+}
+
+# a quoted heredoc ($(cat <<'EOF' ... EOF)) is literal text: its body still
+# gets the attribution and ascii scans with the rest of the command, but not
+# the substitution scan -- markdown code spans want backticks. an unquoted
+# heredoc expands, so only its opener is excused (PR_HEREDOC_RE). newlines
+# were folded to spaces, so the terminator line reads " EOF )".
+_strip_quoted_heredocs() {
+    local s=$1 open d before rest
+    while [[ $s =~ $PR_QUOTED_HEREDOC_RE ]]; do
+        open=${BASH_REMATCH[0]}
+        d=${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}
+        before=${s%%"$open"*}
+        rest=${s#*"$open"}
+        [[ $rest == *" $d )"* ]] || break
+        rest=${rest#*" $d )"}
+        s="$before$rest"
+    done
+    printf '%s' "$s"
+}
+
+if echo "$COMMAND" | grep -qE -- "$PR_CREATE_RE"; then
+    _unfenced pr || _pr_block "$PR_REASON"
+    while IFS= read -r seg; do
+        if echo "$seg" | grep -qE -- "$PR_REPO_FLAG_RE"; then
+            _pr_block "PRs go to the current repo -- no -R / --repo"
+        fi
+        if echo "$seg" | grep -qE -- " --recover"; then
+            _pr_block "--recover replays a title and body this policy cannot read -- pass them explicitly"
+        fi
+        if echo "$seg" | grep -qE -- "$PR_TITLE_FLAG_RE" && ! echo "$seg" | grep -qE -- "$PR_TITLE_RE"; then
+            _pr_block "PR title must open with a lowercase conventional commits prefix (feat:, fix:, docs:, ...)"
+        fi
+        if echo "$seg" | grep -qE -- "$PR_BODYFILE_FLAG_RE"; then
+            bodyfile=$(printf '%s' "$seg" | sed -E "s/.* (-[dfw]*F|--body-file)[= ]?[\"']?([^\"' ]*).*/\2/")
+            [[ "$bodyfile" == /* && -f "$bodyfile" && -r "$bodyfile" ]] || _pr_block "PR body file must be an absolute path to a readable regular file (got '${bodyfile}')"
+            grep -qiE -- "$PR_ATTRIBUTION_RE" "$bodyfile" && _pr_block "PR body file carries agent attribution (Co-Authored-By / Generated with) -- drop it"
+            LC_ALL=C grep -qE -- "$PR_NON_ASCII_RE" "$bodyfile" && _pr_block "PR body file must be ascii only"
+        fi
+    done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])gh pr create( [^;|&]*|$)")
+    printf '%s' "$COMMAND" | grep -qE -- "$PR_ENV_RE" && _pr_block "gh env overrides (GH_REPO, GH_HOST, GH_TOKEN, ...) are not yours"
+    _strip_quoted_heredocs "$COMMAND" | sed -E "s/${PR_HEREDOC_RE}//g" | grep -qE -- "$PR_SUBST_RE" && _pr_block "PR text must be literal -- no \$(...), backticks or variables in a gh pr create command; put the body in a quoted heredoc (\$(cat <<'EOF' ... EOF)), where backticks and \$ are plain text"
+    printf '%s' "$COMMAND" | grep -qiE -- "$PR_ATTRIBUTION_RE" && _pr_block "PR text carries agent attribution (Co-Authored-By / Generated with) -- drop it"
+    printf '%s' "$COMMAND" | LC_ALL=C grep -qE -- "$PR_NON_ASCII_RE" && _pr_block "PR text must be ascii only (no emoji, em-dash, smart quotes)"
 fi
 
 check "$GPG_REASON"       "${GPG_PATTERNS[@]}"
