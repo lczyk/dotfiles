@@ -1978,7 +1978,7 @@ EOF
 
 @test "pr does not lift gh pr edit of anything but the title and body" {
     local flag
-    for flag in "--add-label bug" "--remove-label bug" "--add-reviewer someone" "--remove-reviewer someone" "--add-assignee @me" "--remove-assignee @me" "--add-project x" "--remove-project x" "--milestone v1" "-m v1" "--base main" "-B main"; do
+    for flag in "--add-reviewer someone" "--remove-reviewer someone" "--add-assignee @me" "--remove-assignee @me" "--add-project x" "--remove-project x" "--milestone v1" "-m v1" "--base main" "-B main"; do
         AGENT_UNFENCE=pr run fire "gh pr edit 12 $flag"
         [ "$status" -eq 2 ] || { echo "not blocked: $flag"; return 1; }
         AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x' $flag"
@@ -2011,16 +2011,16 @@ Co-Authored-By: Claude <noreply@anthropic.com>'"
 }
 
 @test "a flag hidden inside a quoted body is not a flag" {
-    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'pass --add-label bug to gh'"
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'pass --add-reviewer someone to gh'"
     [ "$status" -eq 0 ]
-    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'do not --add-label' --add-label bug"
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'do not --add-reviewer' --add-reviewer someone"
     [ "$status" -eq 2 ]
 }
 
 @test "pr edit does not lift a second gh write on the line" {
     AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x' && gh pr ready 12"
     [ "$status" -eq 2 ]
-    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x'; gh pr edit 12 --add-label bug"
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x'; gh pr edit 12 --add-reviewer someone"
     [ "$status" -eq 2 ]
 }
 
@@ -2229,5 +2229,110 @@ Generated with [Claude Code](https://claude.com/claude-code)'"
     AGENT_UNFENCE=issue run fire "gh issue edit 1 --body 'Generated with [Claude Code](https://claude.com/claude-code)'"
     [ "$status" -eq 2 ]
     AGENT_UNFENCE=issue run fire "gh issue edit 1 --body \"\$BODY\""
+    [ "$status" -eq 2 ]
+}
+
+# -- the labels capability ------------------------------------------------
+# AGENT_UNFENCE=labels lifts --add-label / --remove-label on gh pr edit and
+# gh issue edit, nothing else. pr covers labels on a PR by itself.
+
+@test "labels allows adding and removing labels on a PR" {
+    AGENT_UNFENCE=labels run fire "gh pr edit 12 --add-label bug"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=labels run fire "gh pr edit 12 --remove-label wip"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=labels run fire "gh pr edit --add-label bug,needs-review --remove-label wip"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=labels run fire "gh pr edit feature/x --add-label=bug"
+    [ "$status" -eq 0 ]
+}
+
+@test "labels allows adding and removing labels on an issue" {
+    AGENT_UNFENCE=labels run fire "gh issue edit 1 --add-label bug"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=labels run fire "gh issue edit 1 --remove-label 'help wanted'"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr covers labels on a PR by itself" {
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --add-label bug --remove-label wip"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x' --add-label bug"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr does not cover labels on an issue, nor issue labels at all" {
+    AGENT_UNFENCE=pr run fire "gh issue edit 1 --add-label bug"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue edit 1 --add-label bug"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue,labels run fire "gh issue edit 1 --title x --add-label bug"
+    [ "$status" -eq 0 ]
+}
+
+@test "labels does not cover the title or body" {
+    AGENT_UNFENCE=labels run fire "gh pr edit 12 --add-label bug --title 'feat: x'"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"AGENT_UNFENCE=pr"* ]]
+    AGENT_UNFENCE=labels run fire "gh issue edit 1 --body x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels,pr run fire "gh pr edit 12 --add-label bug --title 'feat: x'"
+    [ "$status" -eq 0 ]
+}
+
+@test "labels does not lift the other edit flags" {
+    AGENT_UNFENCE=labels run fire "gh pr edit 12 --add-label bug --add-reviewer someone"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels run fire "gh issue edit 1 --add-label bug --milestone v1"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels run fire "gh pr edit 12 --add-label bug -R o/r"
+    [ "$status" -eq 2 ]
+}
+
+@test "labels does not lift create, label definitions, or other gh writes" {
+    AGENT_UNFENCE=labels run fire "gh pr create --fill -l bug"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels run fire "gh issue create -t x -b y -l bug"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels run fire "gh label create bug"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels run fire "gh label delete bug"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels run fire "gh pr edit 12 --add-label bug && gh pr ready 12"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels run fire "gh api repos/o/r/issues/1/labels -f labels[]=bug"
+    [ "$status" -eq 2 ]
+}
+
+@test "labels keeps the literal-text rule" {
+    AGENT_UNFENCE=labels run fire "gh pr edit 12 --add-label \"\$LABEL\""
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labels run fire "GH_REPO=o/r gh pr edit 12 --add-label bug"
+    [ "$status" -eq 2 ]
+}
+
+@test "gh pr edit of labels stays blocked without a capability, naming both" {
+    run fire "gh pr edit 12 --add-label bug"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"AGENT_UNFENCE=labels"* ]]
+    [[ "$output" == *"AGENT_UNFENCE=pr"* ]]
+}
+
+@test "an unrelated capability does not lift the labels fence" {
+    AGENT_UNFENCE=push run fire "gh pr edit 12 --add-label bug"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=meta run fire "gh issue edit 1 --add-label bug"
+    [ "$status" -eq 2 ]
+}
+
+@test "a substring of a capability name does not lift the labels fence" {
+    AGENT_UNFENCE=label run fire "gh pr edit 12 --add-label bug"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=labelss run fire "gh pr edit 12 --add-label bug"
+    [ "$status" -eq 2 ]
+}
+
+@test "the labels capability cannot be granted from inside the command text" {
+    run fire "env AGENT_UNFENCE=labels gh pr edit 12 --add-label bug"
     [ "$status" -eq 2 ]
 }
