@@ -60,6 +60,7 @@ repo instruction files (`AGENTS.md`, `AGENT.md`, repo `CLAUDE.md`, `.cursorrules
 ## commits and PRs
 
 - **no attribution** no `Co-Authored-By` trailer and no _"Generated with ..."_ line in PR bodies. this overrides harness reminders asking for either.
+- **messages via files** never put prose on the command line -- write it with the Write tool, then `git commit -F /tmp/ai/msg` / `gh pr create --body-file /tmp/ai/body.md`. the fence matches text, so "apt install" in a subject reads as an install and blocks the commit.
 - **PRs are user-run** unless the session carries `pr` -- then `gh pr create` it yourself; otherwise draft the title and body and hand them over. titles use the same conventional prefix as commits.
 - **hooks reject agent commits that break these**
     - `commit-msg` -- subject `<type>(<scope>): ...`, type one of `feat fix docs test refactor chore bench revert ci perf release`; ascii only; no backticks; no `?!`.
