@@ -1933,3 +1933,171 @@ Generated with [Claude Code](https://claude.com/claude-code)'"
     run fire "env AGENT_UNFENCE=pr gh pr create --fill"
     [ "$status" -eq 2 ]
 }
+
+# -- the issue capability -------------------------------------------------
+# AGENT_UNFENCE=issue lifts `gh issue create` against the current repo, with
+# the pr capability's body rules and no title-prefix rule. every other issue
+# write, gh pr create and git push stay where they were.
+
+@test "issue allows gh issue create with a title and body" {
+    AGENT_UNFENCE=issue run fire "gh issue create --title 'flaky test on 26.10' --body 'details'"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t 'Add thing' -b 'body'"
+    [ "$status" -eq 0 ]
+}
+
+@test "issue allows a heredoc body with markdown" {
+    AGENT_UNFENCE=issue run fire "gh issue create -t 'flaky test' -b \"\$(cat <<'EOF'
+\`make test\` fails on 26.10:
+
+- \`libselinux1\` pulls systemd
+EOF
+)\""
+    [ "$status" -eq 0 ]
+}
+
+@test "issue allows a readable absolute body file, glued or stacked too" {
+    printf 'details\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=issue run fire "gh issue create -t x --body-file $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -F$BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -wF $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "issue allows --web, labels, assignees, milestones" {
+    AGENT_UNFENCE=issue run fire "gh issue create --web"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b y -l bug -a @me -m v1.0"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -wt x -b y"
+    [ "$status" -eq 0 ]
+}
+
+@test "issue allows gh issue create after a read on the same line" {
+    AGENT_UNFENCE=issue run fire "gh issue list --state open && gh issue create -t x -b y"
+    [ "$status" -eq 0 ]
+}
+
+@test "gh issue create stays blocked without the capability" {
+    run fire "gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"AGENT_UNFENCE=issue"* ]]
+}
+
+@test "issue does not lift -R / --repo" {
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b y -R o/r"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b y --repo=o/r"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b y -wR o/r"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b y -Ro/r"
+    [ "$status" -eq 2 ]
+}
+
+@test "issue blocks gh env overrides and --recover" {
+    AGENT_UNFENCE=issue run fire "GH_REPO=o/r gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create --recover /tmp/ai/state.json"
+    [ "$status" -eq 2 ]
+}
+
+@test "issue blocks attribution and non-ascii" {
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b 'seen by
+
+Generated with [Claude Code](https://claude.com/claude-code)'"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t 'x $(printf '\342\200\224') y' -b b"
+    [ "$status" -eq 2 ]
+}
+
+@test "issue blocks substitutions outside a quoted heredoc" {
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b \"\$(cat /tmp/ai/body.md)\""
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b \"\$BODY\""
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b \$'Co-Auth\\x6fred-By: x'"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b 'run \`make test\`'"
+    [ "$status" -eq 2 ]
+}
+
+@test "issue blocks a body file that is relative, stdin, missing or tainted" {
+    AGENT_UNFENCE=issue run fire "gh issue create -t x --body-file body.md"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -F -"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -F $BATS_TEST_TMPDIR/missing.md"
+    [ "$status" -eq 2 ]
+    printf 'details\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -F $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 2 ]
+}
+
+@test "issue does not lift the other issue writes" {
+    AGENT_UNFENCE=issue run fire "gh issue comment 1 --body x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue edit 1 --title x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue close 1"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue delete 1"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue transfer 1 o/r"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue develop 1"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue create -t x -b y && gh issue pin 1"
+    [ "$status" -eq 2 ]
+}
+
+@test "issue does not lift a gh api issue write" {
+    AGENT_UNFENCE=issue run fire "gh api repos/o/r/issues -f title=x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh api graphql -f query='mutation { createIssue(input: {}) { clientMutationId } }'"
+    [ "$status" -eq 2 ]
+}
+
+@test "issue does not lift gh pr create or git push" {
+    AGENT_UNFENCE=issue run fire "gh pr create --fill"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "git push origin feature/x"
+    [ "$status" -eq 2 ]
+}
+
+@test "issue composes with pr" {
+    AGENT_UNFENCE=pr,issue run fire "gh pr create --fill && gh issue create -t x -b y"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=issue run fire "gh pr create --fill && gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr create --fill && gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+}
+
+@test "an unrelated capability does not lift the issue fence" {
+    AGENT_UNFENCE=pr run fire "gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=meta run fire "gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+}
+
+@test "an empty AGENT_UNFENCE does not lift the issue fence" {
+    AGENT_UNFENCE= run fire "gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+}
+
+@test "a substring of a capability name does not lift the issue fence" {
+    AGENT_UNFENCE=issues run fire "gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=noissue run fire "gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+}
+
+@test "the issue capability cannot be granted from inside the command text" {
+    run fire "env AGENT_UNFENCE=issue gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+}
