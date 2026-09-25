@@ -62,7 +62,9 @@ reads the same canonical caveman skill directly. status lines, hook
 definitions, and plugin implementations remain harness-specific.
 
 the git hooks treat agent sessions more strictly than human ones (`pre-push`
-blocks agents outright; `pre-commit` and `commit-msg` reject rather than warn).
+blocks agents outright unless the session carries `AGENT_UNFENCE=push`, and
+then allows fast-forward branch pushes only; `pre-commit` and `commit-msg`
+reject rather than warn).
 they detect that via `AGENT_SESSION=1`, which the claude and codex configs
 inject into spawned shells, falling back to the native `CLAUDECODE` and
 `OPENCODE_PID` markers. copilot exposes no env to spawned shells, so it lands on

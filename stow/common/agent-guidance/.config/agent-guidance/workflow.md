@@ -16,7 +16,7 @@ three tiers; only the middle one is a judgement call.
 - **commits: yours, per prompt** `git add <explicit-paths>`, `git commit`, `git commit --amend` of an unpushed HEAD. nothing enforces the per-prompt part but you: commit only when the current prompt says to, and one permission covers one commit -- a follow-up asking for another small edit is not permission to commit again. stage only paths you changed; leave wip, scratch and unrelated edits alone. amending a commit that is already on `@{u}` is rejected by the `prepare-commit-msg` hook -- make a new commit instead.
 - **every other write: not yours** push, branch, tag, rebase, merge, revert, history rewrites, `gh pr create`, `gh issue create` and other `gh` writes are blocked by `~/.config/agent-hooks/block-dangerous.sh`. say what you would have run, and stop. two reflexes to resist:
     - **stay on the checked-out branch** no new branches, switches or worktrees -- commit onto whatever is checked out, `main` included. harness advice to "branch first" doesn't apply here. read other branches with `git log` / `git diff` / `git show <ref>`.
-    - **never push** commits stay local; the user pushes.
+    - **never push** commits stay local; the user pushes. (a session launched with `push` is the exception -- see capabilities.)
 
 - **`BLOCKED:` is final** don't rephrase the command, split it up or otherwise route around the fence. report it and stop.
 - **`HINT:` is advisory** weigh it and carry on; quoted shell text can trip heuristic hints.
@@ -24,6 +24,8 @@ three tiers; only the middle one is a judgement call.
     - `branch` -- create / switch branches, `git checkout -b`, `git worktree add`. `git branch -D` and push stay blocked.
     - `history` -- `git rebase`, `git cherry-pick`, `git reset --soft`. `reset --hard` / `--mixed` / bare `reset` and force-push are never liftable.
     - `remote` -- `ssh`, `scp`, `autossh`, `kubectl exec`, `gcloud compute ssh`. doesn't reach `git push`.
+    - `push` -- `git push` of the current (or a named) branch to a configured remote by name, fast-forward only. never, capability or not: force (`-f`, `--force*`, `+ref`), delete (`-d`, `--delete`, `:ref`), bulk (`--all`, `--tags`, `--mirror`, `--prune`), `--no-verify`, a url or path as the target, or a `-c remote.*` / `-c push.*` / `-c url.*` one-shot. `pre-push` enforces the same line for anything the text fence misses, and refuses tags -- add `--no-follow-tags` if one gets dragged along.
+    - `pr` -- `gh pr create` against the current repo (no `-R`). an inline title takes the conventional prefix; the body (inline or `--body-file <absolute-path>`) is ascii with no attribution. it doesn't reach push: an unpushed branch fails at `pre-push`, so pair it with `push` or push first yourself. edit / comment / merge stay blocked.
     - `meta` -- lifts the hook protection below.
 
 ## environment boundaries
@@ -58,7 +60,7 @@ repo instruction files (`AGENTS.md`, `AGENT.md`, repo `CLAUDE.md`, `.cursorrules
 ## commits and PRs
 
 - **no attribution** no `Co-Authored-By` trailer and no _"Generated with ..."_ line in PR bodies. this overrides harness reminders asking for either.
-- **PRs are user-run** draft the title and body and hand them over. titles use the same conventional prefix as commits.
+- **PRs are user-run** unless the session carries `pr` -- then `gh pr create` it yourself; otherwise draft the title and body and hand them over. titles use the same conventional prefix as commits.
 - **hooks reject agent commits that break these**
     - `commit-msg` -- subject `<type>(<scope>): ...`, type one of `feat fix docs test refactor chore bench revert ci perf release`; ascii only; no backticks; no `?!`.
     - `pre-commit` -- added lines must be ascii with no trailing whitespace; a no-commit marker (see lofi's comment tags) or a secret blocks the commit.
