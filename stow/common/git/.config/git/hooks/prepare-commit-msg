@@ -1,8 +1,34 @@
 #!/usr/bin/env bash
-# rewrite git's default revert message to conventional commits format.
-# Revert "<subject>" -> revert: "<subject>"
+# - rewrite git's default revert message to conventional commits format.
+#   Revert "<subject>" -> revert: "<subject>"
+# - agents: reject --amend of a commit that is already on the upstream.
+#
+# git invokes prepare-commit-msg with: <msg-file> [<source> [<sha>]]
+# --amend (and -c / -C HEAD) arrive as `commit HEAD`. runs even under
+# --no-verify and --no-edit.
+
+# agent harnesses take the strict path. AGENT_SESSION is set by our own harness
+# configs; CLAUDECODE and OPENCODE_PID are native fallbacks. copilot exports
+# nothing usable into spawned shells, so it lands on the human path -- known gap.
+is_agent() {
+    [ -n "$AGENT_SESSION" ] || [ "$CLAUDECODE" = "1" ] || [ -n "$OPENCODE_PID" ]
+}
 
 MSGFILE="$1"
+SOURCE="$2"
+SHA="$3"
+
+# HEAD reachable from @{u} = pushed, as of the last fetch. no upstream,
+# detached HEAD and outside-a-repo all fail the lookup and count as unpushed.
+head_is_pushed() {
+    git merge-base --is-ancestor HEAD '@{u}' 2>/dev/null
+}
+
+if is_agent && [ "$SOURCE" = commit ] && [ "$SHA" = HEAD ] && head_is_pushed; then
+    printf 'rejected: HEAD is already on its upstream -- amending it rewrites pushed history.\n' >&2
+    printf 'rejected: make a new commit instead, or hand the amend to the user.\n' >&2
+    exit 1
+fi
 
 subject=$(head -n1 "$MSGFILE")
 
