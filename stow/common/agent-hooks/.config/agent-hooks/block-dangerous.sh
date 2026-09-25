@@ -187,12 +187,14 @@ GIT_ADD_REASON="stage explicit paths only -- wide \`git add\` may grab unrelated
 
 # any write `gh` op. read ops (view/list/status/api GET) are fine.
 GH_WRITE_PATTERNS=(
-    # `gh pr create` has its own special-case below -- see the pr capability.
-    "(^|[ ;|&])gh pr (comment|edit|review|revert|close|reopen|ready|checkout|lock|unlock|update-branch)"
+    # `gh pr create` / `gh pr edit` have their own special-case below -- see
+    # the pr capability.
+    "(^|[ ;|&])gh pr (comment|review|revert|close|reopen|ready|checkout|lock|unlock|update-branch)"
     # `co` is checkout under both its documented alias and gh's own top-level one
     "(^|[ ;|&])gh (pr )?co( |$)"
-    # `gh issue create` has its own special-case below -- see the issue capability.
-    "(^|[ ;|&])gh issue (comment|edit|close|reopen|lock|unlock|delete|pin|unpin|transfer)"
+    # `gh issue create` / `gh issue edit` have their own special-case below --
+    # see the issue capability.
+    "(^|[ ;|&])gh issue (comment|close|reopen|lock|unlock|delete|pin|unpin|transfer)"
     "(^|[ ;|&])gh release (create|edit|delete|upload)"
     # deploy-key is a group, not a leaf -- `list` under it is a read
     "(^|[ ;|&])gh repo (create|delete|edit|archive|unarchive|fork|rename|sync|deploy-key (add|delete))"
@@ -491,29 +493,32 @@ while IFS= read -r seg; do
     fi
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git push( [^;|&]*|$)")
 
-# `gh pr create` / `gh issue create` -- liftable with the pr / issue
-# capability. the target is the current repo (no -R / --repo, no GH_REPO), a
-# PR's inline title carries a conventional commits prefix, and the body --
-# inline or a file -- is ascii with no agent attribution: the line commit-msg
-# draws, drawn here because no git hook sees a PR or issue body. text reaches
-# gh only as literal command text or as an absolute regular file this policy
-# can read too -- a substitution or a variable would hand gh content it never
-# saw. the inline heredoc is the one allowed substitution, since its text is
-# in the command.
+# `gh pr create` / `gh issue create`, and `gh pr edit` / `gh issue edit` of
+# the title and body -- liftable with the pr / issue capability. the target
+# is the current repo (no -R / --repo, no GH_REPO), a PR's inline title
+# carries a conventional commits prefix, and the body -- inline or a file --
+# is ascii with no agent attribution: the line commit-msg draws, drawn here
+# because no git hook sees a PR or issue body. text reaches gh only as literal
+# command text or as an absolute regular file this policy can read too -- a
+# substitution or a variable would hand gh content it never saw. the inline
+# heredoc is the one allowed substitution, since its text is in the command.
+# an edit touches the title and body only: labels, reviewers, assignees,
+# milestone and the base branch stay user-run.
 #
 # gh's short flags glue their value (-tfoo) and stack behind the booleans
 # (-dwt foo), hence -[<bools>]* before each one; the booleans differ per
-# command (pr: -d -f -w, issue: -w -e).
-GH_CREATE_TYPES="feat|fix|docs|test|refactor|chore|bench|revert|ci|perf|release"
-GH_CREATE_ATTRIBUTION_RE="co-authored-by|generated with"
-GH_CREATE_NON_ASCII_RE=$'[^\t -~]'
-GH_CREATE_HEREDOC_RE='\$\(cat <<-?["'"'"']?[A-Za-z_]+["'"'"']?'
+# command (pr create: -d -f -w, issue create: -w -e, edit: none).
+GH_TEXT_TYPES="feat|fix|docs|test|refactor|chore|bench|revert|ci|perf|release"
+GH_TEXT_ATTRIBUTION_RE="co-authored-by|generated with"
+GH_TEXT_NON_ASCII_RE=$'[^\t -~]'
+GH_TEXT_HEREDOC_RE='\$\(cat <<-?["'"'"']?[A-Za-z_]+["'"'"']?'
 # $'...' is in the list: its escapes rebuild a banned string byte by byte.
-GH_CREATE_SUBST_RE='\$\(|`|\$\{|\$[A-Za-z_]|\$'"'"
-GH_CREATE_ENV_RE="GH_(REPO|HOST|TOKEN|ENTERPRISE_TOKEN|CONFIG_DIR)="
-GH_CREATE_QUOTED_HEREDOC_RE="\\\$\\(cat <<-?('([A-Za-z_]+)'|\"([A-Za-z_]+)\"|\\\\([A-Za-z_]+))"
+GH_TEXT_SUBST_RE='\$\(|`|\$\{|\$[A-Za-z_]|\$'"'"
+GH_TEXT_ENV_RE="GH_(REPO|HOST|TOKEN|ENTERPRISE_TOKEN|CONFIG_DIR)="
+GH_TEXT_QUOTED_HEREDOC_RE="\\\$\\(cat <<-?('([A-Za-z_]+)'|\"([A-Za-z_]+)\"|\\\\([A-Za-z_]+))"
+GH_TEXT_QUOTED_RE="\"[^\"]*\"|'[^']*'"
 
-_gh_create_block() {
+_gh_text_block() {
     echo "BLOCKED: '$(_abbrev "$COMMAND")' -- $1" >&2
     exit 2
 }
@@ -521,11 +526,11 @@ _gh_create_block() {
 # a quoted heredoc ($(cat <<'EOF' ... EOF)) is literal text: its body still
 # gets the attribution and ascii scans with the rest of the command, but not
 # the substitution scan -- markdown code spans want backticks. an unquoted
-# heredoc expands, so only its opener is excused (GH_CREATE_HEREDOC_RE).
+# heredoc expands, so only its opener is excused (GH_TEXT_HEREDOC_RE).
 # newlines were folded to spaces, so the terminator line reads " EOF )".
 _strip_quoted_heredocs() {
     local s=$1 open d before rest
-    while [[ $s =~ $GH_CREATE_QUOTED_HEREDOC_RE ]]; do
+    while [[ $s =~ $GH_TEXT_QUOTED_HEREDOC_RE ]]; do
         open=${BASH_REMATCH[0]}
         d=${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}
         before=${s%%"$open"*}
@@ -537,38 +542,55 @@ _strip_quoted_heredocs() {
     printf '%s' "$s"
 }
 
-# _gh_create <capability> <what> <bool-shorts> <conventional-title: 0|1>
-_gh_create() {
-    local cap=$1 what=$2 bools=$3 conventional=$4 seg bodyfile
-    local seg_re="(^|[ ;|&])gh $what create( [^;|&]*|$)"
-    local title_re="(^| )(-[$bools]*t[ =]?|--title[= ])[\"']?(${GH_CREATE_TYPES})(\([a-z0-9._-]+\))?(!|\?)?: "
+# _gh_text <capability> <what> <sub> <bool-shorts> <conventional-title: 0|1> <title-body-only: 0|1>
+_gh_text() {
+    local cap=$1 what=$2 sub=$3 bools=$4 conventional=$5 strict=$6 seg bodyfile sp tok toks
+    local seg_re="(^|[ ;|&])gh $what $sub( [^;|&]*|$)"
+    if [ -n "$bools" ]; then sp="-[$bools]*"; else sp="-"; fi
+    local title_re="(^| )(${sp}t[ =]?|--title[= ])[\"']?(${GH_TEXT_TYPES})(\([a-z0-9._-]+\))?(!|\?)?: "
     echo "$COMMAND" | grep -qE -- "$seg_re" || return 0
-    _unfenced "$cap" || _gh_create_block "gh $what create is user-run. (the user can lift it for a session with env AGENT_UNFENCE=$cap.)"
+    _unfenced "$cap" || _gh_text_block "gh $what $sub is user-run. (the user can lift it for a session with env AGENT_UNFENCE=$cap.)"
     while IFS= read -r seg; do
-        if echo "$seg" | grep -qE -- " (-[$bools]*R|--repo)"; then
-            _gh_create_block "gh $what create targets the current repo -- no -R / --repo"
+        if echo "$seg" | grep -qE -- " (${sp}R|--repo)"; then
+            _gh_text_block "gh $what $sub targets the current repo -- no -R / --repo"
         fi
         if echo "$seg" | grep -qE -- " --recover"; then
-            _gh_create_block "--recover replays a title and body this policy cannot read -- pass them explicitly"
+            _gh_text_block "--recover replays a title and body this policy cannot read -- pass them explicitly"
         fi
-        if [ "$conventional" = 1 ] && echo "$seg" | grep -qE -- " (-[$bools]*t|--title)" && ! echo "$seg" | grep -qE -- "$title_re"; then
-            _gh_create_block "PR title must open with a lowercase conventional commits prefix (feat:, fix:, docs:, ...)"
+        if [ "$conventional" = 1 ] && echo "$seg" | grep -qE -- " (${sp}t|--title)" && ! echo "$seg" | grep -qE -- "$title_re"; then
+            _gh_text_block "PR title must open with a lowercase conventional commits prefix (feat:, fix:, docs:, ...)"
         fi
-        if echo "$seg" | grep -qE -- " (-[$bools]*F|--body-file)"; then
-            bodyfile=$(printf '%s' "$seg" | sed -E "s/.* (-[$bools]*F|--body-file)[= ]?[\"']?([^\"' ]*).*/\2/")
-            [[ "$bodyfile" == /* && -f "$bodyfile" && -r "$bodyfile" ]] || _gh_create_block "body file must be an absolute path to a readable regular file (got '${bodyfile}')"
-            grep -qiE -- "$GH_CREATE_ATTRIBUTION_RE" "$bodyfile" && _gh_create_block "body file carries agent attribution (Co-Authored-By / Generated with) -- drop it"
-            LC_ALL=C grep -qE -- "$GH_CREATE_NON_ASCII_RE" "$bodyfile" && _gh_create_block "body file must be ascii only"
+        if echo "$seg" | grep -qE -- " (${sp}F|--body-file)"; then
+            bodyfile=$(printf '%s' "$seg" | sed -E "s/.* (${sp}F|--body-file)[= ]?[\"']?([^\"' ]*).*/\2/")
+            [[ "$bodyfile" == /* && -f "$bodyfile" && -r "$bodyfile" ]] || _gh_text_block "body file must be an absolute path to a readable regular file (got '${bodyfile}')"
+            grep -qiE -- "$GH_TEXT_ATTRIBUTION_RE" "$bodyfile" && _gh_text_block "body file carries agent attribution (Co-Authored-By / Generated with) -- drop it"
+            LC_ALL=C grep -qE -- "$GH_TEXT_NON_ASCII_RE" "$bodyfile" && _gh_text_block "body file must be ascii only"
         fi
     done < <(printf '%s' "$COMMAND" | grep -oE -- "$seg_re")
-    printf '%s' "$COMMAND" | grep -qE -- "$GH_CREATE_ENV_RE" && _gh_create_block "gh env overrides (GH_REPO, GH_HOST, GH_TOKEN, ...) are not yours"
-    _strip_quoted_heredocs "$COMMAND" | sed -E "s/${GH_CREATE_HEREDOC_RE}//g" | grep -qE -- "$GH_CREATE_SUBST_RE" && _gh_create_block "gh $what create text must be literal -- no \$(...), backticks or variables; put the body in a quoted heredoc (\$(cat <<'EOF' ... EOF)), where backticks and \$ are plain text"
-    printf '%s' "$COMMAND" | grep -qiE -- "$GH_CREATE_ATTRIBUTION_RE" && _gh_create_block "text carries agent attribution (Co-Authored-By / Generated with) -- drop it"
-    printf '%s' "$COMMAND" | LC_ALL=C grep -qE -- "$GH_CREATE_NON_ASCII_RE" && _gh_create_block "text must be ascii only (no emoji, em-dash, smart quotes)"
+    # title and body only: with the quoted text gone (a quoted span is one
+    # argument to gh, whatever it contains), every flag left must be a title
+    # or body flag. a lone - or -- is markdown, not a flag.
+    if [ "$strict" = 1 ]; then
+        while IFS= read -r seg; do
+            read -ra toks <<< "${seg#*gh "$what" "$sub"}"
+            for tok in "${toks[@]}"; do
+                case "$tok" in
+                    (-|--|-t*|--title|--title=*|-b*|--body|--body=*|-F*|--body-file|--body-file=*) ;;
+                    (-*) _gh_text_block "gh $what $sub under $cap changes the title and body only -- not $tok" ;;
+                esac
+            done
+        done < <(_strip_quoted_heredocs "$COMMAND" | sed -E "s/${GH_TEXT_QUOTED_RE}//g" | grep -oE -- "$seg_re")
+    fi
+    printf '%s' "$COMMAND" | grep -qE -- "$GH_TEXT_ENV_RE" && _gh_text_block "gh env overrides (GH_REPO, GH_HOST, GH_TOKEN, ...) are not yours"
+    _strip_quoted_heredocs "$COMMAND" | sed -E "s/${GH_TEXT_HEREDOC_RE}//g" | grep -qE -- "$GH_TEXT_SUBST_RE" && _gh_text_block "gh $what $sub text must be literal -- no \$(...), backticks or variables; put the body in a quoted heredoc (\$(cat <<'EOF' ... EOF)), where backticks and \$ are plain text"
+    printf '%s' "$COMMAND" | grep -qiE -- "$GH_TEXT_ATTRIBUTION_RE" && _gh_text_block "text carries agent attribution (Co-Authored-By / Generated with) -- drop it"
+    printf '%s' "$COMMAND" | LC_ALL=C grep -qE -- "$GH_TEXT_NON_ASCII_RE" && _gh_text_block "text must be ascii only (no emoji, em-dash, smart quotes)"
 }
 
-_gh_create pr    pr    dfw 1
-_gh_create issue issue we  0
+_gh_text pr    pr    create dfw 1 0
+_gh_text pr    pr    edit   ""  1 1
+_gh_text issue issue create we  0 0
+_gh_text issue issue edit   ""  0 1
 
 check "$GPG_REASON"       "${GPG_PATTERNS[@]}"
 check "$INSTALL_REASON"   "${INSTALL_PATTERNS[@]}"
