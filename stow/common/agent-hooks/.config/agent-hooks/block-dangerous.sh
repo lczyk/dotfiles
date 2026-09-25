@@ -8,7 +8,8 @@
 #   - history-mutating git (rebase, cherry-pick, reset --soft -- liftable, see AGENT_UNFENCE=history)
 #   - git push (liftable, see AGENT_UNFENCE=push; force / delete / bulk forms never)
 #   - any write git op (tag, revert, config, ...)
-#   - gh pr create / gh issue create (liftable, see AGENT_UNFENCE=pr / issue)
+#   - gh pr create / gh issue create and edits of their title, body and
+#     labels (liftable, see AGENT_UNFENCE=pr / issue / labels)
 #   - any write `gh` op (pr/issue/release comment+edit, api writes)
 #   - bypass of commit signing
 #   - software / package installs
@@ -502,7 +503,8 @@ done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git push( [^;|&]*|$)")
 # command text or as an absolute regular file this policy can read too -- a
 # substitution or a variable would hand gh content it never saw. the inline
 # heredoc is the one allowed substitution, since its text is in the command.
-# an edit touches the title and body only: labels, reviewers, assignees,
+# an edit touches the title and body (the pr / issue capability) and the
+# labels (the labels capability, or pr for a PR): reviewers, assignees,
 # milestone and the base branch stay user-run.
 #
 # gh's short flags glue their value (-tfoo) and stack behind the booleans
@@ -542,14 +544,24 @@ _strip_quoted_heredocs() {
     printf '%s' "$s"
 }
 
-# _gh_text <capability> <what> <sub> <bool-shorts> <conventional-title: 0|1> <title-body-only: 0|1>
+# _gh_text <what: pr|issue> <sub: create|edit> <bool-shorts> <conventional-title: 0|1> <strict-flags: 0|1>
+# the capability named after <what> covers the text; labels on an edit come
+# from the labels capability, or from pr for a PR.
 _gh_text() {
-    local cap=$1 what=$2 sub=$3 bools=$4 conventional=$5 strict=$6 seg bodyfile sp tok toks
+    local what=$1 sub=$2 bools=$3 conventional=$4 strict=$5 seg bodyfile sp tok toks
     local seg_re="(^|[ ;|&])gh $what $sub( [^;|&]*|$)"
+    local text_ok=0 labels_ok=0
     if [ -n "$bools" ]; then sp="-[$bools]*"; else sp="-"; fi
     local title_re="(^| )(${sp}t[ =]?|--title[= ])[\"']?(${GH_TEXT_TYPES})(\([a-z0-9._-]+\))?(!|\?)?: "
     echo "$COMMAND" | grep -qE -- "$seg_re" || return 0
-    _unfenced "$cap" || _gh_text_block "gh $what $sub is user-run. (the user can lift it for a session with env AGENT_UNFENCE=$cap.)"
+    _unfenced "$what" && text_ok=1
+    _unfenced labels && labels_ok=1
+    [ "$what" = pr ] && [ "$text_ok" = 1 ] && labels_ok=1
+    if [ "$sub" = create ]; then
+        [ "$text_ok" = 1 ] || _gh_text_block "gh $what create is user-run. (the user can lift it for a session with env AGENT_UNFENCE=$what.)"
+    else
+        [ "$text_ok" = 1 ] || [ "$labels_ok" = 1 ] || _gh_text_block "gh $what edit is user-run. (the user can lift it for a session with env AGENT_UNFENCE=$what for the title and body, or AGENT_UNFENCE=labels for labels.)"
+    fi
     while IFS= read -r seg; do
         if echo "$seg" | grep -qE -- " (${sp}R|--repo)"; then
             _gh_text_block "gh $what $sub targets the current repo -- no -R / --repo"
@@ -567,16 +579,21 @@ _gh_text() {
             LC_ALL=C grep -qE -- "$GH_TEXT_NON_ASCII_RE" "$bodyfile" && _gh_text_block "body file must be ascii only"
         fi
     done < <(printf '%s' "$COMMAND" | grep -oE -- "$seg_re")
-    # title and body only: with the quoted text gone (a quoted span is one
-    # argument to gh, whatever it contains), every flag left must be a title
-    # or body flag. a lone - or -- is markdown, not a flag.
+    # title, body and labels only, each behind its capability: with the
+    # quoted text gone (a quoted span is one argument to gh, whatever it
+    # contains), every flag left must be one of those. a lone - or -- is
+    # markdown, not a flag.
     if [ "$strict" = 1 ]; then
         while IFS= read -r seg; do
             read -ra toks <<< "${seg#*gh "$what" "$sub"}"
             for tok in "${toks[@]}"; do
                 case "$tok" in
-                    (-|--|-t*|--title|--title=*|-b*|--body|--body=*|-F*|--body-file|--body-file=*) ;;
-                    (-*) _gh_text_block "gh $what $sub under $cap changes the title and body only -- not $tok" ;;
+                    (-|--) ;;
+                    (-t*|--title|--title=*|-b*|--body|--body=*|-F*|--body-file|--body-file=*)
+                        [ "$text_ok" = 1 ] || _gh_text_block "the title and body of a $what need AGENT_UNFENCE=$what -- labels alone does not cover $tok" ;;
+                    (--add-label|--add-label=*|--remove-label|--remove-label=*)
+                        [ "$labels_ok" = 1 ] || _gh_text_block "labels need AGENT_UNFENCE=labels (or pr, for a PR) -- $what alone does not cover $tok" ;;
+                    (-*) _gh_text_block "gh $what $sub changes the title, body and labels only -- not $tok" ;;
                 esac
             done
         done < <(_strip_quoted_heredocs "$COMMAND" | sed -E "s/${GH_TEXT_QUOTED_RE}//g" | grep -oE -- "$seg_re")
@@ -587,10 +604,10 @@ _gh_text() {
     printf '%s' "$COMMAND" | LC_ALL=C grep -qE -- "$GH_TEXT_NON_ASCII_RE" && _gh_text_block "text must be ascii only (no emoji, em-dash, smart quotes)"
 }
 
-_gh_text pr    pr    create dfw 1 0
-_gh_text pr    pr    edit   ""  1 1
-_gh_text issue issue create we  0 0
-_gh_text issue issue edit   ""  0 1
+_gh_text pr    create dfw 1 0
+_gh_text pr    edit   ""  1 1
+_gh_text issue create we  0 0
+_gh_text issue edit   ""  0 1
 
 check "$GPG_REASON"       "${GPG_PATTERNS[@]}"
 check "$INSTALL_REASON"   "${INSTALL_PATTERNS[@]}"
