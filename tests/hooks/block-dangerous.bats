@@ -1865,9 +1865,7 @@ Generated with [Claude Code](https://claude.com/claude-code)'"
 
 # pr lifts gh pr create only
 
-@test "pr does not lift gh pr edit / comment / ready / close" {
-    AGENT_UNFENCE=pr run fire "gh pr edit 1 --body x"
-    [ "$status" -eq 2 ]
+@test "pr does not lift gh pr comment / ready / close" {
     AGENT_UNFENCE=pr run fire "gh pr comment 1 --body x"
     [ "$status" -eq 2 ]
     AGENT_UNFENCE=pr run fire "gh pr ready 1"
@@ -1931,6 +1929,105 @@ Generated with [Claude Code](https://claude.com/claude-code)'"
 
 @test "the pr capability cannot be granted from inside the command text" {
     run fire "env AGENT_UNFENCE=pr gh pr create --fill"
+    [ "$status" -eq 2 ]
+}
+
+# pr also lifts gh pr edit, title and body only, under the create rules
+
+@test "pr allows gh pr edit of the title and body" {
+    AGENT_UNFENCE=pr run fire "gh pr edit --title 'feat: better title'"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'updated'"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit feature/x -t 'fix(hooks): x' -b 'y'"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit https://github.com/o/r/pull/12 --title='docs: x' --body='y'"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit -t'chore: x'"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows gh pr edit with a heredoc body full of markdown" {
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body \"\$(cat <<'EOF'
+this PR adds \`thing\` -- see below.
+
+- one | two
+- \`make test\` passes
+
+| flag | effect |
+|---|---|
+| -f | force |
+EOF
+)\""
+    [ "$status" -eq 0 ]
+}
+
+@test "pr allows gh pr edit with an absolute body file" {
+    printf 'updated body\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body-file $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 -F$BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "gh pr edit stays blocked without the capability" {
+    run fire "gh pr edit 12 --title 'feat: x'"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"AGENT_UNFENCE=pr"* ]]
+}
+
+@test "pr does not lift gh pr edit of anything but the title and body" {
+    local flag
+    for flag in "--add-label bug" "--remove-label bug" "--add-reviewer someone" "--remove-reviewer someone" "--add-assignee @me" "--remove-assignee @me" "--add-project x" "--remove-project x" "--milestone v1" "-m v1" "--base main" "-B main"; do
+        AGENT_UNFENCE=pr run fire "gh pr edit 12 $flag"
+        [ "$status" -eq 2 ] || { echo "not blocked: $flag"; return 1; }
+        AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x' $flag"
+        [ "$status" -eq 2 ] || { echo "not blocked with a title: $flag"; return 1; }
+    done
+}
+
+@test "pr does not lift gh pr edit -R / --repo" {
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x' -R o/r"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x' --repo=o/r"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr edit keeps the create rules for the title and body" {
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'Better title'"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'x
+
+Co-Authored-By: Claude <noreply@anthropic.com>'"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'a $(printf '\342\200\224') b'"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body \"\$(cat /tmp/ai/body.md)\""
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body-file body.md"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "GH_REPO=o/r gh pr edit 12 --title 'feat: x'"
+    [ "$status" -eq 2 ]
+}
+
+@test "a flag hidden inside a quoted body is not a flag" {
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'pass --add-label bug to gh'"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --body 'do not --add-label' --add-label bug"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr edit does not lift a second gh write on the line" {
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x' && gh pr ready 12"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title 'feat: x'; gh pr edit 12 --add-label bug"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr does not lift gh issue edit, nor issue gh pr edit" {
+    AGENT_UNFENCE=pr run fire "gh issue edit 1 --title x"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh pr edit 1 --title 'feat: x'"
     [ "$status" -eq 2 ]
 }
 
@@ -2039,7 +2136,7 @@ Generated with [Claude Code](https://claude.com/claude-code)'"
 @test "issue does not lift the other issue writes" {
     AGENT_UNFENCE=issue run fire "gh issue comment 1 --body x"
     [ "$status" -eq 2 ]
-    AGENT_UNFENCE=issue run fire "gh issue edit 1 --title x"
+    AGENT_UNFENCE=issue run fire "gh issue edit 1 --add-label bug"
     [ "$status" -eq 2 ]
     AGENT_UNFENCE=issue run fire "gh issue close 1"
     [ "$status" -eq 2 ]
@@ -2099,5 +2196,38 @@ Generated with [Claude Code](https://claude.com/claude-code)'"
 
 @test "the issue capability cannot be granted from inside the command text" {
     run fire "env AGENT_UNFENCE=issue gh issue create -t x -b y"
+    [ "$status" -eq 2 ]
+}
+
+# issue also lifts gh issue edit, title and body only
+
+@test "issue allows gh issue edit of the title and body" {
+    AGENT_UNFENCE=issue run fire "gh issue edit 1 --title 'better title'"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=issue run fire "gh issue edit 1 -b 'updated'"
+    [ "$status" -eq 0 ]
+    printf 'updated\n' > "$BATS_TEST_TMPDIR/body.md"
+    AGENT_UNFENCE=issue run fire "gh issue edit 1 --body-file $BATS_TEST_TMPDIR/body.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "gh issue edit stays blocked without the capability" {
+    run fire "gh issue edit 1 --title x"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"AGENT_UNFENCE=issue"* ]]
+}
+
+@test "issue does not lift gh issue edit of anything but the title and body" {
+    local flag
+    for flag in "--add-label bug" "--remove-label bug" "--add-assignee @me" "--add-project x" "--milestone v1" "-m v1" "-R o/r"; do
+        AGENT_UNFENCE=issue run fire "gh issue edit 1 --title x $flag"
+        [ "$status" -eq 2 ] || { echo "not blocked: $flag"; return 1; }
+    done
+}
+
+@test "issue edit keeps the body rules" {
+    AGENT_UNFENCE=issue run fire "gh issue edit 1 --body 'Generated with [Claude Code](https://claude.com/claude-code)'"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=issue run fire "gh issue edit 1 --body \"\$BODY\""
     [ "$status" -eq 2 ]
 }
