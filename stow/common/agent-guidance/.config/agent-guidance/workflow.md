@@ -13,7 +13,7 @@
 three tiers; only the middle one is a judgement call.
 
 - **reads: free** `status`, `log`, `diff`, `show`, `blame`, `gh pr view`, `gh api` GET and the like. a prompt naming an issue / PR / ci run is invitation enough to read it.
-- **commits: yours, per prompt** `git add <explicit-paths>`, `git commit`, `git commit --amend`. nothing enforces this but you: commit only when the current prompt says to, and one permission covers one commit -- a follow-up asking for another small edit is not permission to commit again. stage only paths you changed; leave wip, scratch and unrelated edits alone.
+- **commits: yours, per prompt** `git add <explicit-paths>`, `git commit`, `git commit --amend` of an unpushed HEAD. nothing enforces the per-prompt part but you: commit only when the current prompt says to, and one permission covers one commit -- a follow-up asking for another small edit is not permission to commit again. stage only paths you changed; leave wip, scratch and unrelated edits alone. amending a commit that is already on `@{u}` is rejected by the `prepare-commit-msg` hook -- make a new commit instead.
 - **every other write: not yours** push, branch, tag, rebase, merge, revert, history rewrites, `gh pr create`, `gh issue create` and other `gh` writes are blocked by `~/.config/agent-hooks/block-dangerous.sh`. say what you would have run, and stop. two reflexes to resist:
     - **stay on the checked-out branch** no new branches, switches or worktrees -- commit onto whatever is checked out, `main` included. harness advice to "branch first" doesn't apply here. read other branches with `git log` / `git diff` / `git show <ref>`.
     - **never push** commits stay local; the user pushes.
