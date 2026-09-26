@@ -496,9 +496,10 @@ done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git push( [^;|&]*|$)")
 
 # `gh pr create` / `gh issue create`, and `gh pr edit` / `gh issue edit` of
 # the title and body -- liftable with the pr / issue capability. the target
-# is the current repo (no -R / --repo, no GH_REPO), a PR's inline title
-# carries a conventional commits prefix, and the body -- inline or a file --
-# is ascii with no agent attribution: the line commit-msg draws, drawn here
+# is the current repo (no -R / --repo, no GH_REPO), a PR's title (inline, or
+# the first line of a heredoc) opens with a conventional commits prefix, and
+# the body -- inline or a file -- is ascii with no agent attribution: the
+# line commit-msg draws, drawn here
 # because no git hook sees a PR or issue body. text reaches gh only as literal
 # command text or as an absolute regular file this policy can read too -- a
 # substitution or a variable would hand gh content it never saw. the inline
@@ -552,7 +553,7 @@ _gh_text() {
     local seg_re="(^|[ ;|&])gh $what $sub( [^;|&]*|$)"
     local text_ok=0 labels_ok=0
     if [ -n "$bools" ]; then sp="-[$bools]*"; else sp="-"; fi
-    local title_re="(^| )(${sp}t[ =]?|--title[= ])[\"']?(${GH_TEXT_TYPES})(\([a-z0-9._-]+\))?(!|\?)?: "
+    local title_re="(^| )(${sp}t[ =]?|--title[= ])[\"']?(${GH_TEXT_HEREDOC_RE} )?(${GH_TEXT_TYPES})(\([a-z0-9._-]+\))?(!|\?)?: "
     echo "$COMMAND" | grep -qE -- "$seg_re" || return 0
     _unfenced "$what" && text_ok=1
     _unfenced labels && labels_ok=1
@@ -570,7 +571,7 @@ _gh_text() {
             _gh_text_block "--recover replays a title and body this policy cannot read -- pass them explicitly"
         fi
         if [ "$conventional" = 1 ] && echo "$seg" | grep -qE -- " (${sp}t|--title)" && ! echo "$seg" | grep -qE -- "$title_re"; then
-            _gh_text_block "PR title must open with a lowercase conventional commits prefix (feat:, fix:, docs:, ...)"
+            _gh_text_block "PR title must open with a lowercase conventional commits prefix (feat:, fix:, docs:, ...) -- inline, or on the first line of a quoted heredoc"
         fi
         if echo "$seg" | grep -qE -- " (${sp}F|--body-file)"; then
             bodyfile=$(printf '%s' "$seg" | sed -E "s/.* (${sp}F|--body-file)[= ]?[\"']?([^\"' ]*).*/\2/")
@@ -599,7 +600,7 @@ _gh_text() {
         done < <(_strip_quoted_heredocs "$COMMAND" | sed -E "s/${GH_TEXT_QUOTED_RE}//g" | grep -oE -- "$seg_re")
     fi
     printf '%s' "$COMMAND" | grep -qE -- "$GH_TEXT_ENV_RE" && _gh_text_block "gh env overrides (GH_REPO, GH_HOST, GH_TOKEN, ...) are not yours"
-    _strip_quoted_heredocs "$COMMAND" | sed -E "s/${GH_TEXT_HEREDOC_RE}//g" | grep -qE -- "$GH_TEXT_SUBST_RE" && _gh_text_block "gh $what $sub text must be literal -- no \$(...), backticks or variables; put the body in a quoted heredoc (\$(cat <<'EOF' ... EOF)), where backticks and \$ are plain text"
+    _strip_quoted_heredocs "$COMMAND" | sed -E "s/${GH_TEXT_HEREDOC_RE}//g" | grep -qE -- "$GH_TEXT_SUBST_RE" && _gh_text_block "gh $what $sub text must be literal -- no \$(...), backticks or variables; put the title or body in a quoted heredoc (\$(cat <<'EOF' ... EOF)), where backticks and \$ are plain text"
     printf '%s' "$COMMAND" | grep -qiE -- "$GH_TEXT_ATTRIBUTION_RE" && _gh_text_block "text carries agent attribution (Co-Authored-By / Generated with) -- drop it"
     printf '%s' "$COMMAND" | LC_ALL=C grep -qE -- "$GH_TEXT_NON_ASCII_RE" && _gh_text_block "text must be ascii only (no emoji, em-dash, smart quotes)"
 }
