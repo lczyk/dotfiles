@@ -1763,6 +1763,43 @@ EOF
     [ "$status" -eq 2 ]
 }
 
+# the title takes the same heredoc form; the conventional prefix opens its
+# first line
+
+@test "pr allows backticks inside a quoted heredoc title" {
+    AGENT_UNFENCE=pr run fire "gh pr create --title \"\$(cat <<'EOF'
+docs: note \`bats -j\` needs parallel
+EOF
+)\" -b b"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "gh pr create -t \"\$(cat <<\"EOF\"
+fix(hooks): drop \$HOME from \`git push\`
+EOF
+)\" -b b"
+    [ "$status" -eq 0 ]
+}
+
+@test "pr blocks a heredoc title without a conventional prefix" {
+    AGENT_UNFENCE=pr run fire "gh pr create --title \"\$(cat <<'EOF'
+Add \`bats -j\`
+EOF
+)\" -b b"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks backticks in an unquoted heredoc title" {
+    AGENT_UNFENCE=pr run fire "gh pr create --title \"\$(cat <<EOF
+docs: \`cat /tmp/ai/msg\`
+EOF
+)\" -b b"
+    [ "$status" -eq 2 ]
+}
+
+@test "pr blocks backticks in a plain quoted title" {
+    AGENT_UNFENCE=pr run fire "gh pr create -t 'docs: note \`bats -j\`' -b b"
+    [ "$status" -eq 2 ]
+}
+
 @test "pr blocks a body file that is not a regular file" {
     AGENT_UNFENCE=pr run fire "gh pr create -t 'feat: x' --body-file /dev/stdin < /tmp/ai/body.md"
     [ "$status" -eq 2 ]
@@ -2008,6 +2045,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>'"
     [ "$status" -eq 2 ]
     AGENT_UNFENCE=pr run fire "GH_REPO=o/r gh pr edit 12 --title 'feat: x'"
     [ "$status" -eq 2 ]
+}
+
+@test "pr edit allows a quoted heredoc title" {
+    AGENT_UNFENCE=pr run fire "gh pr edit 12 --title \"\$(cat <<'EOF'
+docs: note \`bats -j\` needs parallel
+EOF
+)\""
+    [ "$status" -eq 0 ]
 }
 
 @test "a flag hidden inside a quoted body is not a flag" {
