@@ -6,9 +6,17 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-const evaluator = process.env.AGENT_HOOK_EVALUATOR ||
-  path.join(configHome, 'agent-hooks', 'evaluate.sh');
+// the evaluator sits with the shared policies: found through this hook's
+// real path, then through the installed dir.
+function defaultEvaluator() {
+  const beside = path.join(path.dirname(fs.realpathSync(__filename)),
+    '..', '..', '..', 'agent-hooks', '.config', 'agent-hooks', 'evaluate.sh');
+  return fs.existsSync(beside)
+    ? beside
+    : path.join(os.homedir(), '.config', 'agent-hooks', 'evaluate.sh');
+}
+
+const evaluator = process.env.AGENT_HOOK_EVALUATOR || defaultEvaluator();
 
 const shellTools = new Set(['bash', 'powershell']);
 const writeTools = new Set([

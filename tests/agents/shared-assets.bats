@@ -69,11 +69,18 @@ setup() {
         "$REPO/stow/common/opencode/.config/opencode/plugin/caveman.ts"
     [ "$status" -eq 0 ]
 
-    run rg -F 'agent-hooks/evaluate.sh' \
-        "$REPO/stow/common/claude/.claude/hooks/safety-adapter.sh" \
-        "$REPO/stow/common/codex/.codex/hooks/safety-adapter.sh" \
-        "$REPO/stow/common/copilot/.copilot/hooks/pre-tool-use.js" \
-        "$REPO/stow/common/opencode/.config/opencode/plugin/safety.ts"
+    # claude and codex hand off to the shared adapter; it, copilot and
+    # opencode reach the shared evaluator.
+    for adapter in "$REPO/stow/common/claude/.claude/hooks/safety-adapter.sh" \
+        "$REPO/stow/common/codex/.codex/hooks/safety-adapter.sh"; do
+        run rg -F 'agent-hooks/.config/agent-hooks/adapter.sh' "$adapter"
+        [ "$status" -eq 0 ] || { echo "no shared adapter: $adapter"; false; }
+    done
+    run rg -F 'evaluate.sh' "$REPO/stow/common/agent-hooks/.config/agent-hooks/adapter.sh"
+    [ "$status" -eq 0 ]
+    run rg -F "'agent-hooks', '.config', 'agent-hooks', 'evaluate.sh'" "$REPO/stow/common/copilot/.copilot/hooks/pre-tool-use.js"
+    [ "$status" -eq 0 ]
+    run rg -F '"agent-hooks", "evaluate.sh"' "$REPO/stow/common/opencode/.config/opencode/plugin/safety.ts"
     [ "$status" -eq 0 ]
 
     run rg -F '.claude' \
