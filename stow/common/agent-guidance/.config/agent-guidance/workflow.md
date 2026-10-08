@@ -104,4 +104,4 @@ adding a tool to a project means adding its cache / output dirs to `.gitignore` 
 
 ## agent usage
 
-don't spawn one subagent and sit idle: do the work inline, or spawn several in parallel. a lone subagent pays off only when its tool output would flood your context (heavy research, big grep sweeps, multi-file exploration) -- and then keep working on something else while it runs. in claude code, subagents are pinned to sonnet at low effort (`~/.claude/subagent-policy.md`), so give them tight, explicit prompts.
+don't spawn one subagent and sit idle: do the work inline, or spawn several in parallel. a lone subagent pays off only when its tool output would flood your context (heavy research, big grep sweeps, multi-file exploration) -- and then keep working on something else while it runs. in claude code, subagents are pinned to haiku at medium effort (`~/.claude/subagent-policy.md`), so give them tight, explicit prompts.
