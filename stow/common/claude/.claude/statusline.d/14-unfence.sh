@@ -14,7 +14,11 @@ if [ -n "$AGENT_UNFENCE" ]; then
 fi
 
 if [ -n "$caps" ]; then
-    sl_paint "$SL_BRED" "[U:${caps:0:40}]"
+    # meta lifts the hook fence itself, so it gets the same loud bold white on red as fable 5
+    case ",$caps," in
+        *,meta,*) printf '\033[1;%s;4%sm[U:%s]\033[0m' "$SL_BWHITE" "${SL_RED#3}" "${caps:0:40}" ;;
+        *)        sl_paint "$SL_BRED" "[U:${caps:0:40}]" ;;
+    esac
 else
     printf '[u]'
 fi

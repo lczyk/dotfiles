@@ -52,3 +52,18 @@ fire() { printf '{}' | "$BADGE"; }
     out=$(printf '%s' "$output" | strip_ansi)
     [ "$out" = "[U:branch,meta]" ]
 }
+
+@test "meta gets the loud fable-style badge" {
+    AGENT_UNFENCE=branch,meta run fire
+    [ "$output" = $'\033[1;97;41m[U:branch,meta]\033[0m' ]
+}
+
+@test "non-meta capabilities keep the bright red badge" {
+    AGENT_UNFENCE=branch,push run fire
+    [ "$output" = $'\033[91m[U:branch,push]\033[0m' ]
+}
+
+@test "metadata-looking token does not count as meta" {
+    AGENT_UNFENCE=metal run fire
+    [ "$output" = $'\033[91m[U:metal]\033[0m' ]
+}
