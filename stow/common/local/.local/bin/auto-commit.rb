@@ -102,8 +102,6 @@ end
 # -vvv. `live` is the in-place status line, only drawn when stderr is a tty
 # and nothing else is logging over it.
 class Log
-  attr_reader :level
-
   def initialize(io:, label: nil, color: false, level: 0, live: false)
     @io = io
     @label = label
@@ -137,12 +135,11 @@ class Log
 
   # \r + clear-to-eol, then redraw. no newline: the next redraw overwrites it.
   def redraw(msg)
-    @io.write("\r\e[2K#{paint("34", tag)}#{msg}")
-    @io.flush
+    clear("#{paint("34", tag)}#{msg}")
   end
 
-  def clear
-    @io.write("\r\e[2K")
+  def clear(rest = "")
+    @io.write("\r\e[2K#{rest}")
     @io.flush
   end
 
@@ -188,8 +185,9 @@ class Git
     nil
   end
 
+  # the same paths, in the same order, as --name-only would list.
   def staged_files
-    nul_fields("diff", "--cached", "--name-only").reject(&:empty?)
+    staged_name_status.keys
   end
 
   def staged_binary_files
@@ -527,7 +525,9 @@ def fit(diff, paths, budget = MAX_DIFF_CHARS, log: nil)
   chunks = split_by_file(diff)
   allowances = fair_shares(chunks.map(&:length), budget)
   chunks.zip(allowances).map do |chunk, allowance|
-    log&.debug("trimmed #{chunk_label(chunk, paths)}: #{chunk.length} -> #{allowance} chars") if chunk.length > allowance
+    if log&.debugging? && chunk.length > allowance
+      log.debug("trimmed #{chunk_label(chunk, paths)}: #{chunk.length} -> #{allowance} chars")
+    end
     truncate(chunk, allowance)
   end.join
 end
@@ -653,25 +653,11 @@ def flush_block(stream, on_block)
   stream.buf.clear
 end
 
-# canned lines in, finished Stream out -- the state machine without a child.
-def parse_stream(lines, on_phase: nil, on_block: nil)
-  stream = new_stream
-  lines.each do |line|
-    on_phase&.call(stream.phase, stream.chars) if stream_line(stream, line, on_block: on_block)
-  end
-  flush_block(stream, on_block)
-  stream
-end
-
 # the init event is the cli reporting the sandbox it actually built. a tool we
 # didn't ask for means --tools "" stopped working, which is what makes
 # bypassPermissions safe.
 def sandbox_violations(init)
   (Array(init["tools"]) - ALLOWED_TOOLS).uniq.sort
-end
-
-def quote(value)
-  JSON.generate(value)
 end
 
 # the checks on a finished stream, in order. returns the structured output.
@@ -686,10 +672,10 @@ def check_stream(stream)
   end
   final = stream.result
   raise GenerateError, "no result event from claude cli" if final.nil?
-  raise GenerateError, "claude reported error: #{quote(final["result"])}" if final["is_error"]
+  raise GenerateError, "claude reported error: #{JSON.generate(final["result"])}" if final["is_error"]
 
   structured = final["structured_output"]
-  raise GenerateError, "missing structured_output in response. raw result: #{quote(final["result"])}" unless structured.is_a?(Hash)
+  raise GenerateError, "missing structured_output in response. raw result: #{JSON.generate(final["result"])}" unless structured.is_a?(Hash)
 
   structured
 end
@@ -697,7 +683,7 @@ end
 def parse_commit(obj)
   tag = obj["tag"]
   message = obj["message"]
-  raise GenerateError, "invalid tag from model: #{quote(tag)}" unless VALID_TAGS.include?(tag)
+  raise GenerateError, "invalid tag from model: #{JSON.generate(tag)}" unless VALID_TAGS.include?(tag)
 
   message = message.strip.sub(TAG_PREFIX, "").strip if message.is_a?(String)
   raise GenerateError, "empty message from model" unless message.is_a?(String) && !message.empty?
@@ -799,12 +785,10 @@ def ask_claude(env, prompt)
   structured
 end
 
-# returns [tag, message]. binary files go by name alone (git's diff carries
-# no content for them), so with nothing else staged the diff isn't fetched.
-def generate_message(env, files, binary: [], status: {})
+# returns [tag, message] for the staged `files` and their combined `full` diff.
+def generate_message(env, files, full, binary: [], status: {})
   raise GenerateError, "no staged files" if files.empty?
 
-  full = (files - binary).empty? ? "" : env.git.staged_diff
   diff = fit(full, files, MAX_DIFF_CHARS, log: env.log)
   if diff.length < full.length
     env.log.info "#{files.size} files, diff #{full.length} chars > #{MAX_DIFF_CHARS} -> trimmed to #{diff.length}"
@@ -817,50 +801,37 @@ end
 
 # --- commit flow ------------------------------------------------------------
 
-# raised to unwind to #run with an exit code, once the reason is logged.
-class Abort < StandardError
-  attr_reader :code
+class NothingToCommit < StandardError; end
 
-  def initialize(code)
-    super("exit #{code}")
-    @code = code
+# stage (if asked), read the index, and return the commit message. `git` is
+# the preview copy under -a.
+def compose(env, git = env.git)
+  git.add_all if env.cfg[:all]
+  status = git.staged_name_status
+  files = status.keys
+  binary = git.staged_binary_files
+  if files.empty?
+    if !env.cfg[:all] && git.worktree_dirty?
+      raise NothingToCommit, "nothing staged. `git add` what you want committed, or pass -a to stage everything."
+    end
+
+    raise NothingToCommit, "working tree clean; nothing to commit."
   end
+
+  unless binary.empty?
+    env.log.warn "#{binary.size} binary file(s) staged; only filenames will be sent: #{binary.sort.join(", ")}"
+  end
+  # binary files go by name alone (git's diff carries no content for them),
+  # so with nothing else staged the diff isn't fetched.
+  full = (files - binary).empty? ? "" : git.staged_diff
+  format_message(*generate_message(env, files, full, binary: binary, status: status))
 end
 
-# stage (if asked), read the index, and return the commit message.
-def compose(env)
-  git = env.git
-  log = env.log
-  begin
-    git.add_all if env.cfg[:all]
-    files = git.staged_files
-    binary = git.staged_binary_files
-    status = git.staged_name_status
-    if files.empty?
-      if !env.cfg[:all] && git.worktree_dirty?
-        log.bad "nothing staged. `git add` what you want committed, or pass -a to stage everything."
-      else
-        log.bad "working tree clean; nothing to commit."
-      end
-      raise Abort, 1
-    end
-
-    unless binary.empty?
-      log.warn "#{binary.size} binary file(s) staged; only filenames will be sent: #{binary.sort.join(", ")}"
-    end
-    tag, body = generate_message(env, files, binary: binary, status: status)
-  rescue GitError => e
-    log.bad e.message
-    raise Abort, 2
-  rescue GenerateCancelled
-    env.out.write("\n")
-    log.warn "aborted."
-    raise Abort, 130
-  rescue GenerateError => e
-    log.bad e.message
-    raise Abort, 1
-  end
-  format_message(tag, body)
+# ctrl+c, or eof at the question: finish the line and say so.
+def aborted(env)
+  env.out.write("\n")
+  env.log.warn "aborted."
+  130
 end
 
 # the whole run. returns the exit code; never exits itself.
@@ -872,11 +843,7 @@ def run(env)
   env.git.check_repo
   # -a is previewed against a copy of the index; the real staging only happens
   # once the message is confirmed.
-  message = if cfg[:all]
-              env.git.preview { |git| compose(env.dup.tap { |e| e.git = git }) }
-            else
-              compose(env)
-            end
+  message = cfg[:all] ? env.git.preview { |git| compose(env, git) } : compose(env)
 
   env.out.puts message
   return 0 if cfg[:print]
@@ -884,7 +851,7 @@ def run(env)
   env.out.puts
   unless cfg[:yes]
     reply = env.input.call("#{log.paint("34", "commit with this message? [Y/n]")} ")
-    raise Interrupt if reply.nil?
+    return aborted(env) if reply.nil?
     unless accepts?(reply)
       log.warn "aborted."
       return 1
@@ -898,12 +865,11 @@ def run(env)
 rescue GitError => e
   log.bad e.message
   2
-rescue Abort => e
-  e.code
-rescue Interrupt
-  env.out.write("\n")
-  log.warn "aborted."
-  130
+rescue GenerateCancelled, Interrupt
+  aborted(env)
+rescue NothingToCommit, GenerateError => e
+  log.bad e.message
+  1
 end
 
 # --- main -------------------------------------------------------------------
@@ -985,7 +951,7 @@ if ARGV.first == "--test"
 
     def staged_name_status
       call(:staged_name_status)
-      @status.select { |path, _| @staged.include?(path) }
+      @staged.map { |path| [path, @status.fetch(path, "M")] }.to_h
     end
 
     def staged_diff
@@ -1046,23 +1012,37 @@ if ARGV.first == "--test"
     JSON.generate(obj)
   end
 
+  def sev(event)
+    ev("type" => "stream_event", "event" => event)
+  end
+
   def delta(type, key, text)
-    ev("type" => "stream_event", "event" => { "type" => "content_block_delta", "delta" => { "type" => type, key => text } })
+    sev("type" => "content_block_delta", "delta" => { "type" => type, key => text })
   end
 
   def block_start(type, extra = {})
-    ev("type" => "stream_event", "event" => { "type" => "content_block_start", "content_block" => { "type" => type }.merge(extra) })
+    sev("type" => "content_block_start", "content_block" => { "type" => type }.merge(extra))
   end
 
   def stream_event_line(type)
-    ev("type" => "stream_event", "event" => { "type" => type })
+    sev("type" => type)
+  end
+
+  # canned lines in, finished Stream out -- the state machine without a child.
+  def parse_stream(lines, on_phase: nil, on_block: nil)
+    stream = new_stream
+    lines.each do |line|
+      on_phase&.call(stream.phase, stream.chars) if stream_line(stream, line, on_block: on_block)
+    end
+    flush_block(stream, on_block)
+    stream
   end
 
   INIT_OK = { "type" => "system", "subtype" => "init", "tools" => ["StructuredOutput"], "model" => "m" }.freeze
 
   # a clean run that answers with `structured`.
-  def answer(structured, result: {}, tools: ["StructuredOutput"])
-    [ev(INIT_OK.merge("tools" => tools)), stream_event_line("message_start"),
+  def answer(structured, result: {})
+    [ev(INIT_OK), stream_event_line("message_start"),
      ev({ "type" => "result", "structured_output" => structured,
           "usage" => { "input_tokens" => 10, "cache_read_input_tokens" => 5, "output_tokens" => 7 } }.merge(result))]
   end
@@ -1095,10 +1075,20 @@ if ARGV.first == "--test"
     out
   end
 
+  def in_tmpdir(&blk)
+    Dir.mktmpdir("auto-commit-test-", &blk)
+  end
+
+  def assert_quick(seconds = 3)
+    started = monotonic
+    yield
+    assert_operator monotonic - started, :<, seconds
+  end
+
   # a throwaway repo as the cwd, with a local identity so commits work
   # whatever the user's global config says.
   def in_repo
-    Dir.mktmpdir("auto-commit-test-") do |dir|
+    in_tmpdir do |dir|
       Dir.chdir(dir) do
         sh("git", "init", "-q")
         sh("git", "config", "user.email", "t@t")
@@ -1383,38 +1373,35 @@ if ARGV.first == "--test"
 
   test "generate_message: no files" do
     env, = fake_env
-    e = assert_raises(GenerateError) { generate_message(env, []) }
+    e = assert_raises(GenerateError) { generate_message(env, [], "") }
     assert_equal "no staged files", e.message
   end
 
   test "generate_message: one call, diff and statuses in the prompt" do
     claude = FakeClaude.new(answer({ "tag" => "fix", "message" => "patch bug" }))
-    git = FakeGit.new(diff: "diff-a")
-    env, = fake_env(git: git, claude: claude)
-    assert_equal %w[fix patch\ bug], generate_message(env, ["a.py"], status: { "a.py" => "M" })
+    env, = fake_env(claude: claude)
+    assert_equal %w[fix patch\ bug], generate_message(env, ["a.py"], "diff-a", status: { "a.py" => "M" })
     assert_equal 1, claude.calls.size
     prompt = claude.calls[0].last
     assert_includes prompt, "diff-a"
     assert_includes prompt, "  a.py (modified)"
   end
 
-  test "generate_message: no diff fetched when only binaries are staged" do
-    git = FakeGit.new(diff: "d")
-    env, = fake_env(git: git, claude: FakeClaude.new(answer({ "tag" => "chore", "message" => "x" })))
-    generate_message(env, ["a.py", "b.bin"], binary: ["b.bin"])
-    assert_equal [[:real, :staged_diff]], git.calls
-    git = FakeGit.new
-    env, = fake_env(git: git, claude: FakeClaude.new(answer({ "tag" => "chore", "message" => "x" })))
-    generate_message(env, ["b.bin"], binary: ["b.bin"])
-    assert_empty git.calls
+  test "compose: no diff fetched when only binaries are staged" do
+    [[%w[a.py b.bin], true], [%w[b.bin], false]].each do |staged, fetched|
+      git = FakeGit.new(staged: staged, binary: ["b.bin"], diff: "d")
+      env, = fake_env(git: git, claude: FakeClaude.new(answer({ "tag" => "chore", "message" => "x" })))
+      compose(env)
+      assert_equal fetched, git.calls.include?([:real, :staged_diff]), staged.inspect
+    end
   end
 
   test "generate_message: a huge diff stays one call and keeps every file" do
     diff = diff_chunk("big.py", MAX_DIFF_CHARS / 8) + diff_chunk("small.py", 1)
     assert_operator diff.length, :>, MAX_DIFF_CHARS
     claude = FakeClaude.new(answer({ "tag" => "refactor", "message" => "split module" }))
-    env, _, err = fake_env(git: FakeGit.new(diff: diff), claude: claude, verbose: 1)
-    assert_equal %w[refactor split\ module], generate_message(env, ["big.py", "small.py"])
+    env, _, err = fake_env(claude: claude, verbose: 1)
+    assert_equal %w[refactor split\ module], generate_message(env, ["big.py", "small.py"], diff)
     assert_equal 1, claude.calls.size
     prompt = claude.calls[0].last
     assert_includes prompt, "diff --git c/big.py"
@@ -1557,7 +1544,7 @@ if ARGV.first == "--test"
     assert_equal 1, run(env)
     assert_equal "[auto-commit] invalid tag from model: \"nope\"\n", err.string
 
-    env, _, err = fake_env(git: FakeGit.new(errors: { staged_files: GitError.new("git diff failed: boom") }))
+    env, _, err = fake_env(git: FakeGit.new(errors: { staged_name_status: GitError.new("git diff failed: boom") }))
     assert_equal 2, run(env)
     assert_equal "[auto-commit] git diff failed: boom\n", err.string
 
@@ -1690,7 +1677,7 @@ if ARGV.first == "--test"
   end
 
   test "git: outside a repo, check_repo says so in one line" do
-    Dir.mktmpdir("auto-commit-test-") do |dir|
+    in_tmpdir do |dir|
       git = Git.new(cwd: dir)
       e = assert_raises(GitError) { git.check_repo }
       assert_match(/\Agit rev-parse --git-dir failed: fatal: not a git repository/, e.message)
@@ -1702,7 +1689,7 @@ if ARGV.first == "--test"
   # --- real claude stand-in ---
 
   test "claude: runs the binary with the args, returns its stderr" do
-    Dir.mktmpdir("auto-commit-test-") do |dir|
+    in_tmpdir do |dir|
       bin = fake_claude_bin(dir, "echo line1; echo line2; echo warned >&2")
       lines = []
       assert_equal "warned", Claude.new(bin: bin).run(%w[--print x]) { |l| lines << l }
@@ -1712,23 +1699,23 @@ if ARGV.first == "--test"
   end
 
   test "claude: failure, timeout, missing binary" do
-    Dir.mktmpdir("auto-commit-test-") do |dir|
+    in_tmpdir do |dir|
       bin = fake_claude_bin(dir, "echo boom >&2; exit 3")
       e = assert_raises(GenerateError) { Claude.new(bin: bin).run([]) {} }
       assert_equal "claude cli failed (rc=3): boom", e.message
 
       bin = fake_claude_bin(dir, "exec sleep 5")
-      started = monotonic
-      e = assert_raises(GenerateError) { Claude.new(bin: bin, timeout: 0.2).run([]) {} }
-      assert_equal "claude cli timed out after 0.2s", e.message
-      assert_operator monotonic - started, :<, 3
+      assert_quick do
+        e = assert_raises(GenerateError) { Claude.new(bin: bin, timeout: 0.2).run([]) {} }
+        assert_equal "claude cli timed out after 0.2s", e.message
+      end
 
       # stdout closed but the process lingers: the timeout still has to cover the wait.
       bin = fake_claude_bin(dir, "exec >&-; exec sleep 5")
-      started = monotonic
-      e = assert_raises(GenerateError) { Claude.new(bin: bin, timeout: 0.2).run([]) {} }
-      assert_equal "claude cli timed out after 0.2s", e.message
-      assert_operator monotonic - started, :<, 3
+      assert_quick do
+        e = assert_raises(GenerateError) { Claude.new(bin: bin, timeout: 0.2).run([]) {} }
+        assert_equal "claude cli timed out after 0.2s", e.message
+      end
 
       e = assert_raises(GenerateError) { Claude.new(bin: File.join(dir, "nope")).run([]) {} }
       assert_match(/nope` cli not found on PATH\z/, e.message)
@@ -1740,24 +1727,24 @@ if ARGV.first == "--test"
   end
 
   test "claude: a raising reader still kills the child" do
-    Dir.mktmpdir("auto-commit-test-") do |dir|
+    in_tmpdir do |dir|
       bin = fake_claude_bin(dir, "echo started; exec sleep 5")
-      started = monotonic
-      assert_raises(Errno::EPIPE) { Claude.new(bin: bin).run([]) { |_| raise Errno::EPIPE } }
-      assert_operator monotonic - started, :<, 3
+      assert_quick do
+        assert_raises(Errno::EPIPE) { Claude.new(bin: bin).run([]) { |_| raise Errno::EPIPE } }
+      end
     end
   end
 
   test "claude: ctrl+c mid-stream cancels and reaps" do
-    Dir.mktmpdir("auto-commit-test-") do |dir|
+    in_tmpdir do |dir|
       bin = fake_claude_bin(dir, "echo started; exec sleep 5")
       main = Thread.current
-      started = monotonic
-      e = assert_raises(GenerateCancelled) do
-        Claude.new(bin: bin).run([]) { |_| Thread.new { sleep 0.1; main.raise(Interrupt) } }
+      assert_quick do
+        e = assert_raises(GenerateCancelled) do
+          Claude.new(bin: bin).run([]) { |_| Thread.new { sleep 0.1; main.raise(Interrupt) } }
+        end
+        assert_equal "aborted", e.message
       end
-      assert_equal "aborted", e.message
-      assert_operator monotonic - started, :<, 3
       assert_raises(Errno::ECHILD) { Process.wait(-1, Process::WNOHANG) }
     end
   end
