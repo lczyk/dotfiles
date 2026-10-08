@@ -62,7 +62,7 @@ COMMAND=${COMMAND//\\git/git}
 # known false positive: `git grep -c <key>` reads as an override.
 GIT_CFG_KEYS="core\.hookspath|commit\.gpgsign|tag\.gpgsign|gpg\.program|alias\."
 if echo "$COMMAND" | grep -qiE -- "(^|[ ;|&])git [^;|&]*((-c ?|--config-env[= ])[\"']?(${GIT_CFG_KEYS})|--exec-path=)"; then
-    echo "BLOCKED: '${COMMAND:0:120}' overrides hook / signing / alias / exec-path config -- ask the user if you really need to" >&2
+    echo "BLOCKED: command overrides hook / signing / alias / exec-path config -- ask the user if you really need to" >&2
     exit 2
 fi
 
@@ -71,11 +71,11 @@ fi
 # PATH itself when git or gh is on the line (a shadowing git binary).
 GIT_ENV_VARS="GIT_CONFIG[A-Z_]*|GIT_DIR|GIT_WORK_TREE|GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_PROXY_COMMAND|GIT_NAMESPACE|GIT_CEILING_DIRECTORIES|XDG_CONFIG_HOME|HOME"
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])((env|export) [^;|&]*)?(${GIT_ENV_VARS})="; then
-    echo "BLOCKED: '${COMMAND:0:120}' overrides git's config / repo / exec environment -- ask the user if you really need to" >&2
+    echo "BLOCKED: command overrides git's config / repo / exec environment -- ask the user if you really need to" >&2
     exit 2
 fi
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])((env|export) [^;|&]*)?PATH=" && echo "$COMMAND" | grep -qE -- "(^|[ ;|&/])(git|gh)( |$)"; then
-    echo "BLOCKED: '${COMMAND:0:120}' rewrites PATH around a git / gh call -- ask the user if you really need to" >&2
+    echo "BLOCKED: command rewrites PATH around a git / gh call -- ask the user if you really need to" >&2
     exit 2
 fi
 
@@ -85,7 +85,7 @@ fi
 # so this stays fenced under every capability. matched pre-strip, same reason.
 PUSH_CFG_KEYS="remote\.|url\.|push\.|branch\."
 if echo "$COMMAND" | grep -qiE -- "(^|[ ;|&])git [^;|&]*(-c ?|--config-env[= ])[\"']?(${PUSH_CFG_KEYS})[^;|&]* push( |$)"; then
-    echo "BLOCKED: '${COMMAND:0:120}' pushes under a one-shot remote / push config -- not liftable; push to a configured remote by name" >&2
+    echo "BLOCKED: command pushes under a one-shot remote / push config -- not liftable; push to a configured remote by name" >&2
     exit 2
 fi
 
@@ -279,24 +279,14 @@ REMOTE_PATTERNS=(
 )
 REMOTE_REASON="do not work in remote envs without explicit permission. (the user can lift this for a session with env AGENT_UNFENCE=remote.)"
 
-# display-only truncation for BLOCKED messages -- matching always runs
-# against the full (untruncated) $COMMAND above.
-CMD_ABBREV_LEN=120
-_abbrev() {
-    local cmd="$1"
-    if [ "${#cmd}" -gt "$CMD_ABBREV_LEN" ]; then
-        printf '%s...' "${cmd:0:$CMD_ABBREV_LEN}"
-    else
-        printf '%s' "$cmd"
-    fi
-}
-
+# NOTE: BLOCKED messages never echo the command back. the agent already has
+# it, and a truncated echo hid the part that tripped the fence.
 check() {
     local reason="$1"
     shift
     for pat in "$@"; do
         if echo "$COMMAND" | grep -qE -- "$pat"; then
-            echo "BLOCKED: '$(_abbrev "$COMMAND")' matches '$pat'. $reason" >&2
+            echo "BLOCKED: command matches '$pat'. $reason" >&2
             exit 2
         fi
     done
@@ -313,7 +303,7 @@ check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 # the existing ones. the flag has to sit in the same segment to count.
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])gh issue develop"; then
     if ! echo "$COMMAND" | grep -qE -- "gh issue develop[^;|&]* (--list|-l)( |$)"; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' creates a branch. $GH_WRITE_REASON" >&2
+        echo "BLOCKED: \`gh issue develop\` creates a branch. $GH_WRITE_REASON" >&2
         exit 2
     fi
 fi
@@ -329,7 +319,7 @@ while IFS= read -r seg; do
         ! echo "$COMMAND" | grep -qiE -- "$GH_API_OPAQUE_RE"; then
         continue
     fi
-    echo "BLOCKED: '$(_abbrev "$seg")' writes. $GH_API_FIELD_REASON" >&2
+    echo "BLOCKED: $GH_API_FIELD_REASON" >&2
     exit 2
 done < <(printf '%s' "$COMMAND" | sed -E 's/gh api/;gh api/g' | grep -oE -- "(^|[ ;|&])gh api[^;|&]*")
 # explicit-path discard (`git restore <file>`, `git checkout -- <file>`) is
@@ -372,7 +362,7 @@ while IFS= read -r seg; do
         continue
     fi
     if ! paths_concrete "$args"; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' discards more than named files. \`git restore <explicit-file-paths>\` is allowed -- no \`.\`, globs, dirs, or --source." >&2
+        echo "BLOCKED: \`git restore\` discards more than named files. \`git restore <explicit-file-paths>\` is allowed -- no \`.\`, globs, dirs, or --source." >&2
         exit 2
     fi
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git restore[^;|&]*")
@@ -384,7 +374,7 @@ while IFS= read -r seg; do
     _unfenced branch && break
     args="${seg#*git checkout}"
     if [[ "$args" != " -- "* ]] || ! paths_concrete "${args# -- }"; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- only \`git checkout -- <explicit-file-paths>\` is allowed (no branch switching, \`.\`, globs, or dirs). $BRANCH_REASON" >&2
+        echo "BLOCKED: only \`git checkout -- <explicit-file-paths>\` is allowed (no branch switching, \`.\`, globs, or dirs). $BRANCH_REASON" >&2
         exit 2
     fi
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
@@ -393,7 +383,7 @@ done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
 # `-n` / `--dry-run` (preview).
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git rm "; then
     if ! echo "$COMMAND" | grep -qE -- "(--cached|-n |--dry-run)"; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' deletes worktree files. $GIT_REASON" >&2
+        echo "BLOCKED: \`git rm\` deletes worktree files. $GIT_REASON" >&2
         exit 2
     fi
 fi
@@ -405,7 +395,7 @@ fi
 # index and/or worktree and are a different risk class.
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git reset( |$)"; then
     if ! { _unfenced history && echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git reset --soft( |$)"; }; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- \`git reset\` is destructive past --soft. $GIT_REASON. (\`--soft\` alone is liftable with env AGENT_UNFENCE=history.)" >&2
+        echo "BLOCKED: \`git reset\` is destructive past --soft. $GIT_REASON. (\`--soft\` alone is liftable with env AGENT_UNFENCE=history.)" >&2
         exit 2
     fi
 fi
@@ -472,15 +462,15 @@ check "$MARKER_REASON"        "${MARKER_PATTERNS[@]}"
 while IFS= read -r seg; do
     args="${seg#*git push}"
     if echo "$args" | grep -qE -- "${PUSH_HARD_FLAG_RE}|${PUSH_HARD_SHORT_RE}|${PUSH_HARD_REFSPEC_RE}" || _push_names_url "$args"; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- $PUSH_HARD_REASON" >&2
+        echo "BLOCKED: $PUSH_HARD_REASON" >&2
         exit 2
     fi
     if ! _unfenced push; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- $PUSH_REASON" >&2
+        echo "BLOCKED: $PUSH_REASON" >&2
         exit 2
     fi
     if echo "$args" | grep -qE -- "$PUSH_SUBST_RE"; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' -- git push arguments must be literal (no \$(...), backticks or variables); git push origin HEAD names the current branch" >&2
+        echo "BLOCKED: git push arguments must be literal (no \$(...), backticks or variables); git push origin HEAD names the current branch" >&2
         exit 2
     fi
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git push( [^;|&]*|$)")
@@ -513,7 +503,7 @@ GH_TEXT_QUOTED_HEREDOC_RE="\\\$\\(cat <<-?('([A-Za-z_]+)'|\"([A-Za-z_]+)\"|\\\\(
 GH_TEXT_QUOTED_RE="\"[^\"]*\"|'[^']*'"
 
 _gh_text_block() {
-    echo "BLOCKED: '$(_abbrev "$COMMAND")' -- $1" >&2
+    echo "BLOCKED: $1" >&2
     exit 2
 }
 
