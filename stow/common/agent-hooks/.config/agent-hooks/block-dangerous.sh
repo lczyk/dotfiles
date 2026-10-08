@@ -115,21 +115,14 @@ GIT_WRITE_PATTERNS=(
     # NOTE: `git commit` intentionally allowed -- per workflow.md, commits
     # need explicit per-prompt permission, but the model is trusted to
     # follow that rule rather than being hard-fenced. `git push` has its own
-    # special-case below -- see the push capability.
-    "(^|[ ;|&])git tag( -[adfsmu]| [^-])"
+    # special-case below -- see the push capability. `git tag` and
+    # `git config` have read allowlists below.
     "(^|[ ;|&])git revert( |$)"
     "(^|[ ;|&])git am( |$)"
     # NOTE: `git apply` intentionally allowed -- a patch on the worktree is
     # no more than the Write tool, `sed -i` or `patch -p1` can already do,
     # and fencing it only got in the way of patching scratch clones.
     "(^|[ ;|&])git stash (drop|clear)"
-    "(^|[ ;|&])git config (--add|--unset|--global|--system|--replace-all|--remove-section)"
-    # `git config <key> <value>` (local write, no flag needed). the read form
-    # `git config <key>` has no trailing value token and doesn't match; the
-    # key token stops at segment separators so a chained command after a read
-    # (`git config --get k; echo x`) isn't misread as the value.
-    "(^|[ ;|&])git config (set|unset|rename-section|remove-section)"
-    "(^|[ ;|&])git config (--[a-z-]+ )*[A-Za-z][^ ;|&]* [^-&|;<>[:space:]]"
     # remote config writes -- set-url could silently redirect the user's own
     # future pushes.
     "(^|[ ;|&])git remote (add|remove|rm|rename|set-url|set-head|set-branches|prune)"
@@ -148,13 +141,7 @@ GIT_WRITE_REASON="these git ops are user-run -- commits on the current branch AR
 # tool), branch switching / `-b` stay blocked. reading other branches goes
 # via log / diff / show.
 BRANCH_PATTERNS=(
-    # short create/copy/move/delete/force/track/upstream flags (first arg,
-    # combined forms like -fD included) or a bare non-flag arg (create).
-    "(^|[ ;|&])git branch -[cCmMdDftu]"
-    "(^|[ ;|&])git branch [^-]"
-    # long write flags anywhere in the branch invocation. reads like --list /
-    # --show-current / --contains / --merged / -vv stay allowed.
-    "(^|[ ;|&])git branch [^;|&]*--(track|copy|move|delete|force|set-upstream-to|unset-upstream|create-reflog)"
+    # `git branch` has a read allowlist below.
     "(^|[ ;|&])git switch( |$)"
     "(^|[ ;|&])git worktree (add|remove|move|prune)"
     # symbolic-ref rewrites HEAD = branch switch w/out checkout. blocks the
@@ -297,6 +284,69 @@ while IFS= read -r cmd; do
     echo "BLOCKED: $GIT_ADD_REASON" >&2
     exit 2
 done < <(_git_cmds add)
+
+# tag / branch / config: their read forms are a small closed set and their
+# write forms are not, so these allow the known reads and block the rest. a
+# read: every flag a known read flag (a value-taking one swallows the next
+# token unless that is a flag), and at most <max> positionals -- any number
+# once a listing flag is present.
+_read_form() {
+    local flags=$1 valued=$2 listing=$3 max=$4 tok toks want=0 list=0 n=0
+    read -ra toks <<< "$5"
+    for tok in "${toks[@]}"; do
+        tok=${tok//[\"\']/}
+        if ((want)); then
+            want=0
+            [[ "$tok" == -* ]] || continue
+        fi
+        if [[ "$tok" != -* ]]; then
+            ((n++))
+        elif [[ "$tok" =~ ^($listing)$ ]]; then
+            list=1
+        elif [[ "$tok" =~ ^($valued)$ ]]; then
+            want=1
+        elif ! [[ "$tok" =~ ^($flags)$ ]]; then
+            return 1
+        fi
+    done
+    ((list || n <= max))
+}
+
+READ_LISTING_FLAGS="-i|--ignore-case|--color|--color=.*|--no-color|--column|--column=.*|--no-column|--omit-empty|--sort=.*|--format=.*|--contains=.*|--no-contains=.*|--merged=.*|--no-merged=.*|--points-at=.*"
+READ_LISTING_VALUED="--contains|--no-contains|--merged|--no-merged|--points-at|--sort|--format"
+
+while IFS= read -r cmd; do
+    _read_form "-n|-n[0-9]+|$READ_LISTING_FLAGS" "$READ_LISTING_VALUED" "-l|--list|-v|--verify" 0 "${cmd#git tag}" && continue
+    echo "BLOCKED: \`git tag\` writes or deletes a tag. $GIT_WRITE_REASON" >&2
+    exit 2
+done < <(_git_cmds tag)
+
+if ! _unfenced branch; then
+    while IFS= read -r cmd; do
+        _read_form "-[arvqi]+|--all|--remotes|--verbose|--quiet|--show-current|--abbrev|--abbrev=.*|--no-abbrev|$READ_LISTING_FLAGS" \
+            "$READ_LISTING_VALUED" "-l|--list" 0 "${cmd#git branch}" && continue
+        echo "BLOCKED: $BRANCH_REASON" >&2
+        exit 2
+    done < <(_git_cmds branch)
+fi
+
+# config: the get / list verbs read and set / unset / rename-section /
+# remove-section / edit write; otherwise one positional (a key) reads, two
+# write, and a --get / --list style action makes every positional a read.
+CONFIG_READ_FLAGS="--global|--system|--local|--worktree|--file=.*|--blob=.*|--type=.*|--default=.*|--bool|--int|--bool-or-int|--path|--expiry-date|-z|--null|--name-only|--show-origin|--show-scope|--includes|--no-includes|--fixed-value"
+CONFIG_READ_ACTIONS="--get|--get-all|--get-regexp|--get-urlmatch|--get-color|--get-colorbool|-l|--list"
+while IFS= read -r cmd; do
+    args=${cmd#git config}
+    read -r verb _ <<< "${args//[\"\']/}"
+    case "$verb" in
+        (get|list) continue ;;
+        (set|unset|rename-section|remove-section|edit) ;;
+        (*) _read_form "$CONFIG_READ_FLAGS" "-f|--file|--blob|--type|--default" "$CONFIG_READ_ACTIONS" 1 "$args" && continue ;;
+    esac
+    echo "BLOCKED: \`git config\` writes config. $GIT_WRITE_REASON" >&2
+    exit 2
+done < <(_git_cmds config)
+
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 
 # `gh issue develop` creates a linked branch, but `--list` / `-l` only reads
