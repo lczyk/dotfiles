@@ -8,7 +8,7 @@
   },
   "env": {
     "AGENT_SESSION": "1",
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "haiku",
     "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1"
   },
   "extraKnownMarketplaces": {
@@ -84,8 +84,9 @@
     ]
   },
   "modelSettings": {
-    "claude-sonnet-5": {
-      "maxEffortLevel": "low"
+    "claude-haiku-5-5": {
+      "effortLevel": "medium",
+      "maxEffortLevel": "medium"
     }
   },
   "respondToBashCommands": false,
