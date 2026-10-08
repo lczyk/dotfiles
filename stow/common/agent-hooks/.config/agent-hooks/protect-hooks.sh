@@ -63,14 +63,19 @@ PROTECTED_GLOBS=(
     "$HOME/.copilot/hooks/*"
     # config that switches the hooks off without touching a hook file: every
     # git config that can set core.hooksPath (a repo's own .git/config wins
-    # over the global one), codex's hook switch, and copilot's hook list.
+    # over the global one, and a worktree's config.worktree or a submodule's
+    # module config over that), codex's hook switch, and copilot's hook list.
     "$HOME/.config/git/config"
     "$HOME/.config/git/config.local"
     "$HOME/.gitconfig"
     '*/.git/config'
     '*/.git/config.worktree'
+    '*/.git/worktrees/*/config.worktree'
+    '*/.git/modules/*/config'
     '.git/config'
     '.git/config.worktree'
+    '.git/worktrees/*/config.worktree'
+    '.git/modules/*/config'
     "$HOME/.codex/config.toml"
     "$HOME/.copilot/settings.json"
     '*/stow/common/agent-hooks/.config/agent-hooks'

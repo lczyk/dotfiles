@@ -442,7 +442,7 @@ _switch_ok() {
         if ((!dashdash)); then
             case "$tok" in
                 --) dashdash=1; continue ;;
-                -b|-c|-q|--quiet|-t|--track|--no-track|--detach|-d|-m|--merge|--orphan|--guess|--no-guess|-l) continue ;;
+                -|-b|-c|--create|-q|--quiet|-t|--track|--no-track|--detach|-d|-m|--merge|--orphan|--guess|--no-guess|-l) continue ;;
                 -*) return 1 ;;
             esac
         fi
