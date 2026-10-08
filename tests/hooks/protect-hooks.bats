@@ -68,6 +68,43 @@ fire_write() {
     [ "$status" -eq 2 ]
 }
 
+# -- Write: the config that wires the hooks in --------------------------
+# dropping core.hooksPath (or codex's hook switch) turns the fences off
+# without touching a hook file.
+
+@test "blocks Write to every git config that can set core.hooksPath" {
+    for path in "$HOME/.config/git/config" "$HOME/.config/git/config.local" "$HOME/.gitconfig" \
+        "$REPO/.git/config" "/tmp/ai/x/.git/config" "/tmp/ai/x/.git/config.worktree" \
+        "$REPO/stow/common/git/.config/git/config" "$REPO/stow/mac/git/.config/git/config.local"; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+}
+
+@test "blocks Write to codex config.toml and copilot settings.json" {
+    for path in "$HOME/.codex/config.toml" "$HOME/.copilot/settings.json" \
+        "$REPO/stow/common/codex/.codex/config.toml" "$REPO/stow/common/copilot/.copilot/settings.json"; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+}
+
+@test "blocks shell writes to the wiring config, reads stay free" {
+    run fire "printf 'x' >> $HOME/.gitconfig"
+    [ "$status" -eq 2 ]
+    run fire "cp /tmp/ai/x $HOME/.codex/config.toml"
+    [ "$status" -eq 2 ]
+    run fire "cat $HOME/.config/git/config .git/config"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows Write to unrelated config and gitignore files" {
+    for path in "$HOME/.config/git/ignore" "$REPO/.gitignore" "/tmp/ai/x/.git/info/exclude" "$HOME/.codex/AGENTS.md"; do
+        run fire_write "$path"
+        [ "$status" -eq 0 ] || { echo "blocked: $path"; false; }
+    done
+}
+
 # -- Write: dotfiles sources --------------------------------------------
 
 @test "blocks Write to the policy source in the checkout" {
