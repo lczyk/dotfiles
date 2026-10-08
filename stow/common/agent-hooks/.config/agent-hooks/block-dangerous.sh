@@ -499,8 +499,9 @@ PUSH_PLUMBING_REASON="push plumbing bypasses the pre-push hook -- push through g
 MARKER_PATTERNS=(
     "(CLAUDECODE|AGENT_SESSION|OPENCODE_PID)="
     "(^|[ ;|&])unset [^;|&]*(CLAUDECODE|AGENT_SESSION|OPENCODE_PID)"
-    "(-u|--unset)[ =](CLAUDECODE|AGENT_SESSION|OPENCODE_PID)"
-    "(^|[ ;|&])env( [^;|&]*)? (-i|--ignore-environment)( |$)"
+    "(-u ?|--unset[ =])(CLAUDECODE|AGENT_SESSION|OPENCODE_PID)"
+    # -i, a bare -, or -i inside a short-flag cluster: an emptied environment.
+    "(^|[ ;|&])env( [^;|&]*)? (-[A-Za-z0-9]*i[A-Za-z0-9]*|-|--ignore-environment)( |$)"
 )
 MARKER_REASON="agent session markers are not yours to unset or rewrite -- the git hooks read them"
 
