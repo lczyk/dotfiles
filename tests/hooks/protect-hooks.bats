@@ -98,6 +98,48 @@ fire_write() {
     [ "$status" -eq 0 ]
 }
 
+# -- path spellings ------------------------------------------------------
+# the same protected file named another way must still be judged as itself.
+
+@test "blocks shell writes through every spelling of HOME" {
+    for cmd in 'echo x > ${HOME}/.claude/hooks/new.sh' 'echo x > "${HOME}/.claude/hooks/new.sh"' \
+        'echo x > "$HOME"/.claude/hooks/new.sh' "echo x > '$HOME/.claude/hooks/new.sh'" \
+        'tee ${HOME}/.codex/hooks.json < /tmp/ai/x'; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
+@test "blocks writes to protected paths spelled with ., .. or //" {
+    for path in "$HOME/.claude/hooks/../hooks/new.sh" "$HOME/.claude//hooks/new.sh" \
+        "$HOME/./.claude/hooks/new.sh" "$HOME/.config/agent-hooks/./new.sh"; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+}
+
+@test "blocks a relative new file in a protected source dir" {
+    cd "$REPO"
+    for path in stow/common/agent-hooks/.config/agent-hooks/new.sh ./stow/common/git/.config/git/hooks/post-merge; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+}
+
+@test "blocks a new file reached through a symlinked dir" {
+    ln -s "$HOME/.claude/hooks" "$BATS_TEST_TMPDIR/link"
+    run fire_write "$BATS_TEST_TMPDIR/link/new.sh"
+    [ "$status" -eq 2 ]
+}
+
+@test "normalising does not widen the fence" {
+    cd "$REPO"
+    for path in /tmp/ai/x/../notes.md notes.md ./tests/new.bats "$HOME/.claude/hooks-notes/../notes.md"; do
+        run fire_write "$path"
+        [ "$status" -eq 0 ] || { echo "blocked: $path"; false; }
+    done
+}
+
 @test "allows Write to unrelated config and gitignore files" {
     for path in "$HOME/.config/git/ignore" "$REPO/.gitignore" "/tmp/ai/x/.git/info/exclude" "$HOME/.codex/AGENTS.md"; do
         run fire_write "$path"
