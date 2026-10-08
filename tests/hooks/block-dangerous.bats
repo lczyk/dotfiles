@@ -763,7 +763,8 @@ git push"
 @test "blocks every spelling of unsetting a session marker" {
     for cmd in "env -uCLAUDECODE git commit -F /tmp/ai/m" "env -uAGENT_SESSION git commit -F /tmp/ai/m" \
         "env -u OPENCODE_PID git commit -F /tmp/ai/m" "env --unset=CLAUDECODE git push" \
-        "env - git commit -F /tmp/ai/m" "env -0i git commit -F /tmp/ai/m" "env -i PATH=/usr/bin git commit"; do
+        "env - git commit -F /tmp/ai/m" "env -0i git commit -F /tmp/ai/m" "env -i PATH=/usr/bin git commit" \
+        "env -u COPILOT_CLI git commit -F /tmp/ai/m" "COPILOT_CLI= git commit -F /tmp/ai/m" "unset COPILOT_CLI"; do
         run fire "$cmd"
         [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
     done

@@ -10,7 +10,7 @@ setup() {
     export PATH="$SHIMDIR:$PATH"
     # the suite runs from inside an agent session, so clear the other markers
     # explicitly -- the human-path tests below only unset CLAUDECODE.
-    unset AGENT_SESSION OPENCODE_PID
+    unset AGENT_SESSION OPENCODE_PID COPILOT_CLI
     export CLAUDECODE=1
 }
 
@@ -51,6 +51,13 @@ EOF
     unset CLAUDECODE
     fake_diff $'+hello \xe2\x80\x94 world\n'
     AGENT_SESSION=1 run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "COPILOT_CLI alone takes the strict path" {
+    unset CLAUDECODE
+    fake_diff $'+hello \xe2\x80\x94 world\n'
+    COPILOT_CLI=1 run "$HOOK"
     [ "$status" -ne 0 ]
 }
 

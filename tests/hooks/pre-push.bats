@@ -9,7 +9,7 @@ setup() {
     # the suite runs from inside an agent session -- clear every marker and
     # capability so the human-path tests below aren't testing the agent path
     # by accident.
-    unset CLAUDECODE AGENT_SESSION OPENCODE_PID AGENT_UNFENCE
+    unset CLAUDECODE AGENT_SESSION OPENCODE_PID COPILOT_CLI AGENT_UNFENCE
 }
 
 # fake git: control merge-base --is-ancestor via arg (0=is-ancestor=ff, 1=non-ff).
@@ -36,6 +36,11 @@ Z=0000000000000000000000000000000000000000
 
 @test "blocks push under AGENT_SESSION" {
     AGENT_SESSION=1 run "$HOOK"
+    [ "$status" -ne 0 ]
+}
+
+@test "blocks push under COPILOT_CLI" {
+    COPILOT_CLI=1 run "$HOOK"
     [ "$status" -ne 0 ]
 }
 

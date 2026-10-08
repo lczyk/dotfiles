@@ -6,7 +6,7 @@ setup() {
     MSG="$BATS_TEST_TMPDIR/msg"
     # the suite runs from inside an agent session -- clear every marker so the
     # human-path tests below aren't testing the agent path by accident.
-    unset CLAUDECODE AGENT_SESSION OPENCODE_PID
+    unset CLAUDECODE AGENT_SESSION OPENCODE_PID COPILOT_CLI
     # fixture repos must not pick up the user's hooksPath / gpgsign.
     export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
     export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t
@@ -90,6 +90,13 @@ tracking_repo() {
     tracking_repo
     write_msg "first"
     AGENT_SESSION=1 run "$HOOK" "$MSG" commit HEAD
+    [ "$status" -ne 0 ]
+}
+
+@test "agent: rejects amend under COPILOT_CLI" {
+    tracking_repo
+    write_msg "first"
+    COPILOT_CLI=1 run "$HOOK" "$MSG" commit HEAD
     [ "$status" -ne 0 ]
 }
 

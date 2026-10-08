@@ -6,7 +6,7 @@ setup() {
     MSG="$BATS_TEST_TMPDIR/msg"
     # the suite runs from inside an agent session, so clear the other markers
     # explicitly -- the human-path tests below only unset CLAUDECODE.
-    unset AGENT_SESSION OPENCODE_PID
+    unset AGENT_SESSION OPENCODE_PID COPILOT_CLI
     export CLAUDECODE=1
 }
 
@@ -193,6 +193,13 @@ write_msg() { printf '%s\n' "$1" > "$MSG"; }
     unset CLAUDECODE
     write_msg "update: nope"
     AGENT_SESSION=1 run "$HOOK" "$MSG"
+    [ "$status" -ne 0 ]
+}
+
+@test "COPILOT_CLI alone takes the strict path" {
+    unset CLAUDECODE
+    write_msg "update: nope"
+    COPILOT_CLI=1 run "$HOOK" "$MSG"
     [ "$status" -ne 0 ]
 }
 
