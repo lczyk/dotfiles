@@ -2,6 +2,8 @@
 # contract tests for Claude- and Codex-shaped safety adapters.
 
 setup() {
+    # a capability from the launching session would mask protect-hooks
+    unset AGENT_UNFENCE
     REPO="$BATS_TEST_DIRNAME/../.."
     EVALUATOR="$REPO/stow/common/agent-hooks/.config/agent-hooks/evaluate.sh"
     CLAUDE="$REPO/stow/common/claude/.claude/hooks/safety-adapter.sh"
@@ -61,9 +63,37 @@ fire_codex_patch() {
     [ "$status" -eq 0 ]
 }
 
-@test "Codex adapter permits delete-only patches" {
-    run fire_codex_patch $'*** Begin Patch\n*** Delete File: /tmp/stray.md\n*** End Patch'
+@test "Codex adapter judges deleted paths like any other write" {
+    run fire_codex_patch $'*** Begin Patch\n*** Delete File: /tmp/ai/stray.md\n*** End Patch'
     [ "$status" -eq 0 ]
+
+    run fire_codex_patch $'*** Begin Patch\n*** Delete File: /tmp/stray.md\n*** End Patch'
+    [ "$status" -eq 2 ]
+}
+
+@test "Codex adapter refuses to delete a protected hook" {
+    run fire_codex_patch "*** Begin Patch"$'\n'"*** Delete File: $HOME/.claude/hooks/safety-adapter.sh"$'\n'"*** End Patch"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"not agent-editable"* ]]
+}
+
+@test "Codex adapter checks the deletes in a mixed patch" {
+    run fire_codex_patch "*** Begin Patch"$'\n'"*** Update File: /tmp/ai/note.md"$'\n'"+x"$'\n'"*** Delete File: $HOME/.config/agent-hooks/evaluate.sh"$'\n'"*** End Patch"
+    [ "$status" -eq 2 ]
+}
+
+@test "Codex adapter reads the old side of a unified diff" {
+    run fire_codex_patch $'--- a/.claude/settings.json\n+++ /dev/null\n@@ -1 +0,0 @@\n-{}'
+    [ "$status" -eq 2 ]
+
+    run fire_codex_patch $'--- a/.claude/settings.json\n+++ b/notes.md\n@@ -1 +1 @@\n-{}\n+x'
+    [ "$status" -eq 2 ]
+}
+
+@test "Codex adapter fails closed on a patch with no paths" {
+    run fire_codex_patch $'*** Begin Patch\n*** End Patch'
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cannot inspect Codex patch destinations"* ]]
 }
 
 @test "adapters fail closed when the evaluator fails" {

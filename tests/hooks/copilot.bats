@@ -2,6 +2,8 @@
 # contract tests for Copilot safety and context adapters.
 
 setup() {
+    # a capability from the launching session would mask protect-hooks
+    unset AGENT_UNFENCE
     REPO="$BATS_TEST_DIRNAME/../.."
     CONFIG_HOME="$BATS_TEST_TMPDIR/config"
     STATE_DIR="$BATS_TEST_TMPDIR/state"
@@ -64,6 +66,24 @@ fire_raw_tool() {
     [ -z "$output" ]
 
     run fire_raw_tool apply_patch $'*** Begin Patch\n*** Add File: /tmp/note.md\n+x\n*** End Patch'
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.permissionDecision')" = "deny" ]
+}
+
+@test "Copilot adapter judges deleted paths like any other write" {
+    run fire_raw_tool apply_patch $'*** Begin Patch\n*** Delete File: /tmp/ai/stray.md\n*** End Patch'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+
+    run fire_raw_tool apply_patch "*** Begin Patch"$'\n'"*** Delete File: $HOME/.claude/hooks/safety-adapter.sh"$'\n'"*** End Patch"
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.permissionDecision')" = "deny" ]
+
+    run fire_raw_tool apply_patch "*** Begin Patch"$'\n'"*** Update File: /tmp/ai/note.md"$'\n'"+x"$'\n'"*** Delete File: $HOME/.config/agent-hooks/evaluate.sh"$'\n'"*** End Patch"
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.permissionDecision')" = "deny" ]
+
+    run fire_raw_tool apply_patch $'--- a/.claude/settings.json\n+++ /dev/null\n@@ -1 +0,0 @@\n-{}'
     [ "$status" -eq 0 ]
     [ "$(printf '%s' "$output" | jq -r '.permissionDecision')" = "deny" ]
 }
