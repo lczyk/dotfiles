@@ -127,8 +127,9 @@ GIT_WRITE_PATTERNS=(
     "(^|[ ;|&])git tag( -[adfsmu]| [^-])"
     "(^|[ ;|&])git revert( |$)"
     "(^|[ ;|&])git am( |$)"
-    # NOTE: `git apply` handled by a special-case below -- index-only
-    # (--cached) and dry-run forms allowed for patch staging.
+    # NOTE: `git apply` intentionally allowed -- a patch on the worktree is
+    # no more than the Write tool, `sed -i` or `patch -p1` can already do,
+    # and fencing it only got in the way of patching scratch clones.
     "(^|[ ;|&])git stash (drop|clear)"
     "(^|[ ;|&])git config (--add|--unset|--global|--system|--replace-all|--remove-section)"
     # `git config <key> <value>` (local write, no flag needed). the read form
@@ -393,16 +394,6 @@ done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
 if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git rm "; then
     if ! echo "$COMMAND" | grep -qE -- "(--cached|-n |--dry-run)"; then
         echo "BLOCKED: '$(_abbrev "$COMMAND")' deletes worktree files. $GIT_REASON" >&2
-        exit 2
-    fi
-fi
-
-# `git apply` mutates the worktree by default. allow the index-only form
-# (--cached; NOTE: --index applies to index AND worktree, so it stays
-# blocked) and dry-run inspection (--check/--stat/--numstat/--summary).
-if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git apply "; then
-    if ! echo "$COMMAND" | grep -qE -- "--(cached|check|stat|numstat|summary)"; then
-        echo "BLOCKED: '$(_abbrev "$COMMAND")' mutates worktree. $GIT_WRITE_REASON" >&2
         exit 2
     fi
 fi

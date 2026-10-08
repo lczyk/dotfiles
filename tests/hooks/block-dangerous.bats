@@ -93,6 +93,26 @@ fire() {
     [ "$status" -eq 0 ]
 }
 
+@test "allows git apply" {
+    run fire "git apply fix.patch"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows git apply in a scratch clone" {
+    run fire "git clone -q https://github.com/canonical/chisel /tmp/ai/chisel; cd /tmp/ai/chisel && git apply /tmp/ai/fix.patch"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows git -C <path> apply" {
+    run fire "git -C /tmp/ai/chisel apply --index /tmp/ai/fix.patch"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks git am" {
+    run fire "git am fix.patch"
+    [ "$status" -eq 2 ]
+}
+
 # -- git config: reads through, writes fenced -----------------------------
 
 @test "allows git config --get" {
