@@ -718,6 +718,23 @@ git push"
     [ "$status" -eq 2 ]
 }
 
+# -- agent session markers ----------------------------------------------
+# the git hooks read these to pick the strict path; no spelling of an
+# unset or an emptied environment may reach a child.
+
+@test "blocks every spelling of unsetting a session marker" {
+    for cmd in "env -uCLAUDECODE git commit -F /tmp/ai/m" "env -uAGENT_SESSION git commit -F /tmp/ai/m" \
+        "env -u OPENCODE_PID git commit -F /tmp/ai/m" "env --unset=CLAUDECODE git push" \
+        "env - git commit -F /tmp/ai/m" "env -0i git commit -F /tmp/ai/m" "env -i PATH=/usr/bin git commit"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    for cmd in "env -u FOO make test" "env FOO=1 make test" "env -v true"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
 # -- benign commands ----------------------------------------------------
 
 @test "allows ls" {
