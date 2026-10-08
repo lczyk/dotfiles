@@ -441,13 +441,12 @@ while IFS= read -r seg; do
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
 
 # `git rm <path>` deletes the worktree copy. allow `--cached` (index-only) and
-# `-n` / `--dry-run` (preview).
-if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git rm "; then
-    if ! echo "$COMMAND" | grep -qE -- "(--cached|-n |--dry-run)"; then
-        echo "BLOCKED: \`git rm\` deletes worktree files. $GIT_REASON" >&2
-        exit 2
-    fi
-fi
+# `-n` / `--dry-run` (preview) -- on that rm, not anywhere on the line.
+while IFS= read -r cmd; do
+    printf '%s' " ${cmd#git rm} " | grep -qE -- " (--cached|-n|--dry-run) " && continue
+    echo "BLOCKED: \`git rm\` deletes worktree files. $GIT_REASON" >&2
+    exit 2
+done < <(_git_cmds rm)
 
 # `git reset` -- ONLY `--soft` is conditionally allowed (under the history
 # capability): it moves the branch pointer but leaves index and worktree
