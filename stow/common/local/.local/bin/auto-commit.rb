@@ -256,6 +256,9 @@ class Git
     utf8(out)
   rescue Errno::ENOENT
     raise GitError, "git not found on PATH"
+  rescue ArgumentError => e
+    # an argv item can't carry a NUL; spawn refuses before git ever runs.
+    raise GitError, "git #{args.first} failed: #{e.message}"
   end
 end
 
@@ -301,11 +304,13 @@ class Claude
       rescue Interrupt
         interrupted = true
       ensure
-        # anything but a clean eof (ctrl+c, or the caller's block raising)
-        # leaves the child running with nobody reading it, so kill it here.
-        watchdog.kill
         out_r.close
-        status, again = reap(pid, kill: !drained)
+        # anything but a clean eof (ctrl+c, or the caller's block raising)
+        # leaves the child running with nobody reading it. after a clean eof
+        # the watchdog stays up through the wait, in case it never exits.
+        kill(pid) unless drained
+        status, again = reap(pid)
+        watchdog.kill
         interrupted ||= again
       end
 
@@ -339,11 +344,10 @@ class Claude
     nil
   end
 
-  # stop (if asked) and reap the child. returns [status, interrupted], the
-  # latter true when a ctrl+c landed while waiting.
-  def reap(pid, kill:)
+  # reap the child. returns [status, interrupted], the latter true when a
+  # ctrl+c landed while waiting (which kills it, so the wait still ends).
+  def reap(pid)
     interrupted = false
-    kill(pid) if kill
     begin
       _, status = Process.wait2(pid)
     rescue Interrupt
@@ -464,13 +468,16 @@ def parse_name_status(fields)
 end
 
 # keep the head, cut on a line boundary, say what was dropped. the marker
-# comes out of the limit, so the result fits unless the limit is smaller than
-# the marker itself.
+# comes out of the limit, so the result always fits it; a limit too small for
+# even the marker keeps nothing (the file still shows in the prompt's list).
 def truncate(text, limit)
   return text if text.length <= limit
 
   marker = ->(omitted) { "\n... [truncated, #{omitted} chars omitted]\n" }
-  head = text[0, [limit - marker.call(text.length).length, 0].max]
+  room = limit - marker.call(text.length).length
+  return "" if room.negative?
+
+  head = text[0, room]
   cut = head.rindex("\n")
   head = head[0, cut] if cut
   head + marker.call(text.length - head.length)
@@ -660,8 +667,6 @@ end
 # didn't ask for means --tools "" stopped working, which is what makes
 # bypassPermissions safe.
 def sandbox_violations(init)
-  return [] if init.nil?
-
   (Array(init["tools"]) - ALLOWED_TOOLS).uniq.sort
 end
 
@@ -696,8 +701,6 @@ def parse_commit(obj)
 
   message = message.strip.sub(TAG_PREFIX, "").strip if message.is_a?(String)
   raise GenerateError, "empty message from model" unless message.is_a?(String) && !message.empty?
-  # argv can't carry one, so `git commit -m` would never get to see it.
-  raise GenerateError, "NUL byte in message from model" if message.include?("\0")
 
   [tag, message]
 end
@@ -706,6 +709,12 @@ end
 def format_message(tag, body)
   first, rest = body.split("\n", 2)
   rest.to_s.strip.empty? ? "#{tag}: #{first}" : "#{tag}: #{first}\n#{rest}"
+end
+
+# the y/n answer as text, nil at eof.
+def read_reply(io)
+  line = io.gets
+  line && utf8(line)
 end
 
 def accepts?(reply)
@@ -876,7 +885,7 @@ def run(env)
   unless cfg[:yes]
     reply = env.input.call("#{log.paint("34", "commit with this message? [Y/n]")} ")
     raise Interrupt if reply.nil?
-    unless accepts?(utf8(reply))
+    unless accepts?(reply)
       log.warn "aborted."
       return 1
     end
@@ -914,7 +923,7 @@ def main(argv)
   input = lambda do |prompt|
     $stdout.write(prompt)
     $stdout.flush
-    $stdin.gets
+    read_reply($stdin)
   end
   env = Env.new(git: Git.new, claude: Claude.new, log: log, cfg: cfg, out: $stdout, input: input)
   exit run(env)
@@ -1174,8 +1183,8 @@ if ARGV.first == "--test"
     out = truncate(text, 60)
     assert_equal "line 1\nline 2\nline 3\n... [truncated, #{text.length - 20} chars omitted]\n", out
     assert_operator out.length, :<=, 60
-    # a limit smaller than the marker keeps nothing but the marker.
-    assert_equal "\n... [truncated, 15 chars omitted]\n", truncate("aaaa\nbbbb\ncccc\n", 12)
+    # a limit smaller than the marker keeps nothing at all.
+    assert_equal "", truncate("aaaa\nbbbb\ncccc\n", 12)
   end
 
   test "split_by_file: not fooled by a diff of a diff" do
@@ -1349,8 +1358,6 @@ if ARGV.first == "--test"
       e = assert_raises(GenerateError) { parse_commit("tag" => "fix", "message" => msg) }
       assert_equal "empty message from model", e.message
     end
-    e = assert_raises(GenerateError) { parse_commit("tag" => "fix", "message" => "a\0b") }
-    assert_equal "NUL byte in message from model", e.message
   end
 
   test "format_message and accepts?" do
@@ -1475,9 +1482,16 @@ if ARGV.first == "--test"
     assert_match(/^\[auto-commit\] committed\.$/, err.string)
   end
 
-  test "run: declined, junk bytes, eof and ctrl+c at the question" do
-    junk = "\xFF\n".dup.force_encoding(Encoding::UTF_8)
-    [["n\n", 1, ""], [junk, 1, ""], [nil, 130, "\n"], [Interrupt, 130, "\n"]].each do |reply, code, tail|
+  test "read_reply: bytes in, text out, nil at eof" do
+    reply = read_reply(StringIO.new("\xFF\n".b))
+    assert reply.valid_encoding?
+    refute accepts?(reply)
+    assert_equal "y\n", read_reply(StringIO.new("y\n"))
+    assert_nil read_reply(StringIO.new(""))
+  end
+
+  test "run: declined, eof and ctrl+c at the question" do
+    [["n\n", 1, ""], [nil, 130, "\n"], [Interrupt, 130, "\n"]].each do |reply, code, tail|
       git = FakeGit.new(staged: ["a.py"])
       env, out, err = fake_env(git: git, claude: FakeClaude.new(answer(OK)), replies: [reply])
       assert_equal code, run(env), reply.inspect
@@ -1668,6 +1682,13 @@ if ARGV.first == "--test"
     end
   end
 
+  test "git: a NUL in an argument is a GitError, not a crash" do
+    in_repo do
+      e = assert_raises(GitError) { Git.new.commit("fix: a\0b") }
+      assert_match(/\Agit commit failed: .*null byte/, e.message)
+    end
+  end
+
   test "git: outside a repo, check_repo says so in one line" do
     Dir.mktmpdir("auto-commit-test-") do |dir|
       git = Git.new(cwd: dir)
@@ -1697,6 +1718,13 @@ if ARGV.first == "--test"
       assert_equal "claude cli failed (rc=3): boom", e.message
 
       bin = fake_claude_bin(dir, "exec sleep 5")
+      started = monotonic
+      e = assert_raises(GenerateError) { Claude.new(bin: bin, timeout: 0.2).run([]) {} }
+      assert_equal "claude cli timed out after 0.2s", e.message
+      assert_operator monotonic - started, :<, 3
+
+      # stdout closed but the process lingers: the timeout still has to cover the wait.
+      bin = fake_claude_bin(dir, "exec >&-; exec sleep 5")
       started = monotonic
       e = assert_raises(GenerateError) { Claude.new(bin: bin, timeout: 0.2).run([]) {} }
       assert_equal "claude cli timed out after 0.2s", e.message
