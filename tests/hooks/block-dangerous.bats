@@ -73,6 +73,78 @@ fire() {
     [ "$status" -eq 2 ]
 }
 
+# -- explicit-path discard (checkout -- / restore) ----------------------
+
+@test "allows git checkout -- <files>" {
+    for cmd in "git checkout -- a.txt" "git checkout -- a.txt b/c.go" \
+        "cd /tmp/ai/x && git checkout -- a.txt && git status --short"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "allows -q / --quiet before checkout --" {
+    for cmd in "git checkout -q -- a.txt b/c.go" "git checkout --quiet -- a.txt" \
+        "git -C /tmp/ai/x checkout -q -- a.txt"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "blocks checkout path forms broader than named files" {
+    for cmd in "git checkout -q -- src/" "git checkout -q -- ." "git checkout -q main" \
+        "git checkout HEAD -- a.txt" "git checkout -f -- a.txt" "git checkout --ours -- a.txt" \
+        "git checkout -q -- 'a*.txt'" "git checkout -q"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
+@test "a refused path checkout says what failed, not branch rules" {
+    run fire "git checkout -f -- a.txt"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"checkout [-q] -- <explicit-file-paths>"* ]]
+    [[ "$output" != *"stay on the current branch"* ]]
+}
+
+@test "branch switching still carries the branch reason" {
+    run fire "git checkout main"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"stay on the current branch"* ]]
+}
+
+@test "allows git restore of named files, -q included" {
+    for cmd in "git restore a.txt" "git restore -q a.txt b/c.go" "git restore --quiet -- a.txt" \
+        "git restore --staged ." "git restore -S -W a.txt"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "blocks broad or sourced git restore" {
+    for cmd in "git restore ." "git restore -q ." "git restore --source=HEAD~1 a.txt" \
+        "git restore --source HEAD a.txt" "git restore -q src/"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
+# -- stash --------------------------------------------------------------
+
+@test "allows git stash push / pop / list / show" {
+    for cmd in "git stash" "git stash push -m wip -- a.txt" "git stash pop" "git stash list" "git stash show -p"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "blocks git stash drop / clear" {
+    for cmd in "git stash drop" "git stash drop -q" "git stash drop stash@{1}" "git stash clear"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
 @test "blocks git clean -fd" {
     run fire "git clean -fd"
     [ "$status" -eq 2 ]
