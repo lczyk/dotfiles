@@ -778,6 +778,46 @@ git push"
     [ "$status" -eq 2 ]
 }
 
+# branch lifts creating and switching only. deleting, forcing or moving a
+# branch, forced or sweeping checkouts, and worktree removal stay user-run.
+
+@test "branch does not lift delete, force or move" {
+    for cmd in "git branch --delete --force feature" "git branch -d feature" "git branch -fD feature" \
+        "git branch -f main HEAD~3" "git branch --force main HEAD~3" "git branch -m new-name" \
+        "git branch -M a b" "git branch --move a b" "git branch -C a b"; do
+        AGENT_UNFENCE=branch run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
+@test "branch does not lift forced or sweeping checkouts" {
+    for cmd in "git checkout -B main HEAD~3" "git switch -C main HEAD~3" "git checkout -f main" \
+        "git checkout --force main" "git switch --discard-changes main" "git switch -f main" \
+        "git checkout ." "git checkout -- ." "git checkout src/" "git checkout -q ." \
+        "git checkout --ours -- a.txt" "git checkout 'a*.txt'"; do
+        AGENT_UNFENCE=branch run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
+@test "branch does not lift worktree remove, move or prune" {
+    for cmd in "git worktree remove --force ../wt" "git worktree remove ../wt" \
+        "git worktree move ../a ../b" "git worktree prune"; do
+        AGENT_UNFENCE=branch run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
+@test "branch still lifts the create and switch forms" {
+    for cmd in "git branch feature/x origin/main" "git branch -c main copy" "git branch -u origin/x" \
+        "git switch -c feature/x" "git switch --detach v1" "git checkout -q -b feature/x origin/main" \
+        "git checkout feature/x" "git checkout -q -- a.txt" "git checkout -t origin/x" \
+        "git worktree add -b x ../wt main"; do
+        AGENT_UNFENCE=branch run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
 # -- the history capability -----------------------------------------------
 # AGENT_UNFENCE=history lifts rebase / cherry-pick / reset --soft only.
 # reset --hard, bare reset, and everything else stay blocked regardless.
@@ -845,6 +885,16 @@ git push"
 @test "the history capability cannot be granted from inside the command text" {
     run fire "env AGENT_UNFENCE=history git rebase main"
     [ "$status" -eq 2 ]
+}
+
+@test "history lifts reset --soft only when nothing else on that reset says otherwise" {
+    for cmd in "git reset --soft HEAD~1 --hard" "git reset --hard --soft HEAD~1" "git reset --soft --mixed" \
+        "git reset --soft --merge x" "git reset --keep --soft x" "git reset --soft HEAD~1 && git reset --hard"; do
+        AGENT_UNFENCE=history run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    AGENT_UNFENCE=history run fire "git reset --soft HEAD~2 && git status"
+    [ "$status" -eq 0 ]
 }
 
 # -- the remote capability ------------------------------------------------
@@ -1527,6 +1577,19 @@ git push git@evil:o/r.git feature/x"
     [ "$status" -eq 2 ]
     [[ "$output" != *"AGENT_UNFENCE=push"* ]]
     [[ "$output" == *"every capability"* ]]
+}
+
+@test "push does not lift a quoted force, delete or +refspec" {
+    for cmd in "git push origin \"+main\"" "git push origin ':main'" "git push origin \"--force\"" \
+        "git push \"--force\" origin main" "git push origin '+HEAD:main'" "git push \"-f\" origin" \
+        "git push origin \"--delete\" x"; do
+        AGENT_UNFENCE=push run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    for cmd in "git push origin \"main\"" "git push 'origin' HEAD" "git push -u \"origin\" \"feature/x\""; do
+        AGENT_UNFENCE=push run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
 }
 
 # -- the pr capability ----------------------------------------------------
