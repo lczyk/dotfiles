@@ -515,9 +515,9 @@ PUSH_PLUMBING_REASON="push plumbing bypasses the pre-push hook -- push through g
 # the git hooks read the agent markers from the environment; unsetting or
 # rewriting them for a child would hand the hooks a human session.
 MARKER_PATTERNS=(
-    "(CLAUDECODE|AGENT_SESSION|OPENCODE_PID)="
-    "(^|[ ;|&])unset [^;|&]*(CLAUDECODE|AGENT_SESSION|OPENCODE_PID)"
-    "(-u ?|--unset[ =])(CLAUDECODE|AGENT_SESSION|OPENCODE_PID)"
+    "(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)="
+    "(^|[ ;|&])unset [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
+    "(-u ?|--unset[ =])(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
     # -i, a bare -, or -i inside a short-flag cluster: an emptied environment.
     "(^|[ ;|&])env( [^;|&]*)? (-[A-Za-z0-9]*i[A-Za-z0-9]*|-|--ignore-environment)( |$)"
 )
