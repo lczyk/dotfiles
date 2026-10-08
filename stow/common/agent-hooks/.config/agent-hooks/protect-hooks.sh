@@ -29,8 +29,8 @@ COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's
 
 # expand the two home shorthands so `~/.claude/hooks/x` and `$HOME/.claude/...`
 # compare against the absolute globs below.
+COMMAND=${COMMAND//\$\{HOME\}/$HOME}
 COMMAND=${COMMAND//\$HOME/$HOME}
-COMMAND=${COMMAND//\{HOME\}/$HOME}
 COMMAND=${COMMAND//\~\//$HOME/}
 
 # capability opt-outs, comma-separated, read from this process's OWN
@@ -124,15 +124,36 @@ function _protected() {
     return 1
 }
 
+# lexical normalisation: made absolute against the cwd, `.` and empty
+# segments dropped, `..` folded -- so `./x`, `a//b` and a relative new file
+# read as the path they name, whether it exists yet or not.
+function _normpath() {
+    local p="$1" seg parts out=()
+    [[ "$p" == /* ]] || p="$PWD/$p"
+    IFS=/ read -ra parts <<< "$p"
+    for seg in "${parts[@]}"; do
+        case "$seg" in
+            ("" | .) ;;
+            (..) ((${#out[@]})) && out=("${out[@]:0:${#out[@]}-1}") ;;
+            (*) out+=("$seg") ;;
+        esac
+    done
+    (IFS=/; printf '/%s' "${out[*]}")
+}
+
 # a path may arrive as the symlink in $HOME or as the file in the dotfiles
-# checkout. resolve when we can, and judge both forms -- readlink -f prints
-# nothing for a path that does not exist yet, which is exactly the create-a-
-# new-hook case the raw form has to cover.
+# checkout, and spelled any number of ways. judge the raw form, the
+# normalised one, and its resolution -- readlink -f prints nothing for a file
+# that does not exist yet, so a new file is resolved through its parent dir.
 function _protected_either() {
-    local path="$1" resolved
+    local path="$1" norm resolved
     _protected "$path" && return 0
-    resolved=$(readlink -f "$path" 2>/dev/null)
-    [[ -n "$resolved" ]] && _protected "$resolved"
+    norm=$(_normpath "$path")
+    _protected "$norm" && return 0
+    resolved=$(readlink -f "$norm" 2>/dev/null)
+    [[ -n "$resolved" ]] && _protected "$resolved" && return 0
+    resolved=$(readlink -f "${norm%/*}" 2>/dev/null)
+    [[ -n "$resolved" ]] && _protected "$resolved/${norm##*/}"
 }
 
 # -- normalized write destinations --------------------------------------
@@ -142,12 +163,12 @@ if [[ "$OPERATION" == write ]]; then
     done < <(printf '%s' "$INPUT" | jq -r '.write_paths[]')
 fi
 
-# strip a glued redirect and any surrounding quotes, then judge the token.
+# strip a glued redirect and every quote char (`"$HOME"/x` names $HOME/x),
+# then judge the token.
 function _bare_token() {
     local tok="$1"
     tok=${tok##*>}
-    tok=${tok#[\"\']}
-    tok=${tok%[\"\']}
+    tok=${tok//[\"\']/}
     printf '%s' "${tok%/}"
 }
 
