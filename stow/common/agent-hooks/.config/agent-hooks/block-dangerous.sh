@@ -340,7 +340,7 @@ paths_concrete() {
     for tok in "${toks[@]}"; do
         case "$tok" in
             --) ;;
-            -S|-W|--staged|--worktree) ;;              # restore's own flags
+            -S|-W|--staged|--worktree|-q|--quiet) ;;   # restore's own flags, and quiet
             -*) return 1 ;;                            # unknown flag -- fail safe
             .|..) return 1 ;;                          # cwd sweep
             "~"*) return 1 ;;                          # tilde -- shell expands to home
@@ -367,16 +367,22 @@ while IFS= read -r seg; do
     fi
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git restore[^;|&]*")
 
-# `git checkout` -- ONLY the explicit-path discard form `checkout -- <paths>`
-# is allowed. branch switching, `-b`, `checkout <ref> -- <path>`, and bare
-# `checkout .` stay blocked.
+# `git checkout` -- ONLY the explicit-path discard form `checkout [-q] -- <paths>`
+# is allowed; -q changes nothing about what gets overwritten. branch switching,
+# `-b`, `checkout <ref> -- <path>`, any other flag, and bare `checkout .` stay
+# blocked. a refused line with ` -- ` in it was a path checkout, so it gets the
+# path reason rather than the branch one.
+CHECKOUT_PATH_REASON="a path checkout must be \`git checkout [-q] -- <explicit-file-paths>\` -- no other flags, no ref, no \`.\`, globs or dirs"
 while IFS= read -r seg; do
     _unfenced branch && break
-    args="${seg#*git checkout}"
-    if [[ "$args" != " -- "* ]] || ! paths_concrete "${args# -- }"; then
-        echo "BLOCKED: only \`git checkout -- <explicit-file-paths>\` is allowed (no branch switching, \`.\`, globs, or dirs). $BRANCH_REASON" >&2
-        exit 2
+    args=$(printf '%s' "${seg#*git checkout}" | sed -E 's/^( (-q|--quiet))+( |$)/ /')
+    [[ "$args" == " -- "* ]] && paths_concrete "${args# -- }" && continue
+    if [[ "$args" == *" -- "* ]]; then
+        echo "BLOCKED: $CHECKOUT_PATH_REASON" >&2
+    else
+        echo "BLOCKED: $BRANCH_REASON" >&2
     fi
+    exit 2
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
 
 # `git rm <path>` deletes the worktree copy. allow `--cached` (index-only) and
