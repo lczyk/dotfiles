@@ -1,11 +1,12 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# gh-retry -- rerun a failed gh actions run, optionally gated on log patterns.
+# gh-retry -- rerun failed gh actions runs, optionally gated on log patterns.
 #
-# watches a run; when it fails, reruns just the failed jobs. if patterns are
-# given, only reruns when one of them appears in the failed-job logs (i.e. the
-# failure looks transient). loops up to N times with a delay between attempts.
+# watches one or more runs in parallel; when one fails, reruns just its failed
+# jobs. if patterns are given, only reruns when one of them appears in the
+# failed-job logs (i.e. the failure looks transient). loops up to N times per
+# run with a delay between attempts.
 #
 # shells out to the user's `gh`.
 
@@ -29,13 +30,14 @@ dry_run = false
 
 parser = OptionParser.new do |o|
   o.banner = <<~USAGE
-    usage: gh-retry [options] <target> [pattern...]
+    usage: gh-retry [options] <target>... [-- pattern...]
 
-    watch a gh actions run; on failure, rerun the failed jobs. if patterns are
+    watch gh actions runs; on failure, rerun the failed jobs. if patterns are
     given, only rerun when one appears in the failed logs. always reruns failed
-    jobs only (never the whole run).
+    jobs only (never the whole run). several targets are watched in parallel
+    and share the patterns; "--" separates the targets from the patterns.
 
-    <target> identifies the run (need not live in the current repo), either as
+    <target> identifies a run (need not live in the current repo), either as
       OWNER/REPO/RUN_ID          e.g. canonical/chisel-releases/29429492601
     or a github url (anything with .../actions/runs/RUN_ID in it), e.g.
       https://github.com/canonical/chisel-releases/actions/runs/29429492601/job/8756?pr=1046
@@ -45,8 +47,10 @@ parser = OptionParser.new do |o|
 
     examples:
       gh-retry canonical/chisel-releases/29429492601
-      gh-retry canonical/chisel-releases/29429492601 \\
+      gh-retry canonical/chisel-releases/29429492601 -- \\
                "context deadline exceeded (Client.Timeout exceeded while awaiting headers)" \\
+               "error: cannot talk to archive:"
+      gh-retry canonical/chisel-releases#1191 canonical/chisel-releases#1192 -- \\
                "error: cannot talk to archive:"
 
     options:
@@ -65,6 +69,11 @@ parser = OptionParser.new do |o|
     exit 0
   end
 end
+
+# everything after "--" is a pattern, kept verbatim: split before option
+# parsing so neither OptionParser nor the -9 rewrite below touches it.
+sep = ARGV.index("--")
+patterns = sep ? ARGV.slice!(sep..).drop(1) : []
 
 # -9 means -N 9 (same idea as nice/kill numeric shorts).
 ARGV.replace(ARGV.flat_map { |arg| arg =~ /\A-(\d+)\z/ ? ["-N", $1] : [arg] })
@@ -92,14 +101,12 @@ def parse_target(target)
   end
 end
 
-target = ARGV.shift
-parsed = parse_target(target)
-if parsed.nil?
-  warn "gh-retry: could not parse target #{target.inspect} -- expected OWNER/REPO/RUN_ID, a github run url, or a pull request"
-  exit 2
+targets = ARGV.map do |target|
+  parse_target(target) || begin
+    warn "gh-retry: could not parse target #{target.inspect} -- expected OWNER/REPO/RUN_ID, a github run url, or a pull request"
+    exit 2
+  end
 end
-
-patterns = ARGV.dup
 
 # --- colours ----------------------------------------------------------------
 
@@ -112,10 +119,17 @@ def colorize(code, str, bold: false)
   USE_COLOR ? "\e[#{attr}m#{str}\e[0m" : str
 end
 
-def info(msg)  warn(colorize("34", "[gh-retry] ") + msg) end  # blue
-def good(msg)  warn(colorize("32", "[gh-retry] ") + msg) end  # green
-def warn_(msg) warn(colorize("33", "[gh-retry] ") + msg) end  # yellow
-def bad(msg)   warn(colorize("31", "[gh-retry] ") + msg) end  # red
+# with several targets each watcher thread carries a label so the interleaved
+# lines can be told apart.
+def prefix
+  label = Thread.current[:label]
+  label ? "[gh-retry #{label}] " : "[gh-retry] "
+end
+
+def info(msg)  warn(colorize("34", prefix) + msg) end  # blue
+def good(msg)  warn(colorize("32", prefix) + msg) end  # green
+def warn_(msg) warn(colorize("33", prefix) + msg) end  # yellow
+def bad(msg)   warn(colorize("31", prefix) + msg) end  # red
 
 def color_status(status)
   code = case status
@@ -136,6 +150,10 @@ end
 
 # --- gh helpers -------------------------------------------------------------
 
+# raised by the helpers when a target cannot be watched any further; the
+# watcher prints the message and marks the target as given up.
+class GiveUp < StandardError; end
+
 def gh_capture(repo, *args)
   out, status = Open3.capture2e("gh", *args, "--repo", repo)
   [out, status.success?]
@@ -146,10 +164,7 @@ end
 # the watcher can wait or report success. multiple failed runs: warn, take latest.
 def resolve_pr_run(repo, number)
   out, ok = gh_capture(repo, "pr", "view", number, "--json", "statusCheckRollup")
-  unless ok
-    bad "failed to look up #{repo}##{number}:\n#{out}"
-    exit 1
-  end
+  raise GiveUp, "failed to look up #{repo}##{number}:\n#{out}" unless ok
 
   rollup = JSON.parse(out)["statusCheckRollup"] || []
   runs = {}
@@ -168,10 +183,7 @@ def resolve_pr_run(repo, number)
     entry["failed"] = true if %w[failure cancelled timed_out].include?(conclusion)
   end
 
-  if runs.empty?
-    bad "no actions runs found on #{repo}##{number}"
-    exit 1
-  end
+  raise GiveUp, "no actions runs found on #{repo}##{number}" if runs.empty?
 
   failed = runs.values.select { |r| r["failed"] }
   chosen = (failed.empty? ? runs.values : failed).max_by { |r| r["stamp"] }
@@ -209,10 +221,7 @@ def state_for(repo, run_id)
     end
 
     attempts += 1
-    if attempts > POLL_QUERY_RETRIES
-      bad "failed to query run #{run_id} after #{POLL_QUERY_RETRIES} retries:\n#{out}"
-      exit 1
-    end
+    raise GiveUp, "failed to query run #{run_id} after #{POLL_QUERY_RETRIES} retries:\n#{out}" if attempts > POLL_QUERY_RETRIES
     warn_ "poll failed (attempt #{attempts}/#{POLL_QUERY_RETRIES}), retrying in #{POLL_QUERY_BACKOFF}s"
     sleep POLL_QUERY_BACKOFF
   end
@@ -307,92 +316,122 @@ def match_pattern(logs, patterns, ignore_case)
   end
 end
 
-# --- resolve target ---------------------------------------------------------
+# --- watch one target -------------------------------------------------------
 
-kind, repo, ident = parsed
-run_id = kind == :pr ? resolve_pr_run(repo, ident) : ident
+# runs the retry loop for one target. returns true once the run passes (or a
+# dry run stops before its first write), false when it gives up.
+def watch(parsed, patterns, stop_patterns, cfg)
+  Thread.current[:label] = cfg[:label]
+  retries, delay, poll, timeout, ignore_case, cancel, dry_run =
+    cfg.values_at(:retries, :delay, :poll, :timeout, :ignore_case, :cancel, :dry_run)
 
-# first line: the resolved run url, plain and copy-pasteable.
-warn "https://github.com/#{repo}/actions/runs/#{run_id}"
+  kind, repo, ident = parsed
+  run_id = kind == :pr ? resolve_pr_run(repo, ident) : ident
 
-# --- main loop --------------------------------------------------------------
+  # first line: the resolved run url, plain and copy-pasteable.
+  warn "https://github.com/#{repo}/actions/runs/#{run_id}"
 
-attempts_left = retries
-deadline = timeout.positive? ? Time.now + timeout : nil
+  attempts_left = retries
+  deadline = timeout.positive? ? Time.now + timeout : nil
 
-loop do
-  info "watching run #{run_id} in #{repo} ..."
-  state = wait_for_actionable(repo, run_id, poll, cancel, deadline)
+  loop do
+    info "watching run #{run_id} in #{repo} ..."
+    state = wait_for_actionable(repo, run_id, poll, cancel, deadline)
 
-  if state == :timeout
-    bad "overall timeout (#{timeout}s) exceeded while waiting on run #{run_id} -- giving up"
-    exit 1
-  elsif state == "success"
-    good "run #{run_id} passed"
-    exit 0
-  elsif state == :cancel
-    if dry_run
-      good "[dry-run] would cancel run #{run_id} (failures + queued, nothing running), then rerun failed jobs"
-      exit 0
-    end
-    warn_ "run #{run_id} stalled (failures + queued, nothing running) -- cancelling to force rerun"
-    gh_stream(repo, "run", "cancel", run_id)
-    sleep poll # let the cancellation propagate before we re-poll
-    # loop back; once the run reports completed we can rerun.
-    next
-  elsif state != :retry
-    bad "run #{run_id} finished: #{state} -- nothing failed to rerun, giving up"
-    exit 1
-  end
-
-  warn_ "run #{run_id} completed with failures"
-
-  unless patterns.empty? && stop_patterns.empty?
-    logs = failed_logs(repo, run_id)
-    if logs.strip.empty?
-      # logs never materialised -- we can't classify the failure. don't treat
-      # "couldn't read the logs" as "not transient"; assume transient and rerun.
-      warn_ "failed logs empty/unavailable -- can't classify, assuming transient and rerunning"
-    else
-      # deny-list wins: a stop-on match means a real failure, give up now even
-      # if a retry pattern also matches somewhere in the noisy log.
-      aborted = match_pattern(logs, stop_patterns, ignore_case)
-      unless aborted.nil?
-        bad "stop-on pattern matched: #{aborted.inspect} -- treating as a real failure, giving up"
-        exit 1
+    if state == :timeout
+      bad "overall timeout (#{timeout}s) exceeded while waiting on run #{run_id} -- giving up"
+      return false
+    elsif state == "success"
+      good "run #{run_id} passed"
+      return true
+    elsif state == :cancel
+      if dry_run
+        good "[dry-run] would cancel run #{run_id} (failures + queued, nothing running), then rerun failed jobs"
+        return true
       end
+      warn_ "run #{run_id} stalled (failures + queued, nothing running) -- cancelling to force rerun"
+      gh_stream(repo, "run", "cancel", run_id)
+      sleep poll # let the cancellation propagate before we re-poll
+      # loop back; once the run reports completed we can rerun.
+      next
+    elsif state != :retry
+      bad "run #{run_id} finished: #{state} -- nothing failed to rerun, giving up"
+      return false
+    end
 
-      unless patterns.empty?
-        matched = match_pattern(logs, patterns, ignore_case)
-        if matched.nil?
-          bad "no retry pattern matched failed logs -- not transient, giving up"
-          exit 1
+    warn_ "run #{run_id} completed with failures"
+
+    unless patterns.empty? && stop_patterns.empty?
+      logs = failed_logs(repo, run_id)
+      if logs.strip.empty?
+        # logs never materialised -- we can't classify the failure. don't treat
+        # "couldn't read the logs" as "not transient"; assume transient and rerun.
+        warn_ "failed logs empty/unavailable -- can't classify, assuming transient and rerunning"
+      else
+        # deny-list wins: a stop-on match means a real failure, give up now even
+        # if a retry pattern also matches somewhere in the noisy log.
+        aborted = match_pattern(logs, stop_patterns, ignore_case)
+        unless aborted.nil?
+          bad "stop-on pattern matched: #{aborted.inspect} -- treating as a real failure, giving up"
+          return false
         end
-        info "matched pattern: #{matched.inspect}"
+
+        unless patterns.empty?
+          matched = match_pattern(logs, patterns, ignore_case)
+          if matched.nil?
+            bad "no retry pattern matched failed logs -- not transient, giving up"
+            return false
+          end
+          info "matched pattern: #{matched.inspect}"
+        end
       end
     end
+
+    if dry_run
+      good "[dry-run] would rerun failed jobs for run #{run_id} (gh run rerun #{run_id} --failed)"
+      return true
+    end
+
+    if attempts_left <= 0
+      bad "retries exhausted (#{retries}) -- giving up"
+      return false
+    end
+
+    attempts_left -= 1
+    attempt = retries - attempts_left
+    warn_ "rerunning failed jobs (attempt #{attempt}/#{retries})"
+
+    unless gh_stream(repo, "run", "rerun", run_id, "--failed")
+      bad "gh run rerun failed -- giving up"
+      return false
+    end
+
+    sleep delay if delay.positive?
+    # don't let the next watch iteration read the pre-rerun completed state.
+    wait_until_restarted(repo, run_id, poll)
   end
-
-  if dry_run
-    good "[dry-run] would rerun failed jobs for run #{run_id} (gh run rerun #{run_id} --failed)"
-    exit 0
-  end
-
-  if attempts_left <= 0
-    bad "retries exhausted (#{retries}) -- giving up"
-    exit 1
-  end
-
-  attempts_left -= 1
-  attempt = retries - attempts_left
-  warn_ "rerunning failed jobs (attempt #{attempt}/#{retries})"
-
-  unless gh_stream(repo, "run", "rerun", run_id, "--failed")
-    bad "gh run rerun failed -- giving up"
-    exit 1
-  end
-
-  sleep delay if delay.positive?
-  # don't let the next watch iteration read the pre-rerun completed state.
-  wait_until_restarted(repo, run_id, poll)
+rescue GiveUp => e
+  bad e.message
+  false
 end
+
+# --- main -------------------------------------------------------------------
+
+cfg = { retries: retries, delay: delay, poll: poll, timeout: timeout,
+        ignore_case: ignore_case, cancel: cancel, dry_run: dry_run }
+
+# one watcher thread per target, labelled only when there is more than one.
+threads = targets.map do |parsed|
+  kind, _repo, ident = parsed
+  label = targets.size > 1 ? (kind == :pr ? "##{ident}" : ident) : nil
+  Thread.new { watch(parsed, patterns, stop_patterns, cfg.merge(label: label)) }
+end
+results = threads.map(&:value)
+
+if targets.size > 1
+  targets.zip(results).each do |(kind, repo, ident), ok|
+    name = kind == :pr ? "#{repo}##{ident}" : "#{repo}/#{ident}"
+    ok ? good("#{name} ok") : bad("#{name} gave up")
+  end
+end
+exit(results.all? ? 0 : 1)
