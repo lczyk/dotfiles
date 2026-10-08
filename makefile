@@ -68,11 +68,11 @@ list-stow:  ## List dotfile packages discovered for stow
 	@for d in $(PROFILE_DIRS); do echo "  $$d"; done
 
 .PHONY: normalize
-normalize:  ## Restage filtered agent settings and config
+normalize:  ## Restage filtered agent settings and config (whole files, working-tree edits too)
 	git add --renormalize $(NORMALIZE_FILES)
 	@git diff --cached --quiet -- $(NORMALIZE_FILES) \
 		&& echo "agent settings already normalized" \
-		|| echo "agent settings restaged -- commit to record"
+		|| echo "agent settings restaged, working-tree edits included -- check git diff --cached, then commit"
 
 .PHONY: test
 test: test-cargo test-hooks test-agents test-statusline test-fish test-local test-debx test-git test-py test-auto-commit test-gh-retry  ## Run all tests (rust + bats + pytest + self-tests)

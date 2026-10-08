@@ -40,7 +40,8 @@ claude-code rewrites transient keys (`effortLevel`, `model`, `theme`, `tui`, `vo
 
 to add a newly-discovered transient key: append it to the `del(...)` list in the
 filter def, then `make normalize` and commit. the make target is idempotent --
-restages all filtered agent settings/config files, no-op if already clean.
+it restages each filtered agent settings/config file whole, so unrelated
+working-tree edits in them get staged too; a no-op if already clean.
 
 caveat: needs `jq`, and the filter def must be live (`make stow`) before committing that file from a fresh machine. the filter is marked `required`, so a missing def hard-fails `git add` rather than silently staging the raw file with the transient keys still in it.
 
@@ -66,9 +67,9 @@ blocks agents outright unless the session carries `AGENT_UNFENCE=push`, and
 then allows fast-forward branch pushes only; `pre-commit` and `commit-msg`
 reject rather than warn).
 they detect that via `AGENT_SESSION=1`, which the claude and codex configs
-inject into spawned shells, falling back to the native `CLAUDECODE` and
-`OPENCODE_PID` markers. copilot exposes no env to spawned shells, so it lands on
-the human path -- `block-dangerous.sh` still fences it either way.
+inject into spawned shells, falling back to the native `CLAUDECODE`,
+`COPILOT_CLI` (copilot sets it in the shells it spawns) and `OPENCODE_PID`
+markers.
 
 `workflow.md` reaches each harness through that harness's native instruction
 path: `~/.claude/CLAUDE.md`, `~/.copilot/copilot-instructions.md`, and
@@ -81,8 +82,13 @@ back to reading `~/.claude/CLAUDE.md`, a migration-compat path that
 safety policies use a harness-neutral request/verdict contract through
 `~/.config/agent-hooks/evaluate.sh`. each harness adapter normalizes its native
 tool payload, invokes the evaluator, then translates a denial into that
-harness's blocking mechanism. shared policies contain no harness names,
-harness payload fields, or harness-specific exit-code assumptions.
+harness's blocking mechanism. claude and codex share one bash adapter,
+`agent-hooks/adapter.sh`, and the policies, git hooks and unfence badge share
+their helpers through `agent-hooks/lib.sh`, which every caller loads
+fail-closed. shared policies take no harness payload fields and make no
+harness-specific exit-code assumptions; harness names appear in them only as
+data -- the config paths `protect-hooks.sh` guards and the session markers the
+git hooks read.
 
 the codex stow package manages `~/.codex/AGENTS.md`, `~/.codex/hooks.json`,
 `~/.codex/skills/`, and `~/.codex/config.toml`. codex writes machine-local

@@ -15,9 +15,9 @@
 #   - software / package installs
 #   - remote envs (ssh, scp, kubectl exec, ... -- liftable, see AGENT_UNFENCE=remote)
 #
-# the agent is fenced to read-only git/gh by default. when the user
-# wants a commit / push / PR, they run it themselves or temporarily
-# disable this hook.
+# reads are free and commits are the agent's to make (per prompt, checked by
+# the git hooks); every other git / gh write is fenced here unless the user
+# granted a capability at launch.
 
 # shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$(dirname "$(readlink -f "$0")")/lib.sh" 2>/dev/null ||
@@ -153,9 +153,9 @@ BRANCH_REASON="stay on the current branch -- don't create or switch branches / w
 # history-mutating git ops -- rewrite or duplicate commits, distinct risk
 # class from branch nav (which never loses work). reflog-recoverable but
 # real risk: conflicts, duplicate commits, wrong base. `git reset --soft`
-# belongs here too but is handled as a special case below (it's the one
-# `reset` form that touches neither index nor worktree); --hard / --mixed /
-# bare `reset` stay in GIT_PATTERNS, ungated by any capability.
+# belongs here too but has its own per-command check below (the one `reset`
+# form that touches neither index nor worktree), which also blocks every
+# other reset under any capability.
 HISTORY_PATTERNS=(
     "git rebase"
     "(^|[ ;|&])git cherry-pick( |$)"
