@@ -29,6 +29,17 @@ _unfenced() {
     return 1
 }
 
+# the AGENT_UNFENCE tokens a capability check can match, one per line: split
+# on commas and kept only when a bare word -- `branch, meta` grants branch.
+_unfence_tokens() {
+    local tok toks
+    IFS=, read -ra toks <<< "$AGENT_UNFENCE"
+    for tok in "${toks[@]}"; do
+        [[ "$tok" =~ ^[A-Za-z0-9_-]+$ ]] && printf '%s\n' "$tok"
+    done
+    return 0
+}
+
 # agent sessions take the strict path in the git hooks. AGENT_SESSION is set
 # by our own harness configs; CLAUDECODE, COPILOT_CLI and OPENCODE_PID are
 # native fallbacks.
