@@ -100,6 +100,8 @@ GIT_PATTERNS=(
     "git filter-branch"
     "git filter-repo"
     "git reflog (expire|delete)"
+    # plumbing checkout: overwrites worktree files from the index
+    "(^|[ ;|&])git checkout-index( |$)"
     "git gc --prune"
     # ref plumbing -- create / move / delete branch pointers directly
     "(^|[ ;|&])git update-ref( |$)"
@@ -330,6 +332,17 @@ done < <(printf '%s' "$COMMAND" | sed -E 's/gh api/;gh api/g' | grep -oE -- "(^|
 # NOTE: word-splitting heuristic, not a shell parser. quoted paths with
 # spaces split into odd tokens but still land in the concrete branch. the
 # -d directory check is cwd-dependent (best effort).
+_concrete_path() {
+    case "$1" in
+        .|..) return 1 ;;                          # cwd sweep
+        "~"*) return 1 ;;                          # tilde -- shell expands to home
+        :*) return 1 ;;                            # pathspec magic
+        *'*'*|*'?'*|*'['*|*'$'*|*'`'*) return 1 ;; # glob / expansion
+        */) return 1 ;;                            # explicit dir
+    esac
+    [[ ! -d "$1" ]]                                # dir sweep (best effort)
+}
+
 paths_concrete() {
     local n=0 tok toks
     # read -ra (not bare $1 expansion) so glob tokens are inspected
@@ -337,25 +350,19 @@ paths_concrete() {
     read -ra toks <<< "$1"
     for tok in "${toks[@]}"; do
         case "$tok" in
-            --) ;;
-            -S|-W|--staged|--worktree|-q|--quiet) ;;   # restore's own flags, and quiet
-            -*) return 1 ;;                            # unknown flag -- fail safe
-            .|..) return 1 ;;                          # cwd sweep
-            "~"*) return 1 ;;                          # tilde -- shell expands to home
-            :*) return 1 ;;                            # pathspec magic
-            *'*'*|*'?'*|*'['*|*'$'*|*'`'*) return 1 ;; # glob / expansion
-            */) return 1 ;;                            # explicit dir
-            *) [[ -d "$tok" ]] && return 1             # dir sweep (best effort)
-               ((n++)) ;;
+            --|-S|-W|--staged|--worktree|-q|--quiet) continue ;;   # restore's own flags, and quiet
+            -*) return 1 ;;                                        # unknown flag -- fail safe
         esac
+        _concrete_path "$tok" || return 1
+        ((n++))
     done
-    ((n > 0))                                          # at least one real path
+    ((n > 0))                                                      # at least one real path
 }
 
 # `git restore` -- allow index-only (--staged w/out --worktree, worktree
 # untouched) and explicit-path discard; block broad forms.
 while IFS= read -r seg; do
-    args="${seg#*git restore}"
+    args="${seg#git restore}"
     if [[ "$args" == *--staged* && "$args" != *--worktree* ]]; then
         continue
     fi
@@ -363,7 +370,7 @@ while IFS= read -r seg; do
         echo "BLOCKED: \`git restore\` discards more than named files. \`git restore <explicit-file-paths>\` is allowed -- no \`.\`, globs, dirs, or --source." >&2
         exit 2
     fi
-done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git restore[^;|&]*")
+done < <(_git_cmds restore)
 
 # `git checkout` -- ONLY the explicit-path discard form `checkout [-q] -- <paths>`
 # is allowed; -q changes nothing about what gets overwritten. branch switching,
@@ -389,10 +396,7 @@ _switch_ok() {
                 -*) return 1 ;;
             esac
         fi
-        case "$tok" in
-            .|..|"~"*|:*|*'*'*|*'?'*|*'['*|*'$'*|*'`'*|*/) return 1 ;;
-            *) [[ -d "$tok" ]] && return 1 ;;
-        esac
+        _concrete_path "$tok" || return 1
     done
     return 0
 }
@@ -420,7 +424,7 @@ fi
 
 while IFS= read -r seg; do
     _unfenced branch && break
-    args=$(printf '%s' "${seg#*git checkout}" | sed -E 's/^( (-q|--quiet))+( |$)/ /')
+    args=$(printf '%s' "${seg#git checkout}" | sed -E 's/^( (-q|--quiet))+( |$)/ /')
     [[ "$args" == " -- "* ]] && paths_concrete "${args# -- }" && continue
     if [[ "$args" == *" -- "* ]]; then
         echo "BLOCKED: $CHECKOUT_PATH_REASON" >&2
@@ -428,7 +432,7 @@ while IFS= read -r seg; do
         echo "BLOCKED: $BRANCH_REASON" >&2
     fi
     exit 2
-done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
+done < <(_git_cmds checkout)
 
 # `git replace` with no arguments, -l or --list only lists; anything else
 # rewrites what an object resolves to.
