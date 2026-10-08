@@ -522,8 +522,9 @@ done < <(_git_cmds reset)
 
 # `git push` -- liftable with the push capability, minus the forms that rewrite
 # or delete remote refs, skip the pre-push hook, push in bulk, or name a url or
-# path instead of a configured remote. those stay fenced under every capability
-# (pre-push draws the same line for aliases and scripts the text match misses).
+# path instead of a configured remote. those stay fenced under every capability.
+# the git pre-push hook draws the same line on the refs a push really sends,
+# for the aliases and scripts this text match misses -- keep the two in step.
 # git takes any unambiguous prefix of a long option, so each flag is matched
 # from its shortest accepted spelling: --force-w(ith-lease), --force-i(f-includes),
 # --de(lete), --m(irror), --pru(ne), --al(l), --b(ranches), --ta(gs),

@@ -7,6 +7,12 @@
 #
 # git invokes pre-push with: <remote-name> <remote-url>
 # and feeds lines on stdin: <local-ref> <local-sha> <remote-ref> <remote-sha>
+#
+# the agent rules are drawn twice, on purpose: this hook judges the refs a
+# push really sends, whatever alias or script sent them; the push section of
+# agent-hooks/block-dangerous.sh judges the command text, the only place a
+# --no-verify (which skips this hook), a url target or a -c one-shot shows.
+# a change to one belongs in the other.
 
 # the agent / capability helpers live with the agent policies.
 _lib="$(dirname "$(readlink -f "$0")")/../../../../agent-hooks/.config/agent-hooks/lib.sh"
