@@ -129,6 +129,22 @@ fire() {
     done
 }
 
+# -- git rm -------------------------------------------------------------
+# rm deletes the worktree copy; only --cached and dry runs are excused, and
+# only by flags on that same rm.
+
+@test "git rm is judged on its own flags, not the rest of the line" {
+    for cmd in "git rm src/main.go && git log -n 3" "git rm x; git diff --cached" \
+        "git rm -n x; git rm y" "git rm -r src | head -n 5" "git rm x --dry-runner"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    for cmd in "git rm --cached x && git log -n 3" "git rm -n x" "git rm -r --dry-run src" "git rm --cached -r src"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
 # -- stash --------------------------------------------------------------
 
 @test "allows git stash push / pop / list / show" {
