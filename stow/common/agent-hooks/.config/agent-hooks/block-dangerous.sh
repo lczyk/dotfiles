@@ -149,6 +149,10 @@ GIT_WRITE_PATTERNS=(
     # remote config writes -- set-url could silently redirect the user's own
     # future pushes.
     "(^|[ ;|&])git remote (add|remove|rm|rename|set-url|set-head|set-branches|prune)"
+    # commit plumbing: objects and refs written without the commit hooks.
+    # `git replace` has its own case below -- its bare and -l forms list.
+    "(^|[ ;|&])git commit-tree( |$)"
+    "(^|[ ;|&])git notes (add|append|copy|edit|merge|prune|remove)( |$)"
 )
 GIT_WRITE_REASON="these git ops are user-run -- commits on the current branch ARE allowed, but run push / tag / etc yourself or disable the hook"
 
@@ -188,11 +192,10 @@ HISTORY_PATTERNS=(
 HISTORY_REASON="git rebase / cherry-pick rewrite or duplicate commits -- user prevents this by default. (the user can lift this for a session with env AGENT_UNFENCE=history.)"
 
 # wide `git add` -- agent must stage explicit paths, not sweep the worktree.
-# blocks -A / --all / -u / --update / `.` / `*` (and combined short flags
-# containing A or u, e.g. -Au, -Av). pass file paths explicitly instead.
-GIT_ADD_PATTERNS=(
-    "(^|[ ;|&])git add (-[A-Za-z]*[Au][A-Za-z]*|--all|--update|\\.|\\*)( |$)"
-)
+# blocks -A / --all / -u / --update / --no-ignore-removal (and short-flag
+# clusters containing A or u, e.g. -Au, -Av) and the `.` / `..` / `*` / `:/`
+# sweeps, wherever they sit in the add. pass file paths explicitly instead.
+GIT_ADD_WIDE_RE=" (-[A-Za-z]*[Au][A-Za-z]*|--all|--update|--no-ignore-removal|\\.|\\.\\.|\\*|:/)( |$)"
 GIT_ADD_REASON="stage explicit paths only -- wide \`git add\` may grab unrelated wip / scratch files"
 
 # any write `gh` op. read ops (view/list/status/api GET) are fine.
@@ -304,7 +307,12 @@ check "$GIT_REASON"       "${GIT_PATTERNS[@]}"
 check "$GIT_WRITE_REASON" "${GIT_WRITE_PATTERNS[@]}"
 _unfenced branch  || check "$BRANCH_REASON"  "${BRANCH_PATTERNS[@]}"
 _unfenced history || check "$HISTORY_REASON" "${HISTORY_PATTERNS[@]}"
-check "$GIT_ADD_REASON"   "${GIT_ADD_PATTERNS[@]}"
+while IFS= read -r cmd; do
+    args=" ${cmd#git add} "
+    printf '%s' "${args//[\"\']/}" | grep -qE -- "$GIT_ADD_WIDE_RE" || continue
+    echo "BLOCKED: $GIT_ADD_REASON" >&2
+    exit 2
+done < <(_git_cmds add)
 check "$GH_WRITE_REASON"  "${GH_WRITE_PATTERNS[@]}"
 
 # `gh issue develop` creates a linked branch, but `--list` / `-l` only reads
@@ -440,6 +448,16 @@ while IFS= read -r seg; do
     exit 2
 done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git checkout[^;|&]*")
 
+# `git replace` with no arguments, -l or --list only lists; anything else
+# rewrites what an object resolves to.
+while IFS= read -r cmd; do
+    args="${cmd#git replace}"
+    [[ -z "${args// /}" ]] && continue
+    printf '%s' "$args" | grep -qE -- "^ (-l|--list|--format=[^ ]*)( |$)" && continue
+    echo "BLOCKED: \`git replace\` rewrites what objects resolve to. $GIT_WRITE_REASON" >&2
+    exit 2
+done < <(_git_cmds replace)
+
 # `git rm <path>` deletes the worktree copy. allow `--cached` (index-only) and
 # `-n` / `--dry-run` (preview) -- on that rm, not anywhere on the line.
 while IFS= read -r cmd; do
@@ -541,7 +559,7 @@ while IFS= read -r seg; do
         echo "BLOCKED: git push arguments must be literal (no \$(...), backticks or variables); git push origin HEAD names the current branch" >&2
         exit 2
     fi
-done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git push( [^;|&]*|$)")
+done < <(_git_cmds push)
 
 # `gh pr create` / `gh issue create`, and `gh pr edit` / `gh issue edit` of
 # the title and body -- liftable with the pr / issue capability. the target
