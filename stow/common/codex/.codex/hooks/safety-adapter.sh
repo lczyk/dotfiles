@@ -34,22 +34,19 @@ function _patch_request() {
         | select(type == "string")
     ') || return 1
 
+    # deletes are writes too: a Delete File line, or the `--- a/` side of a
+    # unified diff (the old name of a rename, the file a /dev/null target drops).
     paths=$(
         printf '%s\n' "$patch" |
             sed -nE \
-                -e 's/^\*\*\* (Add|Update) File: (.*)$/\2/p' \
+                -e 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' \
                 -e 's/^\*\*\* Move to: (.*)$/\1/p' \
-                -e 's/^\+\+\+ b\/(.*)$/\1/p' |
+                -e 's/^\+\+\+ b\/(.*)$/\1/p' \
+                -e 's/^--- a\/(.*)$/\1/p' |
             jq -Rsc 'split("\n") | map(select(length > 0)) | unique'
     ) || return 1
 
-    if [ "$(printf '%s' "$paths" | jq 'length')" -eq 0 ]; then
-        if printf '%s\n' "$patch" | grep -qE -- '^\*\*\* Delete File: |^\+\+\+ /dev/null$'; then
-            printf '{"decision":"allow"}'
-            return
-        fi
-        return 1
-    fi
+    [ "$(printf '%s' "$paths" | jq 'length')" -gt 0 ] || return 1
 
     jq -cn \
         --argjson paths "$paths" \
@@ -62,10 +59,6 @@ function _evaluate() {
     local status
     local decision
     local reason
-
-    if [ "$(printf '%s' "$request" | jq -r '.decision // empty')" = "allow" ]; then
-        return
-    fi
 
     verdict=$(printf '%s' "$request" | "$ENGINE")
     status=$?

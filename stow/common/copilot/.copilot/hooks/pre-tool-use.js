@@ -66,21 +66,19 @@ function patchFrom(args) {
   return null;
 }
 
+// deletes are writes too: a Delete File line, or the `--- a/` side of a
+// unified diff (the old name of a rename, the file a /dev/null target drops).
 function patchPaths(patch) {
   const paths = new Set();
   for (const line of patch.split(/\r?\n/)) {
-    const custom = line.match(/^\*\*\* (?:Add|Update) File: (.*)$/) ||
+    const custom = line.match(/^\*\*\* (?:Add|Update|Delete) File: (.*)$/) ||
       line.match(/^\*\*\* Move to: (.*)$/);
     if (custom) paths.add(custom[1]);
 
-    const unified = line.match(/^\+\+\+ b\/(.*)$/);
+    const unified = line.match(/^\+\+\+ b\/(.*)$/) || line.match(/^--- a\/(.*)$/);
     if (unified) paths.add(unified[1]);
   }
   return [...paths];
-}
-
-function isDeleteOnlyPatch(patch) {
-  return /^\*\*\* Delete File: |^\+\+\+ \/dev\/null$/m.test(patch);
 }
 
 function emitDenial(reason) {
@@ -146,7 +144,6 @@ function main() {
 
   const uniquePaths = [...new Set(paths)];
   if (uniquePaths.length === 0) {
-    if (patch && isDeleteOnlyPatch(patch)) return;
     emitDenial(`cannot inspect Copilot ${tool} write destinations`);
     return;
   }
