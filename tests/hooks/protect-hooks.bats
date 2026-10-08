@@ -75,6 +75,7 @@ fire_write() {
 @test "blocks Write to every git config that can set core.hooksPath" {
     for path in "$HOME/.config/git/config" "$HOME/.config/git/config.local" "$HOME/.gitconfig" \
         "$REPO/.git/config" "/tmp/ai/x/.git/config" "/tmp/ai/x/.git/config.worktree" \
+        "$REPO/.git/worktrees/wt/config.worktree" "/tmp/ai/x/.git/modules/sub/config" \
         "$REPO/stow/common/git/.config/git/config" "$REPO/stow/mac/git/.config/git/config.local"; do
         run fire_write "$path"
         [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }

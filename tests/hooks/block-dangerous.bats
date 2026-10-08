@@ -938,7 +938,8 @@ git push"
 
 @test "branch still lifts the create and switch forms" {
     for cmd in "git branch feature/x origin/main" "git branch -c main copy" "git branch -u origin/x" \
-        "git switch -c feature/x" "git switch --detach v1" "git checkout -q -b feature/x origin/main" \
+        "git switch -c feature/x" "git switch --create feature/x" "git switch -" "git checkout -" \
+        "git switch --detach v1" "git checkout -q -b feature/x origin/main" \
         "git checkout feature/x" "git checkout -q -- a.txt" "git checkout -t origin/x" \
         "git worktree add -b x ../wt main"; do
         AGENT_UNFENCE=branch run fire "$cmd"
