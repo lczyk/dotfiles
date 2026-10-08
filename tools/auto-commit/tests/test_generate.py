@@ -364,6 +364,11 @@ def test_generate_large_diff_stays_one_call_and_keeps_every_file():
     assert "truncated" in prompt
 
 
+def test_rules_have_no_literal_escapes_and_ban_backticks():
+    assert "\\n" not in generate._RULES
+    assert "no backticks" in generate._RULES
+
+
 _TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
 
 if __name__ == "__main__":

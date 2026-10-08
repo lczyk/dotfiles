@@ -63,7 +63,7 @@ _RULES_COMMON = (
     + "".join(f"  {tag}: {gloss}\n" for tag, gloss in TAG_GLOSS.items())
     + "pick the narrowest one that covers the whole diff; `chore` is the fallback "
     "when nothing narrower fits, not a tie-breaker. "
-    "message: `<subject>` or `<subject>\\n\\n<body>`. "
+    "message: `<subject>` alone, or `<subject>`, a blank line, then `<body>`. "
     "subject: imperative, no trailing period, <= 72 chars. a terse reminder of what the "
     "change is about, not a description -- don't name specific functions/classes/variables, "
     "and don't pad with framing verbs (add, implement, introduce, support for) the tag "
@@ -72,7 +72,7 @@ _RULES_COMMON = (
     "wrap ~72 chars. "
     "avoid filler/marketing words (robust, seamless, leverage, crucial) and tacked-on "
     "'-ing' clauses (ensuring..., highlighting..., reflecting...). no emoji. "
-    "ascii only (write -- not an em-dash, -> not an arrow)."
+    "ascii only (write -- not an em-dash, -> not an arrow). no backticks anywhere."
 )
 
 # personal voice/locale -- edit (or empty) to taste; concatenated onto the common rules.
