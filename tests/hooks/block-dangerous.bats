@@ -145,6 +145,44 @@ fire() {
     done
 }
 
+# -- wide git add, push before a separator, commit plumbing ---------------
+
+@test "blocks a wide git add wherever the wide flag or path sits" {
+    for cmd in "git add -v -A" "git add -- ." "git add -f ." "git add src \".\"" "git add -Av" \
+        "git add :/" "git add x && git add -u" "git add -- .." "git add --no-ignore-removal src"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    for cmd in "git add -- a.txt b.txt" "git add -v a.txt" "git add -N new.txt" "git add src/dir/" "git add -p a.txt"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "a push right before a separator is still a push" {
+    for cmd in "git push;echo hi" "git push&&echo hi" "git push|cat"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    AGENT_UNFENCE=push run fire "git push --force;echo hi"
+    [ "$status" -eq 2 ]
+    AGENT_UNFENCE=push run fire "git push;echo hi"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks commit plumbing writes, reads stay free" {
+    for cmd in "git commit-tree HEAD^{tree} -m x" "git replace HEAD~1 HEAD" "git replace -d abc1234" \
+        "git replace --graft HEAD" "git notes add -m x" "git notes remove HEAD" "git notes append -m y"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    for cmd in "git replace" "git replace -l" "git replace --list 'v*'" "git notes show HEAD" "git notes list" \
+        "git notes" "git commit-graph write" "git commit -F /tmp/ai/m"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
 # -- stash --------------------------------------------------------------
 
 @test "allows git stash push / pop / list / show" {
