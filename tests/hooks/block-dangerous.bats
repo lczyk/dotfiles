@@ -271,6 +271,55 @@ fire() {
     [ "$status" -eq 2 ]
 }
 
+# -- tag / branch / config: known reads through, everything else fenced ----
+# the read forms are a small closed set and the write forms are not, so a
+# write flag after a read flag, a long write option or a --file target must
+# not pass.
+
+@test "git tag: only the listing and verify forms read" {
+    for cmd in "git tag -l -d v1" "git tag --delete v1" "git tag -n -f v1" "git tag --annotate v2 -m x" \
+        "git tag v2" "git tag -s v2 -m x" "git tag --contains HEAD -d v1" "git tag --merged -d v1" \
+        "git tag --force v1 HEAD"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    for cmd in "git tag" "git tag -l" "git tag -l 'v*'" "git tag --list --sort=-v:refname" "git tag -n5" \
+        "git tag --contains HEAD" "git tag --points-at HEAD" "git tag -v v1" "git tag --merged main --sort=-creatordate"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "git branch: only the listing forms read without the capability" {
+    for cmd in "git branch -v -d x" "git branch --list -D x" "git branch -vv --delete x" "git branch new" \
+        "git branch -a -m x y" "git branch --contains HEAD -f main"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    for cmd in "git branch" "git branch -a" "git branch -vv" "git branch -av" "git branch --show-current" \
+        "git branch --list 'feat*'" "git branch -r --contains HEAD" "git branch --merged main" \
+        "git branch --format='%(refname:short)'" "git branch --sort=-committerdate"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "git config: reads in any scope, writes through any flag fenced" {
+    for cmd in "git config --local --unset x.y" "git config --file .git/config core.hooksPath /dev/null" \
+        "git config --file=.git/config a.b c" "git config -f .git/config a.b c" "git config --replace-all a.b c" \
+        "git config set a.b c" "git config edit" "git config -e" "git config --global --add a.b c" \
+        "git config unset a.b" "git config --get-regexp x --unset y"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    for cmd in "git config --global --get user.name" "git config --global user.name" "git config -l" \
+        "git config --get-regexp '^alias'" "git config --list --show-origin" "git config get user.name" \
+        "git config list" "git config --file .gitmodules --get-regexp path" "git config --type=bool --get core.bare"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
 # -- git config injection: -c / --config-env ------------------------------
 # checked pre-strip -- the global-option normalisation would otherwise erase
 # the override before any pattern sees it.
