@@ -19,31 +19,19 @@
 #   - `git -C <path> diff <hook>` -- global options before a read subcommand
 #     read as unknown and deny (fail-safe, but noisy)
 
+# shellcheck source-path=SCRIPTDIR source=lib.sh
+. "$(dirname "$(readlink -f "$0")")/lib.sh" 2>/dev/null ||
+    { echo "BLOCKED: agent-hooks lib.sh is missing next to $0" >&2; exit 2; }
+
 INPUT=$(cat)
 OPERATION=$(printf '%s' "$INPUT" | jq -r '.operation')
-COMMAND=$(printf '%s' "$INPUT" | jq -r '.command // empty')
-
-# fold line wraps and whitespace runs -- same fold as the sibling policies,
-# kept inline so a missing helper can't turn this into a no-op.
-COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's/  +/ /g')
+COMMAND=$(_fold "$(printf '%s' "$INPUT" | jq -r '.command // empty')")
 
 # expand the two home shorthands so `~/.claude/hooks/x` and `$HOME/.claude/...`
 # compare against the absolute globs below.
 COMMAND=${COMMAND//\$\{HOME\}/$HOME}
 COMMAND=${COMMAND//\$HOME/$HOME}
 COMMAND=${COMMAND//\~\//$HOME/}
-
-# capability opt-outs, comma-separated, read from this process's OWN
-# environment (`env AGENT_UNFENCE=meta claude`). an agent cannot grant itself
-# one: a command's env-prefix reaches this policy as text on stdin, never as
-# an actual variable. kept inline in each policy for the same reason as the
-# fold above.
-function _unfenced() {
-    case ",${AGENT_UNFENCE}," in
-        (*",$1,"*) return 0 ;;
-    esac
-    return 1
-}
 
 _unfenced meta && exit 0
 
@@ -198,8 +186,7 @@ if [[ "$OPERATION" == shell && -n "$COMMAND" ]]; then
         bad+=("unstow (removes the fence symlinks)")
     fi
 
-    # shellcheck disable=SC2020  # a char-set mapping is the intent
-    SEGMENTS=$(printf '%s' "$COMMAND" | tr ';|&' '\n\n\n')
+    SEGMENTS=$(_segments "$COMMAND")
 
     while IFS= read -r seg; do
         hits=()

@@ -19,29 +19,12 @@
 # wants a commit / push / PR, they run it themselves or temporarily
 # disable this hook.
 
+# shellcheck source-path=SCRIPTDIR source=lib.sh
+. "$(dirname "$(readlink -f "$0")")/lib.sh" 2>/dev/null ||
+    { echo "BLOCKED: agent-hooks lib.sh is missing next to $0" >&2; exit 2; }
+
 INPUT=$(cat)
-COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
-
-# capability opt-outs, comma-separated, read from this process's OWN
-# environment (`env AGENT_UNFENCE=branch claude`). an agent cannot grant
-# itself one: a command's env-prefix reaches this policy as text on stdin,
-# never as an actual variable. kept inline for the same reason as the fold
-# below -- a policy that can't find a helper file must not degrade into
-# allowing everything.
-_unfenced() {
-    case ",${AGENT_UNFENCE}," in
-        (*",$1,"*) return 0 ;;
-    esac
-    return 1
-}
-
-# fold line wraps and whitespace runs before matching. every pattern below is
-# a line-based grep with literal spaces in it, so a wrapped `git \<newline>
-# push` or a stray `git  push` would otherwise walk straight past the fence.
-# folding only joins what the shell would join anyway -- it can widen a
-# pattern's reach, never narrow it. (kept inline, not sourced: a policy that
-# can't find a helper file must not degrade into allowing everything.)
-COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's/  +/ /g')
+COMMAND=$(_fold "$(printf '%s' "$INPUT" | jq -r '.command')")
 
 # normalise before matching, so `git <subcommand>` anchors can't be dodged:
 #   - `\git push` (backslash escape) -> `git push`
@@ -101,8 +84,7 @@ done
 # the end of its `;` / `|` / `&` segment. <sub> is an ERE alternation; the
 # word has to end after it, so `git checkout` never matches checkout-index.
 _git_cmds() {
-    # shellcheck disable=SC2020  # a char-set mapping is the intent
-    printf '%s\n' "$COMMAND" | tr ';|&' '\n\n\n' | grep -oE -- "(^| )git ($1)( .*|$)" | sed -E 's/^ //'
+    _segments "$COMMAND" | grep -oE -- "(^| )git ($1)( .*|$)" | sed -E 's/^ //'
 }
 
 # destructive git ops. not recoverable, and not liftable by any capability.

@@ -16,14 +16,13 @@
 #   - $VAR-expanded paths, literal '>' inside a quoted string
 #   - tee with flags / multiple files (only the first path after tee is seen)
 
+# shellcheck source-path=SCRIPTDIR source=lib.sh
+. "$(dirname "$(readlink -f "$0")")/lib.sh" 2>/dev/null ||
+    { echo "BLOCKED: agent-hooks lib.sh is missing next to $0" >&2; exit 2; }
+
 INPUT=$(cat)
 OPERATION=$(printf '%s' "$INPUT" | jq -r '.operation')
-COMMAND=$(printf '%s' "$INPUT" | jq -r '.command // empty')
-
-# fold line wraps and whitespace runs -- `cmd > \<newline>/tmp/x` is still a
-# redirect to /tmp. same fold in the sibling policies; kept inline so a
-# missing helper can't turn this into a no-op.
-COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's/  +/ /g')
+COMMAND=$(_fold "$(printf '%s' "$INPUT" | jq -r '.command // empty')")
 
 # a path is allowed iff it isn't under /tmp at all, or it's /tmp/ai[/...].
 # /tmp is a symlink to /private/tmp on macos; the harness hands out an

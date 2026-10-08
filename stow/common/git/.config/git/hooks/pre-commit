@@ -9,11 +9,12 @@
 # differ", so their contents never reach any check. this hook is a speed bump,
 # not a secrets manager.
 
-# agent harnesses take the strict path. AGENT_SESSION is set by our own harness
-# configs; CLAUDECODE, COPILOT_CLI and OPENCODE_PID are native fallbacks.
-is_agent() {
-    [ -n "$AGENT_SESSION" ] || [ "$CLAUDECODE" = "1" ] || [ "$COPILOT_CLI" = "1" ] || [ -n "$OPENCODE_PID" ]
-}
+# the agent / capability helpers live with the agent policies.
+_lib="$(dirname "$(readlink -f "$0")")/../../../../agent-hooks/.config/agent-hooks/lib.sh"
+[ -r "$_lib" ] || _lib="$HOME/.config/agent-hooks/lib.sh"
+# shellcheck source-path=SCRIPTDIR source=../../../../agent-hooks/.config/agent-hooks/lib.sh
+. "$_lib" 2>/dev/null ||
+    { echo "rejected: agent-hooks lib.sh not found (stow agent-hooks)" >&2; exit 1; }
 
 if is_agent; then
     LABEL="rejected"

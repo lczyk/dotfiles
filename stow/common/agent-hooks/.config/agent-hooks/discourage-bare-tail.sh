@@ -16,13 +16,12 @@
 #   - variable-expanded log path:  LOG=/tmp/ai/log/x.log; cmd | tee $LOG | tail
 #   - literal `| tail` inside quoted string: git commit -m "fix | tail crash"
 
-INPUT=$(cat)
-COMMAND=$(printf '%s' "$INPUT" | jq -r '.command')
+# shellcheck source-path=SCRIPTDIR source=lib.sh
+. "$(dirname "$(readlink -f "$0")")/lib.sh" 2>/dev/null ||
+    { echo "BLOCKED: agent-hooks lib.sh is missing next to $0" >&2; exit 2; }
 
-# fold line wraps and whitespace runs -- `cmd |<newline>tail -5` is one
-# pipeline, but a line-based grep can't see it. same fold in the sibling
-# policies; kept inline so a missing helper can't turn this into a no-op.
-COMMAND=$(printf '%s' "$COMMAND" | sed -E 's/\\$//' | tr '\n\t' '  ' | sed -E 's/  +/ /g')
+INPUT=$(cat)
+COMMAND=$(_fold "$(printf '%s' "$INPUT" | jq -r '.command')")
 
 # bad pattern 1: piped to tail/head. word boundary via [^[:alnum:]_] / EOL.
 # `[|]` (char class) for a literal pipe.
