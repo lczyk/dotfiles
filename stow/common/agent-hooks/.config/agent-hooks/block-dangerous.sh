@@ -97,6 +97,14 @@ while :; do
     COMMAND=$STRIPPED
 done
 
+# every `git <sub>` command on the line, one per output line, from `git` to
+# the end of its `;` / `|` / `&` segment. <sub> is an ERE alternation; the
+# word has to end after it, so `git checkout` never matches checkout-index.
+_git_cmds() {
+    # shellcheck disable=SC2020  # a char-set mapping is the intent
+    printf '%s\n' "$COMMAND" | tr ';|&' '\n\n\n' | grep -oE -- "(^| )git ($1)( .*|$)" | sed -E 's/^ //'
+}
+
 # destructive git ops. not recoverable, and not liftable by any capability.
 # `git reset` (past --soft) and `git rebase` are handled separately below --
 # see the history capability.
@@ -373,6 +381,53 @@ done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])git restore[^;|&]*")
 # blocked. a refused line with ` -- ` in it was a path checkout, so it gets the
 # path reason rather than the branch one.
 CHECKOUT_PATH_REASON="a path checkout must be \`git checkout [-q] -- <explicit-file-paths>\` -- no other flags, no ref, no \`.\`, globs or dirs"
+BRANCH_LIFT_REASON="the branch capability covers creating and switching branches only -- deleting, forcing or moving a branch, a forced or sweeping checkout, and removing a worktree stay user-run"
+
+# the arguments of a checkout / switch the branch capability lifts: create
+# and switch flags, branch names and named files. anything that forces,
+# discards or sweeps (-B, -C, -f, --discard-changes, --ours, `.`, globs,
+# dirs) or any unknown flag fails it.
+_switch_ok() {
+    local tok toks dashdash=0
+    read -ra toks <<< "$1"
+    for tok in "${toks[@]}"; do
+        tok=${tok//[\"\']/}
+        if ((!dashdash)); then
+            case "$tok" in
+                --) dashdash=1; continue ;;
+                -b|-c|-q|--quiet|-t|--track|--no-track|--detach|-d|-m|--merge|--orphan|--guess|--no-guess|-l) continue ;;
+                -*) return 1 ;;
+            esac
+        fi
+        case "$tok" in
+            .|..|"~"*|:*|*'*'*|*'?'*|*'['*|*'$'*|*'`'*|*/) return 1 ;;
+            *) [[ -d "$tok" ]] && return 1 ;;
+        esac
+    done
+    return 0
+}
+
+if _unfenced branch; then
+    while IFS= read -r cmd; do
+        if printf '%s' " ${cmd#git branch} " | grep -qE -- " (-[A-Za-z]*[dDfmMC][A-Za-z]*|--(delete|force|move))( |=)"; then
+            echo "BLOCKED: $BRANCH_LIFT_REASON" >&2
+            exit 2
+        fi
+    done < <(_git_cmds branch)
+    while IFS= read -r cmd; do
+        args=${cmd#git checkout}
+        [[ "$args" == "$cmd" ]] && args=${cmd#git switch}
+        if ! _switch_ok "$args"; then
+            echo "BLOCKED: $BRANCH_LIFT_REASON" >&2
+            exit 2
+        fi
+    done < <(_git_cmds 'checkout|switch')
+    if _git_cmds worktree | grep -qE -- "^git worktree (remove|move|prune)( |$)"; then
+        echo "BLOCKED: $BRANCH_LIFT_REASON" >&2
+        exit 2
+    fi
+fi
+
 while IFS= read -r seg; do
     _unfenced branch && break
     args=$(printf '%s' "${seg#*git checkout}" | sed -E 's/^( (-q|--quiet))+( |$)/ /')
@@ -399,12 +454,18 @@ fi
 # untouched, fully reflog-recoverable. `--hard`, `--mixed`, and bare
 # `git reset` stay blocked always, capability or not -- they touch the
 # index and/or worktree and are a different risk class.
-if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git reset( |$)"; then
-    if ! { _unfenced history && echo "$COMMAND" | grep -qE -- "(^|[ ;|&])git reset --soft( |$)"; }; then
-        echo "BLOCKED: \`git reset\` is destructive past --soft. $GIT_REASON. (\`--soft\` alone is liftable with env AGENT_UNFENCE=history.)" >&2
-        exit 2
+# each reset is judged on its own: a --soft on one can't vouch for another,
+# or for a --hard on the same line.
+while IFS= read -r cmd; do
+    args=" ${cmd#git reset} "
+    args=${args//[\"\']/}
+    if _unfenced history && [[ "$args" == *" --soft "* ]] &&
+        ! printf '%s' "$args" | grep -qE -- " --(hard|mixed|merge|keep) "; then
+        continue
     fi
-fi
+    echo "BLOCKED: \`git reset\` is destructive past --soft. $GIT_REASON. (\`--soft\` alone is liftable with env AGENT_UNFENCE=history.)" >&2
+    exit 2
+done < <(_git_cmds reset)
 
 # `git push` -- liftable with the push capability, minus the forms that rewrite
 # or delete remote refs, skip the pre-push hook, push in bulk, or name a url or
@@ -467,7 +528,8 @@ check "$MARKER_REASON"        "${MARKER_PATTERNS[@]}"
 
 while IFS= read -r seg; do
     args="${seg#*git push}"
-    if echo "$args" | grep -qE -- "${PUSH_HARD_FLAG_RE}|${PUSH_HARD_SHORT_RE}|${PUSH_HARD_REFSPEC_RE}" || _push_names_url "$args"; then
+    plain=${args//[\"\']/}
+    if echo "$plain" | grep -qE -- "${PUSH_HARD_FLAG_RE}|${PUSH_HARD_SHORT_RE}|${PUSH_HARD_REFSPEC_RE}" || _push_names_url "$plain"; then
         echo "BLOCKED: $PUSH_HARD_REASON" >&2
         exit 2
     fi
