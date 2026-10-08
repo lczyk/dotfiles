@@ -73,6 +73,18 @@ PROTECTED_GLOBS=(
     "$HOME/.codex/hooks.json"
     "$HOME/.copilot/hooks"
     "$HOME/.copilot/hooks/*"
+    # config that switches the hooks off without touching a hook file: every
+    # git config that can set core.hooksPath (a repo's own .git/config wins
+    # over the global one), codex's hook switch, and copilot's hook list.
+    "$HOME/.config/git/config"
+    "$HOME/.config/git/config.local"
+    "$HOME/.gitconfig"
+    '*/.git/config'
+    '*/.git/config.worktree'
+    '.git/config'
+    '.git/config.worktree'
+    "$HOME/.codex/config.toml"
+    "$HOME/.copilot/settings.json"
     '*/stow/common/agent-hooks/.config/agent-hooks'
     '*/stow/common/agent-hooks/.config/agent-hooks/*'
     '*/stow/common/git/.config/git/hooks'
@@ -85,6 +97,10 @@ PROTECTED_GLOBS=(
     '*/stow/common/codex/.codex/hooks.json'
     '*/stow/common/copilot/.copilot/hooks'
     '*/stow/common/copilot/.copilot/hooks/*'
+    '*/stow/common/git/.config/git/config'
+    '*/stow/*/git/.config/git/config.local'
+    '*/stow/common/codex/.codex/config.toml'
+    '*/stow/common/copilot/.copilot/settings.json'
 )
 
 # commands that cannot modify their arguments. deliberately excludes the ones
