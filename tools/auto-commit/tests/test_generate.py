@@ -183,6 +183,29 @@ def test_parse_commit_ok():
     assert _parse_commit({"tag": "feat", "message": "  add thing  "}) == ("feat", "add thing")
 
 
+def test_parse_commit_strips_repeated_tag_prefix():
+    cases = {
+        "chore: add dependency tree notes": "add dependency tree notes",
+        "chore: chore: add dependency tree notes": "add dependency tree notes",
+        "Chore(deps)!: bump uv": "bump uv",
+        "feat: add thing\n\nwhy it matters": "add thing\n\nwhy it matters",
+        # only a tag followed by a colon counts as a prefix.
+        "fixup handling of feat: lines": "fixup handling of feat: lines",
+        "docs: docs site layout": "docs site layout",
+    }
+    for raw, want in cases.items():
+        assert _parse_commit({"tag": "chore", "message": raw}) == ("chore", want), raw
+
+
+def test_parse_commit_prefix_only_is_empty():
+    try:
+        _parse_commit({"tag": "chore", "message": "chore: "})
+    except GenerateError:
+        pass
+    else:
+        raise AssertionError("expected GenerateError on a prefix-only message")
+
+
 def test_parse_commit_bad_tag():
     try:
         _parse_commit({"tag": "nope", "message": "x"})

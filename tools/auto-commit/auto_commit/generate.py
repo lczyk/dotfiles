@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -41,6 +42,10 @@ TAG_GLOSS: dict[str, str] = {
 }
 
 VALID_TAGS = tuple(TAG_GLOSS)
+
+# the model sometimes writes the tag into the message too, which the cli then
+# prefixes again -> `chore: chore: ...`. matches any run of such prefixes.
+_TAG_PREFIX = re.compile(rf"^(?:(?:{'|'.join(VALID_TAGS)})(?:\([^)]*\))?[!?]?:[ \t]*)+", re.IGNORECASE)
 
 COMMIT_SCHEMA = {
     "type": "object",
@@ -468,9 +473,11 @@ def _parse_commit(obj: dict) -> tuple[str, str]:
     message = obj.get("message")
     if tag not in VALID_TAGS:
         raise GenerateError(f"invalid tag from model: {tag!r}")
-    if not isinstance(message, str) or not message.strip():
+    if isinstance(message, str):
+        message = _TAG_PREFIX.sub("", message.strip()).strip()
+    if not isinstance(message, str) or not message:
         raise GenerateError("empty message from model")
-    return tag, message.strip()
+    return tag, message
 
 
 _STATUS_WORD = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed", "C": "copied", "T": "type changed"}
