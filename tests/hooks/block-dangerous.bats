@@ -199,6 +199,13 @@ fire() {
     done
 }
 
+@test "blocks git checkout-index under every capability" {
+    for caps in "" branch "branch,history,push"; do
+        AGENT_UNFENCE=$caps run fire "git checkout-index -a -f"
+        [ "$status" -eq 2 ] || { echo "allowed under [$caps]"; false; }
+    done
+}
+
 @test "blocks git clean -fd" {
     run fire "git clean -fd"
     [ "$status" -eq 2 ]
