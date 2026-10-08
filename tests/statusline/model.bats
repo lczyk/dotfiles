@@ -23,6 +23,15 @@ strip_ansi() {
     [ "$out" = "[O47-1M]" ]
 }
 
+@test "maps deepseek flash ids to aliases" {
+    run bash -c "echo '{\"model\":{\"display_name\":\"deepseek-flash[1m]\"}}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[DSF-1M]" ]
+    run bash -c "echo '{\"model\":{\"display_name\":\"deepseek-flash\"}}' | '$BADGE'"
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[DSF]" ]
+}
+
 @test "passes through unknown display_name unchanged when short" {
     run bash -c "echo '{\"model\":{\"display_name\":\"Mystery 9.9\"}}' | '$BADGE'"
     out=$(printf '%s' "$output" | strip_ansi)
