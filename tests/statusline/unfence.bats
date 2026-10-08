@@ -35,10 +35,15 @@ fire() { printf '{}' | "$BADGE"; }
     [ "$out" = "[U:branch,meta]" ]
 }
 
-@test "strips junk characters from the value" {
+@test "drops tokens no capability check can match" {
     AGENT_UNFENCE='branch;$(rm x),meta' run fire
     out=$(printf '%s' "$output" | strip_ansi)
-    [ "$out" = "[U:branchrmx,meta]" ]
+    [ "$out" = "[U:meta]" ]
+}
+
+@test "a spaced token is not shown: the fences don't honour it either" {
+    AGENT_UNFENCE='branch, meta' run fire
+    [ "$output" = $'\033[91m[U:branch]\033[0m' ]
 }
 
 @test "[u] plain when the value is only separators" {
