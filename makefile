@@ -82,7 +82,7 @@ normalize:  ## Restage filtered agent settings and config
 		|| echo "agent settings restaged -- commit to record"
 
 .PHONY: test
-test: test-cargo test-hooks test-agents test-statusline test-fish test-local test-debx test-git test-py test-auto-commit  ## Run all tests (rust + bats + pytest)
+test: test-cargo test-hooks test-agents test-statusline test-fish test-local test-debx test-git test-py test-auto-commit test-gh-retry  ## Run all tests (rust + bats + pytest + self-tests)
 
 .PHONY: test-cargo
 test-cargo: $(addprefix test-cargo-,$(CARGO_BINS))  ## cargo test all rust binaries
@@ -110,6 +110,10 @@ test-fish:  ## Run bats tests for fish helpers
 .PHONY: test-local
 test-local:  ## Run bats tests for ~/.local/bin scripts
 	bats tests/local/
+
+.PHONY: test-gh-retry
+test-gh-retry:  ## Run gh-retry built-in self-test
+	ruby stow/common/local/.local/bin/gh-retry.rb --test
 
 .PHONY: test-debx
 test-debx:  ## Run bats tests for debx

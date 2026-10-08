@@ -9,7 +9,8 @@
 # run with a delay between attempts.
 #
 # shells out to the user's `gh`. the decisions are pure functions; everything
-# with side effects (gh, time, output) comes in through an Env.
+# with side effects (gh, time, output) comes in through an Env, which
+# `gh-retry --test` swaps for fakes to run the built-in self-test.
 
 require "optparse"
 require "json"
@@ -550,4 +551,383 @@ def main(argv)
   exit(watch_all(env, targets) ? 0 : 1)
 end
 
-main(ARGV)
+# --- self-test (gh-retry --test) --------------------------------------------
+
+if ARGV.first == "--test"
+  require "minitest"
+  require "stringio"
+
+  TESTS = []
+
+  def test(name, &blk)
+    TESTS << [name, blk]
+  end
+
+  class SelfTest
+    include Minitest::Assertions
+    attr_accessor :assertions
+
+    def initialize
+      @assertions = 0
+    end
+  end
+
+  # replays canned answers per run id / PR number. the last answer in each
+  # queue repeats, so a test only scripts the transitions. an Exception in a
+  # queue is raised instead of returned.
+  class FakeGh
+    attr_reader :writes
+
+    def initialize(states: {}, logs: {}, rollups: {}, rerun_ok: true)
+      @states = states
+      @logs = logs
+      @rollups = rollups
+      @rerun_ok = rerun_ok
+      @writes = []
+    end
+
+    def run_state(_repo, run_id) answer(@states, run_id) end
+    def failed_logs(_repo, run_id) answer(@logs, run_id) end
+    def pr_rollup(_repo, number) answer(@rollups, number) end
+
+    def rerun(_repo, run_id)
+      @writes << [:rerun, run_id]
+      @rerun_ok
+    end
+
+    def cancel(_repo, run_id)
+      @writes << [:cancel, run_id]
+      true
+    end
+
+    private
+
+    def answer(table, key)
+      queue = table.fetch(key)
+      item = queue.size > 1 ? queue.shift : queue.first
+      raise item if item.is_a?(Exception)
+
+      item
+    end
+  end
+
+  # sleeping advances the clock, so deadlines play out instantly. a day of fake
+  # sleep means a loop that never ends; fail it rather than hang.
+  class FakeClock
+    attr_reader :now, :slept
+
+    def initialize
+      @now = Time.at(0)
+      @slept = 0
+    end
+
+    def sleep(seconds)
+      @now += seconds
+      @slept += seconds
+      raise "fake clock ran away" if @slept > 86_400
+    end
+  end
+
+  def fake_env(gh, **cfg)
+    io = StringIO.new
+    cfg = default_cfg.merge(delay: 0, poll: 1).merge(cfg)
+    [Env.new(gh: gh, clock: FakeClock.new, log: Log.new(io: io), cfg: cfg), io]
+  end
+
+  def job(status, conclusion = nil)
+    { "status" => status, "conclusion" => conclusion }
+  end
+
+  def run_data(status, conclusion = nil, jobs = [])
+    { "status" => status, "conclusion" => conclusion, "jobs" => jobs }
+  end
+
+  def rollup_check(name, run_id, conclusion, at, url_key: "detailsUrl")
+    { "name" => name, url_key => "https://github.com/o/r/actions/runs/#{run_id}/job/1",
+      "conclusion" => conclusion, "completedAt" => at }
+  end
+
+  PASSED = run_data("completed", "success", [job("completed", "success")])
+  FAILED = run_data("completed", "failure", [job("completed", "failure"), job("completed", "success")])
+  RUNNING = run_data("in_progress", nil, [job("in_progress")])
+  STALLED = run_data("in_progress", nil, [job("completed", "failure"), job("queued")])
+
+  # --- pure ---
+
+  test "parse_target: run and pr forms" do
+    {
+      "o/r/123" => [:run, "o/r", "123"],
+      "https://github.com/o/r/actions/runs/123/job/9?pr=1" => [:run, "o/r", "123"],
+      "o/r#7" => [:pr, "o/r", "7"],
+      "o/r/pull/7" => [:pr, "o/r", "7"],
+      "https://github.com/o/r/pull/7/checks" => [:pr, "o/r", "7"],
+    }.each { |input, want| assert_equal want, parse_target(input), input }
+    ["o/r", "o/r/x", "123", "o r/1"].each { |junk| assert_nil parse_target(junk), junk }
+  end
+
+  test "parse_args: -9 and verbatim patterns" do
+    cfg, targets = parse_args(%w[-9 o/r/1 o/r#2 -- -3 --retries])
+    assert_equal 9, cfg[:retries]
+    assert_equal 30, cfg[:delay]
+    assert_equal [[:run, "o/r", "1"], [:pr, "o/r", "2"]], targets
+    assert_equal %w[-3 --retries], cfg[:patterns]
+  end
+
+  test "parse_args: repeatable stop-on, fresh defaults per call" do
+    cfg, = parse_args(%w[-s a --stop-on b o/r/1])
+    assert_equal %w[a b], cfg[:stop_patterns]
+    cfg, = parse_args(%w[o/r/1])
+    assert_empty cfg[:stop_patterns]
+  end
+
+  test "parse_args: usage errors" do
+    assert_raises(UsageError) { parse_args([]) }
+    assert_raises(UsageError) { parse_args(%w[-- pattern]) }
+    e = assert_raises(UsageError) { parse_args(%w[o/r/1 junk]) }
+    assert_match(/could not parse target "junk"/, e.message)
+  end
+
+  test "match_pattern: case and order" do
+    logs = "Error: Cannot talk to archive\ntimeout"
+    assert_nil match_pattern(logs, ["cannot talk"], false)
+    assert_equal "cannot talk", match_pattern(logs, ["cannot talk"], true)
+    assert_equal "timeout", match_pattern(logs, %w[nope timeout Error], false)
+    assert_nil match_pattern(logs, [], false)
+  end
+
+  test "classify_run" do
+    assert_equal :success, classify_run(PASSED)
+    assert_equal :retry, classify_run(FAILED)
+    assert_equal "cancelled", classify_run(run_data("completed", "cancelled", [job("completed", "cancelled")]))
+    assert_equal "unknown", classify_run(run_data("completed"))
+    assert_equal :waiting, classify_run(RUNNING)
+    assert_equal :waiting, classify_run(STALLED)
+    assert_equal :cancel, classify_run(STALLED, cancel: true)
+    still_running = run_data("in_progress", nil, [job("in_progress"), job("completed", "failure")])
+    assert_equal :waiting, classify_run(still_running, cancel: true)
+  end
+
+  test "pick_pr_run: latest failed run wins" do
+    pick = pick_pr_run([
+      rollup_check("a", 1, "FAILURE", "2026-01-01"),
+      rollup_check("b", 2, "SUCCESS", "2026-01-03"),
+      rollup_check("c", 3, "FAILURE", "2026-01-02"),
+      rollup_check("d", 3, "SUCCESS", "2026-01-02"),
+      rollup_check("d", 3, "SUCCESS", "2026-01-02"),
+    ])
+    assert_equal "3", pick[:id]
+    assert_equal ["1"], pick[:others]
+    assert_equal [%w[c failure], %w[d success]], pick[:checks]
+  end
+
+  test "pick_pr_run: no failures picks the latest run" do
+    pending = rollup_check("b", 2, "", "2026-01-02", url_key: "targetUrl").merge("status" => "IN_PROGRESS")
+    pick = pick_pr_run([rollup_check("a", 1, "SUCCESS", "2026-01-01"), pending])
+    assert_equal({ id: "2", others: [], checks: [%w[b in_progress]] }, pick)
+  end
+
+  test "pick_pr_run: nothing from actions" do
+    assert_nil pick_pr_run([])
+    assert_nil pick_pr_run([{ "name" => "lint", "detailsUrl" => "https://ci.example.com/1" }])
+  end
+
+  test "verdict" do
+    assert_equal [:stop, "fatal"], verdict("flaky\nfatal", ["flaky"], ["fatal"], false)
+    assert_equal [:rerun, "flaky"], verdict("flaky", ["flaky"], ["fatal"], false)
+    assert_equal [:no_match], verdict("boom", ["flaky"], [], false)
+    assert_equal [:rerun, nil], verdict("boom", [], ["fatal"], false)
+    assert_equal [:unclassified], verdict(" \n", ["flaky"], ["fatal"], false)
+  end
+
+  test "log: labels and colour" do
+    io = StringIO.new
+    Log.new(io: io).info("hi")
+    Log.new(io: io).with_label("#7").bad("no")
+    Log.new(io: io, color: true).good("ok")
+    assert_equal "[gh-retry] hi\n[gh-retry #7] no\n\e[32m[gh-retry] \e[0mok\n", io.string
+    assert_equal "skipped", Log.new(io: io).status("skipped")
+    assert_equal "\e[1;30mskipped\e[0m", Log.new(io: io, color: true).status("skipped")
+    assert_equal "weird", Log.new(io: io, color: true).status("weird")
+  end
+
+  # --- gh with retries ---
+
+  test "state_for: rides out transient gh failures" do
+    gh = FakeGh.new(states: { "1" => [GhError.new("502"), GhError.new("502"), PASSED] })
+    env, io = fake_env(gh)
+    assert_equal PASSED, state_for(env, "o/r", "1")
+    assert_equal 2, io.string.scan(/poll failed/).size
+    assert_equal 2 * POLL_QUERY_BACKOFF, env.clock.slept
+  end
+
+  test "state_for: gives up after POLL_QUERY_RETRIES" do
+    env, = fake_env(FakeGh.new(states: { "1" => [GhError.new("502")] }))
+    e = assert_raises(GiveUp) { state_for(env, "o/r", "1") }
+    assert_equal "failed to query run 1 after #{POLL_QUERY_RETRIES} retries:\n502", e.message
+  end
+
+  test "failed_logs: waits for logs to materialise" do
+    env, = fake_env(FakeGh.new(logs: { "1" => ["", " \n", "boom"] }))
+    assert_equal "boom", failed_logs(env, "o/r", "1")
+    env, io = fake_env(FakeGh.new(logs: { "1" => [""] }))
+    assert_equal "", failed_logs(env, "o/r", "1")
+    assert_equal LOG_FETCH_RETRIES, io.string.scan(/failed logs empty/).size
+  end
+
+  # --- watch ---
+
+  test "watch: passes straight away" do
+    gh = FakeGh.new(states: { "1" => [PASSED] })
+    env, io = fake_env(gh)
+    assert watch(env, [:run, "o/r", "1"])
+    assert_empty gh.writes
+    assert_match %r{\Ahttps://github.com/o/r/actions/runs/1\n}, io.string
+  end
+
+  test "watch: waits out a running run" do
+    gh = FakeGh.new(states: { "1" => [RUNNING, RUNNING, RUNNING, PASSED] })
+    env, io = fake_env(gh, poll: 7)
+    assert watch(env, [:run, "o/r", "1"])
+    assert_equal 21, env.clock.slept
+    assert_equal 1, io.string.scan(/rechecking every 7s/).size
+  end
+
+  test "watch: one rerun, despite the stale completed state" do
+    gh = FakeGh.new(states: { "1" => [FAILED, FAILED, RUNNING, PASSED] })
+    env, = fake_env(gh, delay: 30)
+    assert watch(env, [:run, "o/r", "1"])
+    assert_equal [[:rerun, "1"]], gh.writes
+    assert_equal 31, env.clock.slept
+  end
+
+  test "watch: gives up once retries run out" do
+    gh = FakeGh.new(states: { "1" => [FAILED, RUNNING, FAILED] })
+    env, io = fake_env(gh, retries: 1)
+    refute watch(env, [:run, "o/r", "1"])
+    assert_equal [[:rerun, "1"]], gh.writes
+    assert_match(/rerunning failed jobs \(attempt 1\/1\)/, io.string)
+    assert_match(/retries exhausted \(1\) -- giving up/, io.string)
+  end
+
+  test "watch: completed without failed jobs gives up" do
+    env, io = fake_env(FakeGh.new(states: { "1" => [run_data("completed", "cancelled")] }))
+    refute watch(env, [:run, "o/r", "1"])
+    assert_match(/finished: cancelled -- nothing failed to rerun/, io.string)
+  end
+
+  test "watch: rerun pattern matched" do
+    gh = FakeGh.new(states: { "1" => [FAILED, RUNNING, PASSED] }, logs: { "1" => ["Cannot talk to archive"] })
+    env, io = fake_env(gh, patterns: ["cannot talk"], ignore_case: true)
+    assert watch(env, [:run, "o/r", "1"])
+    assert_equal [[:rerun, "1"]], gh.writes
+    assert_match(/matched pattern: "cannot talk"/, io.string)
+  end
+
+  test "watch: stop-on pattern gives up without rerunning" do
+    gh = FakeGh.new(states: { "1" => [FAILED] }, logs: { "1" => ["flaky\nfatal"] })
+    env, io = fake_env(gh, patterns: ["flaky"], stop_patterns: ["fatal"])
+    refute watch(env, [:run, "o/r", "1"])
+    assert_empty gh.writes
+    assert_match(/stop-on pattern matched: "fatal"/, io.string)
+  end
+
+  test "watch: no retry pattern matched" do
+    gh = FakeGh.new(states: { "1" => [FAILED] }, logs: { "1" => ["boom"] })
+    env, io = fake_env(gh, patterns: ["flaky"])
+    refute watch(env, [:run, "o/r", "1"])
+    assert_empty gh.writes
+    assert_match(/no retry pattern matched/, io.string)
+  end
+
+  test "watch: unreadable logs count as transient" do
+    gh = FakeGh.new(states: { "1" => [FAILED, RUNNING, PASSED] }, logs: { "1" => [""] })
+    env, io = fake_env(gh, patterns: ["flaky"])
+    assert watch(env, [:run, "o/r", "1"])
+    assert_equal [[:rerun, "1"]], gh.writes
+    assert_match(/assuming transient and rerunning/, io.string)
+  end
+
+  test "watch: dry run never writes" do
+    gh = FakeGh.new(states: { "1" => [FAILED], "2" => [STALLED] })
+    env, io = fake_env(gh, dry_run: true, cancel: true)
+    assert watch(env, [:run, "o/r", "1"])
+    assert watch(env, [:run, "o/r", "2"])
+    assert_empty gh.writes
+    assert_match(/\[dry-run\] would rerun failed jobs for run 1/, io.string)
+    assert_match(/\[dry-run\] would cancel run 2/, io.string)
+  end
+
+  test "watch: cancels a stalled run, then reruns" do
+    gh = FakeGh.new(states: { "1" => [STALLED, FAILED, RUNNING, PASSED] })
+    env, = fake_env(gh, cancel: true)
+    assert watch(env, [:run, "o/r", "1"])
+    assert_equal [[:cancel, "1"], [:rerun, "1"]], gh.writes
+  end
+
+  test "watch: overall timeout while a job wedges" do
+    env, io = fake_env(FakeGh.new(states: { "1" => [RUNNING] }), timeout: 30, poll: 10)
+    refute watch(env, [:run, "o/r", "1"])
+    assert_equal 30, env.clock.slept
+    assert_match(/overall timeout \(30s\) exceeded/, io.string)
+  end
+
+  test "watch: failed rerun gives up" do
+    gh = FakeGh.new(states: { "1" => [FAILED] }, rerun_ok: false)
+    env, io = fake_env(gh)
+    refute watch(env, [:run, "o/r", "1"])
+    assert_match(/gh run rerun failed -- giving up/, io.string)
+  end
+
+  test "watch: pr resolves to its failed run" do
+    rollup = [rollup_check("a", 5, "FAILURE", "2026-01-01"), rollup_check("b", 6, "SUCCESS", "2026-01-02")]
+    gh = FakeGh.new(rollups: { "7" => [rollup] }, states: { "5" => [PASSED] })
+    env, io = fake_env(gh)
+    assert watch(env, [:pr, "o/r", "7"])
+    assert_match(%r{resolved o/r#7 -> run 5\n}, io.string)
+    assert_match(%r{https://github.com/o/r/actions/runs/5\n}, io.string)
+  end
+
+  test "watch: failed pr lookup gives up" do
+    env, io = fake_env(FakeGh.new(rollups: { "7" => [GhError.new("not found")] }))
+    refute watch(env, [:pr, "o/r", "7"])
+    assert_match(%r{failed to look up o/r#7:\nnot found}, io.string)
+  end
+
+  test "watch_all: labels each target, reports the lot" do
+    gh = FakeGh.new(states: { "1" => [PASSED], "2" => [run_data("completed", "cancelled")] },
+                    rollups: { "9" => [[rollup_check("x", 2, "CANCELLED", "2026-01-01")]] })
+    env, io = fake_env(gh)
+    refute watch_all(env, [[:run, "o/r", "1"], [:pr, "o/r", "9"]])
+    assert_match(/^\[gh-retry 1\] run 1 passed$/, io.string)
+    assert_match(/^\[gh-retry #9\] run 2 finished: cancelled/, io.string)
+    assert_match(%r{^\[gh-retry\] o/r/1 ok$}, io.string)
+    assert_match(%r{^\[gh-retry\] o/r#9 gave up$}, io.string)
+  end
+
+  # --- runner ---
+
+  def self_test
+    color = $stdout.tty? && !ENV.key?("NO_COLOR")
+    paint = ->(code, str) { color ? sgr(code, str) : str }
+    failures = 0
+    TESTS.each do |name, blk|
+      print "#{name} ... "
+      SelfTest.new.instance_exec(&blk)
+      puts paint.call("32", "pass")
+    rescue Minitest::Assertion, StandardError => e
+      failures += 1
+      puts paint.call("31", "fail")
+      detail = e.is_a?(Minitest::Assertion) ? e.message : "#{e.class}: #{e.message}\n#{e.backtrace.first}"
+      puts detail.gsub(/^/, "    ")
+    end
+
+    if failures.zero?
+      puts paint.call("32", "self-test passed (#{TESTS.size})")
+    else
+      puts paint.call("31", "self-test failed (#{failures}/#{TESTS.size})")
+    end
+    failures.zero?
+  end
+end
+
+ARGV.first == "--test" ? exit(self_test) : main(ARGV)
