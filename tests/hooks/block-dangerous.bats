@@ -860,12 +860,14 @@ git push"
         "env - git commit -F /tmp/ai/m" "env -0i git commit -F /tmp/ai/m" "env -i PATH=/usr/bin git commit" \
         "env -u COPILOT_CLI git commit -F /tmp/ai/m" "COPILOT_CLI= git commit -F /tmp/ai/m" "unset COPILOT_CLI" \
         "export -n CLAUDECODE git commit -F /tmp/ai/m" "set -e CLAUDECODE" "set --erase AGENT_SESSION" "set -eU COPILOT_CLI" \
+        "set -g -e CLAUDECODE" "set -U -e AGENT_SESSION" "set -g --erase COPILOT_CLI" \
         "env -u HOME git commit -F /tmp/ai/m" "env --unset=XDG_CONFIG_HOME git push" "env -uHOME git commit" "unset HOME"; do
         run fire "$cmd"
         [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
     done
     for cmd in "env -u FOO make test" "env FOO=1 make test" "env -v true" \
-        "set -e" "set -gx MYVAR x" "export -n PATH" "env -u HOMEBREW_NO_AUTO_UPDATE make" "unset HOMEDIR"; do
+        "set -e" "set -gx MYVAR x" "export -n PATH" "env -u HOMEBREW_NO_AUTO_UPDATE make" "unset HOMEDIR" \
+        "set --show CLAUDECODE" "set -q AGENT_SESSION" "set -gx CLAUDECODE_NOTE x"; do
         run fire "$cmd"
         [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
     done
