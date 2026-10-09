@@ -61,6 +61,12 @@ if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])((env|export) [^;|&]*)?PATH=" && ech
     echo "BLOCKED: command rewrites PATH around a git / gh call -- ask the user if you really need to" >&2
     exit 2
 fi
+# unsetting HOME / XDG_CONFIG_HOME drops git's global config (and its
+# core.hooksPath) for a child -- the same layer the assignment check guards.
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])(env ([^;|&]* )?(-u ?|--unset[ =])|unset ([^;|&]* )?)(HOME|XDG_CONFIG_HOME)( |$)"; then
+    echo "BLOCKED: command unsets HOME / XDG_CONFIG_HOME, dropping git's global config -- ask the user if you really need to" >&2
+    exit 2
+fi
 
 # one-shot config that redirects or widens a push: remote.<r>.pushurl,
 # url.<base>.pushInsteadOf, push.default=matching, branch.<b>.pushRemote.
@@ -561,6 +567,9 @@ MARKER_PATTERNS=(
     "(-u ?|--unset[ =])(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
     # -i, a bare -, or -i inside a short-flag cluster: an emptied environment.
     "(^|[ ;|&])env( [^;|&]*)? (-[A-Za-z0-9]*i[A-Za-z0-9]*|-|--ignore-environment)( |$)"
+    # export -n drops the export attribute; fish `set -e` / --erase erases it.
+    "(^|[ ;|&])export -n [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
+    "(^|[ ;|&])set (-[A-Za-z]*e[A-Za-z]*|--erase) [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
 )
 MARKER_REASON="agent session markers are not yours to unset or rewrite -- the git hooks read them"
 
