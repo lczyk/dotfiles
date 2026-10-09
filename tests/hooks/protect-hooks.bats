@@ -148,6 +148,13 @@ fire_write() {
     done
 }
 
+@test "blocks a write path spelled with ~ or an unexpanded HOME" {
+    for path in "~/.gitconfig" '$HOME/.config/agent-hooks/lib.sh' '${HOME}/.claude/hooks/x.sh'; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+}
+
 # -- Write: dotfiles sources --------------------------------------------
 
 @test "blocks Write to the policy source in the checkout" {
@@ -308,6 +315,36 @@ $SRC/evaluate.sh"
 
 @test "blocks awk -- it can write to a path it appears to read" {
     run fire "awk '{print}' $SRC/evaluate.sh"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks a protected path hidden in an --opt=value or key=value token" {
+    for cmd in "dd if=/tmp/ai/x of=$HOME/.gitconfig" "curl --output=$HOME/.gitconfig http://x.invalid/y" \
+        "git diff --output=$SRC/block-dangerous.sh" "git show --output $SRC/evaluate.sh HEAD"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    run fire "curl --output=/tmp/ai/x http://y.invalid/z"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks shfmt -w (and any shfmt) on a hook" {
+    run fire "shfmt -w $SRC/lib.sh"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks cp / tee into a protected codex or copilot dir" {
+    for cmd in "cp /tmp/ai/x $HOME/.codex/" "cp /tmp/ai/x ~/.codex/" "cp -t $HOME/.copilot /tmp/ai/x"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    run fire "ls $HOME/.codex/"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks the ~user tilde form of a protected path" {
+    me=$(id -un)
+    run fire "rm ~$me/.claude/hooks/safety-adapter.sh"
     [ "$status" -eq 2 ]
 }
 
