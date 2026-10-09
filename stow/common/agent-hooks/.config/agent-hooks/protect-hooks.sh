@@ -108,7 +108,7 @@ PROTECTED_GLOBS=(
 # awk (print >), and every interpreter. find sits in its own branch below --
 # a read until
 # -delete / -exec and friends make it a write.
-READ_CMDS="ls|cat|bat|head|tail|less|more|grep|rg|egrep|fgrep|wc|stat|file|diff|cmp|readlink|realpath|dirname|basename|shellcheck|bats|shasum|md5|md5sum|sha256sum"
+READ_CMDS="ls|cd|pushd|cat|bat|head|tail|less|more|grep|rg|egrep|fgrep|wc|stat|file|du|tree|diff|cmp|readlink|realpath|dirname|basename|shellcheck|bats|shasum|md5|md5sum|sha256sum"
 GIT_READ_SUBCMDS="diff|show|log|blame|status|ls-files|grep|cat-file|rev-parse"
 FIND_WRITE_RE="(^| )-(delete|exec|execdir|ok|okdir|fls|fprint0?|fprintf)( |$)"
 
@@ -226,10 +226,17 @@ if [[ "$OPERATION" == shell && -n "$COMMAND" ]]; then
         if [[ "$seg" != *">"* ]]; then
             leading=$(_leading_cmd "$seg")
             if [[ "$leading" == git ]]; then
-                # --output makes a read subcommand write a file -- not a read.
+                # --output <file> makes a read subcommand WRITE that file (-o is
+                # a read flag for ls-files / grep, so only --output counts). a
+                # protected target is a write; a safe one leaves the read excuse.
+                otgt=$(printf '%s' "$seg" | sed -nE 's/.*--output[= ]+([^ ]+).*/\1/p')
+                otgt=$(_bare_token "$otgt")
+                if [[ -n "$otgt" ]] && _protected_either "$otgt"; then
+                    bad+=("$otgt")
+                    continue
+                fi
                 if printf '%s' "$seg" |
-                    grep -qE -- "(^| )git +(${GIT_READ_SUBCMDS})( |$)" &&
-                    ! printf '%s' "$seg" | grep -qE -- "(^| )(-o|--output)([= ]|$)"; then
+                    grep -qE -- "(^| )git +(${GIT_READ_SUBCMDS})( |$)"; then
                     excused+=("${hits[@]}")
                     continue
                 fi
