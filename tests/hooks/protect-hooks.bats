@@ -380,6 +380,29 @@ $SRC/evaluate.sh"
     [ "$status" -eq 0 ]
 }
 
+@test "allows read git flags that are not --output on a hook" {
+    for cmd in "git ls-files -o $SRC" "git grep -o TODO $SRC/block-dangerous.sh" \
+        "git diff --output=/tmp/ai/d.patch -- $SRC/block-dangerous.sh" "git log -p -- $SRC/lib.sh"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "blocks a read git subcommand whose --output target is a hook" {
+    for cmd in "git show --output $SRC/lib.sh HEAD:x" "git show --output=$SRC/lib.sh HEAD:x" \
+        "git diff --output $HOME/.gitconfig"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
+@test "allows navigation and inspection of a protected dir" {
+    for cmd in "cd $HOME/.codex" "cd $HOME/.copilot && ls" "du -sh $HOME/.copilot" "tree $HOME/.codex"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
 @test "allows ls run with no path argument" {
     # readlink would otherwise resolve bare words against the cwd, which
     # denies `ls` when the cwd happens to be the policy dir
