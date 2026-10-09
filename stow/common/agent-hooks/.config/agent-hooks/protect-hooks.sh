@@ -32,6 +32,9 @@ COMMAND=$(_fold "$(printf '%s' "$INPUT" | jq -r '.command // empty')")
 COMMAND=${COMMAND//\$\{HOME\}/$HOME}
 COMMAND=${COMMAND//\$HOME/$HOME}
 COMMAND=${COMMAND//\~\//$HOME/}
+# and the current user's own ~name, which bash would expand the same way.
+_me=$(id -un 2>/dev/null); [ -n "$_me" ] || _me=${HOME##*/}
+[ -n "$_me" ] && COMMAND=${COMMAND//\~$_me\//$HOME/}
 
 _unfenced meta && exit 0
 
@@ -78,6 +81,10 @@ PROTECTED_GLOBS=(
     '.git/modules/*/config'
     "$HOME/.codex/config.toml"
     "$HOME/.copilot/settings.json"
+    # the dirs themselves: a cp / mv / tee naming only the dir lands a file on
+    # the protected config inside. reads are excused by command, not by path.
+    "$HOME/.codex"
+    "$HOME/.copilot"
     '*/stow/common/agent-hooks/.config/agent-hooks'
     '*/stow/common/agent-hooks/.config/agent-hooks/*'
     '*/stow/common/git/.config/git/hooks'
@@ -97,10 +104,11 @@ PROTECTED_GLOBS=(
 )
 
 # commands that cannot modify their arguments. deliberately excludes the ones
-# that can write to a path they were only "reading": sed (-i), awk (print >),
-# and every interpreter. find sits in its own branch below -- a read until
+# that can write to a path they were only "reading": sed (-i), shfmt (-w),
+# awk (print >), and every interpreter. find sits in its own branch below --
+# a read until
 # -delete / -exec and friends make it a write.
-READ_CMDS="ls|cat|bat|head|tail|less|more|grep|rg|egrep|fgrep|wc|stat|file|diff|cmp|readlink|realpath|dirname|basename|shellcheck|shfmt|bats|shasum|md5|md5sum|sha256sum"
+READ_CMDS="ls|cat|bat|head|tail|less|more|grep|rg|egrep|fgrep|wc|stat|file|diff|cmp|readlink|realpath|dirname|basename|shellcheck|bats|shasum|md5|md5sum|sha256sum"
 GIT_READ_SUBCMDS="diff|show|log|blame|status|ls-files|grep|cat-file|rev-parse"
 FIND_WRITE_RE="(^| )-(delete|exec|execdir|ok|okdir|fls|fprint0?|fprintf)( |$)"
 
@@ -152,6 +160,10 @@ function _protected_either() {
 # -- normalized write destinations --------------------------------------
 if [[ "$OPERATION" == write ]]; then
     while IFS= read -r path; do
+        path=${path//\$\{HOME\}/$HOME}
+        path=${path//\$HOME/$HOME}
+        path=${path/#\~\//$HOME/}
+        [ -n "$_me" ] && path=${path/#\~$_me\//$HOME/}
         _protected_either "$path" && bad+=("$path")
     done < <(printf '%s' "$INPUT" | jq -r '.write_paths[]')
 fi
@@ -198,6 +210,9 @@ if [[ "$OPERATION" == shell && -n "$COMMAND" ]]; then
         read -ra toks <<< "$seg"
         for tok in "${toks[@]}"; do
             tok=$(_bare_token "$tok")
+            # a path can hide after an = (dd of=, curl --output=, git --output=,
+            # GIT_CONFIG=): judge the value, not the --opt= / key= wrapper.
+            [[ "$tok" == *=*/* ]] && tok=${tok##*=}
             # only path-shaped tokens. without this, readlink resolves every
             # bare word against the cwd, and `ls` run from inside a protected
             # directory would deny itself.
@@ -211,8 +226,10 @@ if [[ "$OPERATION" == shell && -n "$COMMAND" ]]; then
         if [[ "$seg" != *">"* ]]; then
             leading=$(_leading_cmd "$seg")
             if [[ "$leading" == git ]]; then
+                # --output makes a read subcommand write a file -- not a read.
                 if printf '%s' "$seg" |
-                    grep -qE -- "(^| )git +(${GIT_READ_SUBCMDS})( |$)"; then
+                    grep -qE -- "(^| )git +(${GIT_READ_SUBCMDS})( |$)" &&
+                    ! printf '%s' "$seg" | grep -qE -- "(^| )(-o|--output)([= ]|$)"; then
                     excused+=("${hits[@]}")
                     continue
                 fi
