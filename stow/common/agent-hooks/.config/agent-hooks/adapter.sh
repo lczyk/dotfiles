@@ -65,15 +65,17 @@ function _patch_request() {
     # deletes are writes too: a Delete File line, or the `--- a/` side of a
     # unified diff (the old name of a rename, the file a /dev/null target
     # drops). strip CR first so a CRLF patch cannot smuggle a path past the
-    # globs, and read the git rename headers, which carry no +++/--- hunk.
+    # globs; read the git rename / copy / diff --git headers (which carry no
+    # +++/--- hunk); and tolerate the quotes git puts around a path in a header.
     paths=$(
         printf '%s\n' "$patch" | tr -d '\r' |
             sed -nE \
-                -e 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' \
-                -e 's/^\*\*\* Move to: (.*)$/\1/p' \
-                -e 's/^\+\+\+ b\/(.*)$/\1/p' \
-                -e 's/^--- a\/(.*)$/\1/p' \
-                -e 's/^rename (from|to) (.*)$/\2/p' |
+                -e 's/^\*\*\* (Add|Update|Delete) File: "?([^"]*)"?$/\2/p' \
+                -e 's/^\*\*\* Move to: "?([^"]*)"?$/\1/p' \
+                -e 's/^\+\+\+ "?b\/([^"]*)"?$/\1/p' \
+                -e 's/^--- "?a\/([^"]*)"?$/\1/p' \
+                -e 's/^(rename|copy) (from|to) "?([^"]*)"?$/\3/p' \
+                -e 's/^diff --git "?a\/([^ "]*).*/\1/p' |
             jq -Rsc 'split("\n") | map(select(length > 0)) | unique'
     ) || return 1
 

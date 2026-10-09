@@ -76,7 +76,8 @@ function patchFrom(args) {
 
 // deletes are writes too: a Delete File line, the `--- a/` side of a unified
 // diff (the old name of a rename, the file a /dev/null target drops), or a git
-// rename header, which carries no +++/--- hunk. the split drops any CR.
+// rename / copy / diff --git header (which carries no +++/--- hunk), with the
+// quotes git may put around a header path tolerated. the split drops any CR.
 function patchPaths(patch) {
   const paths = new Set();
   for (const line of patch.split(/\r?\n/)) {
@@ -84,11 +85,14 @@ function patchPaths(patch) {
       line.match(/^\*\*\* Move to: (.*)$/);
     if (custom) paths.add(custom[1]);
 
-    const unified = line.match(/^\+\+\+ b\/(.*)$/) || line.match(/^--- a\/(.*)$/);
+    const unified = line.match(/^\+\+\+ "?b\/([^"]*)"?$/) || line.match(/^--- "?a\/([^"]*)"?$/);
     if (unified) paths.add(unified[1]);
 
-    const renamed = line.match(/^rename (?:from|to) (.*)$/);
+    const renamed = line.match(/^(?:rename|copy) (?:from|to) "?([^"]*)"?$/);
     if (renamed) paths.add(renamed[1]);
+
+    const gitDiff = line.match(/^diff --git "?a\/([^ "]*)/);
+    if (gitDiff) paths.add(gitDiff[1]);
   }
   return [...paths];
 }
