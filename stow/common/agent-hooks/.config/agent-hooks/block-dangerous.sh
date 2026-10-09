@@ -575,18 +575,28 @@ MARKER_REASON="agent session markers are not yours to unset or rewrite -- the gi
 
 # a url or path where a remote name belongs. remotes are fixed for the agent
 # (git remote / git config writes are fenced), so a literal target is the only
-# way left to push somewhere the user did not configure. redirect targets are
-# files, not remotes -- skipped.
+# way left to push somewhere the user did not configure. an unambiguous url or
+# scp-style host:path is never a remote wherever it sits (so a second push
+# folded into the segment is still caught); the first positional is the remote,
+# where a bare relative path or host:colon also disqualifies it, while the
+# refspecs that follow keep their own colons and slashes. redirect targets and
+# the value of -o are files, not remotes -- skipped.
 _push_names_url() {
-    local tok toks skip=0
+    local tok toks skip=0 seen_remote=0
     read -ra toks <<< "$1"
     for tok in "${toks[@]}"; do
         if ((skip)); then skip=0; continue; fi
         case "$tok" in
             (\>|\>\>|[0-9]\>|[0-9]\>\>|\<|[0-9]\<) skip=1; continue ;;
             (*\>*|\<*) continue ;;
-            (*://*|*@*:*|/*|./*|../*|"~"*|*.git) return 0 ;;
+            (-o|--push-option|--receive-pack|--exec|--repo) skip=1; continue ;;
+            (-*) continue ;;
+            (*://*|*@*:*|*.git) return 0 ;;
         esac
+        if ((!seen_remote)); then
+            seen_remote=1
+            case "$tok" in (*:*|*/*|"~"*) return 0 ;; esac
+        fi
     done
     return 1
 }
