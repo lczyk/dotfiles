@@ -74,8 +74,9 @@ function patchFrom(args) {
   return null;
 }
 
-// deletes are writes too: a Delete File line, or the `--- a/` side of a
-// unified diff (the old name of a rename, the file a /dev/null target drops).
+// deletes are writes too: a Delete File line, the `--- a/` side of a unified
+// diff (the old name of a rename, the file a /dev/null target drops), or a git
+// rename header, which carries no +++/--- hunk. the split drops any CR.
 function patchPaths(patch) {
   const paths = new Set();
   for (const line of patch.split(/\r?\n/)) {
@@ -85,6 +86,9 @@ function patchPaths(patch) {
 
     const unified = line.match(/^\+\+\+ b\/(.*)$/) || line.match(/^--- a\/(.*)$/);
     if (unified) paths.add(unified[1]);
+
+    const renamed = line.match(/^rename (?:from|to) (.*)$/);
+    if (renamed) paths.add(renamed[1]);
   }
   return [...paths];
 }
