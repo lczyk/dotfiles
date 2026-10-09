@@ -149,11 +149,13 @@ fire() {
 
 @test "blocks a wide git add wherever the wide flag or path sits" {
     for cmd in "git add -v -A" "git add -- ." "git add -f ." "git add src \".\"" "git add -Av" \
-        "git add :/" "git add x && git add -u" "git add -- .." "git add --no-ignore-removal src"; do
+        "git add :/" "git add x && git add -u" "git add -- .." "git add --no-ignore-removal src" \
+        "git add ./" "git add ../" "git add :(top)" "git add :!keep.txt" "git add :/*"; do
         run fire "$cmd"
         [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
     done
-    for cmd in "git add -- a.txt b.txt" "git add -v a.txt" "git add -N new.txt" "git add src/dir/" "git add -p a.txt"; do
+    for cmd in "git add -- a.txt b.txt" "git add -v a.txt" "git add -N new.txt" "git add src/dir/" "git add -p a.txt" \
+        "git add ./a.txt" "git add ../sib/b.txt"; do
         run fire "$cmd"
         [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
     done
@@ -172,12 +174,14 @@ fire() {
 
 @test "blocks commit plumbing writes, reads stay free" {
     for cmd in "git commit-tree HEAD^{tree} -m x" "git replace HEAD~1 HEAD" "git replace -d abc1234" \
-        "git replace --graft HEAD" "git notes add -m x" "git notes remove HEAD" "git notes append -m y"; do
+        "git replace --graft HEAD" "git notes add -m x" "git notes remove HEAD" "git notes append -m y" \
+        "git notes --ref=foo add -m x" "git notes --ref foo remove HEAD"; do
         run fire "$cmd"
         [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
     done
     for cmd in "git replace" "git replace -l" "git replace --list 'v*'" "git notes show HEAD" "git notes list" \
-        "git notes" "git commit-graph write" "git commit -F /tmp/ai/m"; do
+        "git notes" "git commit-graph write" "git commit -F /tmp/ai/m" \
+        "git notes --ref=foo show HEAD" "git notes --ref foo list"; do
         run fire "$cmd"
         [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
     done
@@ -209,6 +213,29 @@ fire() {
 @test "blocks git clean -fd" {
     run fire "git clean -fd"
     [ "$status" -eq 2 ]
+}
+
+@test "blocks clean behind a -c clean.requireForce one-shot" {
+    run fire "git -c clean.requireForce=false clean -d"
+    [ "$status" -eq 2 ]
+}
+
+@test "blocks git mv --force, plain git mv is fine" {
+    for cmd in "git mv -f a.txt keep.txt" "git mv --force a b" "git mv -kf a b"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    run fire "git mv old.txt new.txt"
+    [ "$status" -eq 0 ]
+}
+
+@test "blocks git read-tree that touches the worktree, bare read-tree is fine" {
+    for cmd in "git read-tree -u --reset HEAD" "git read-tree -m -u HEAD" "git read-tree --reset HEAD"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+    run fire "git read-tree HEAD"
+    [ "$status" -eq 0 ]
 }
 
 @test "allows git status" {
