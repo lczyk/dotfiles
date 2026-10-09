@@ -1,4 +1,5 @@
 ---
+name: fizz-debug
 description: >
   Debug a FizzBee spec that fails, produces unexpected results, is too slow,
   or has an incorrect state space. Use when the model checker reports FAILED,
@@ -7,7 +8,7 @@ description: >
 
 # FizzBee Debugging Guide
 
-**Full references**: `~/.claude/skills/fizzbee-docs/VERIFICATION_GUIDE.md`, `~/.claude/skills/fizzbee-docs/GOTCHAS.md`, `~/.claude/skills/fizzbee-docs/PERFORMANCE_GUIDE.md`
+**Full references**: [VERIFICATION_GUIDE.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/VERIFICATION_GUIDE.md), [GOTCHAS.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/GOTCHAS.md), [PERFORMANCE_GUIDE.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/PERFORMANCE_GUIDE.md)
 
 ---
 
@@ -58,7 +59,7 @@ WARNING: Trace execution incomplete. Expected 8 links, executed 6 links.
 ```
 
 A transition in your trace was blocked. Most common causes:
-1. A `require` guard failed — a condition you expected to be true wasn't
+1. A `require` guard failed -- a condition you expected to be true wasn't
 2. A symmetry limit was exceeded (e.g., `limit=2` but trace creates 3 distinct values)
 3. The action name in the trace doesn't match (case-sensitive, exact match)
 
@@ -84,8 +85,8 @@ done
 ```
 
 **Ask:** Are all expected actions appearing? If an action never fires:
-- Check `require` guards — is the condition too tight?
-- Check enabling conditions — does the action body execute a simple statement?
+- Check `require` guards -- is the condition too tight?
+- Check enabling conditions -- does the action body execute a simple statement?
 - Remember: `any empty_list` disables the action
 
 **Write a guided trace for the missing scenario:**
@@ -99,7 +100,7 @@ fizz --trace "ActionThatShouldHappen" spec.fizz
 ## When State Count Is Unexpectedly Large
 
 **Check symmetry configuration:**
-- Are symmetric role instances stored in `bag()` or `list()`? Lists break symmetry — use `bag()`.
+- Are symmetric role instances stored in `bag()` or `list()`? Lists break symmetry -- use `bag()`.
 - Are symmetry limits too loose? Limit = max *coexisting* values, not total ever created.
 - Are old symmetric values being cleaned up?
 
@@ -154,9 +155,9 @@ WINDOW=1" spec.fizz
 ```
 
 **Check for state space explosion causes:**
-1. Non-atomic loops — convert to comprehensions or `atomic for`
-2. Loose symmetry limits — tighten them
-3. Too many concurrent actions — add `max_concurrent_actions: 1` for single-user models
+1. Non-atomic loops -- convert to comprehensions or `atomic for`
+2. Loose symmetry limits -- tighten them
+3. Too many concurrent actions -- add `max_concurrent_actions: 1` for single-user models
 4. Missing cleanup of old symmetric values
 
 **Use DFS instead of BFS to find bugs faster:**
@@ -184,7 +185,7 @@ DFS finds counterexamples faster; BFS finds the shortest ones.
 | `for k, v in dict.items()` error | Tuple unpacking not supported | `for k in d: v = d[k]` |
 | Model passes but wrong | `require` used instead of assertion | Use `always assertion` for invariants |
 
-**Full gotchas list**: `~/.claude/skills/fizzbee-docs/GOTCHAS.md`
+**Full gotchas list**: [GOTCHAS.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/GOTCHAS.md)
 
 ---
 

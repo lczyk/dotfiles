@@ -1,4 +1,5 @@
 ---
+name: fizz-spec
 description: >
   Write, edit, or review FizzBee (.fizz) specifications for model checking
   distributed systems. Use when the user asks to model a system, write a
@@ -10,8 +11,8 @@ description: >
 
 FizzBee is a Python-like formal spec language built on Starlark. Specs model distributed systems; the model checker exhaustively verifies safety and liveness properties.
 
-**Full reference**: `~/.claude/skills/fizzbee-docs/LANGUAGE_REFERENCE.md`
-**Examples index**: `~/.claude/skills/fizzbee-docs/README.md`
+**Full reference**: [LANGUAGE_REFERENCE.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/LANGUAGE_REFERENCE.md)
+**Examples index**: [README.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/README.md)
 
 ## Installation
 
@@ -107,7 +108,7 @@ role Server:
 - `self.*` = role state; local vars are not part of state
 - `self.__id__` = auto-generated unique ID (read-only)
 - Functions can only be called from atomic context or inside roles
-- `result = role.fn()` works; `self.x = role.fn()` crashes — use a local var first
+- `result = role.fn()` works; `self.x = role.fn()` crashes -- use a local var first
 
 ### Flow Modifiers
 
@@ -142,7 +143,7 @@ oneof x in items:              # for-each style: pick one x, execute body
     process(x)
 
 # `any` is a deprecated alias for `oneof` (emits DeprecationWarning)
-x = any items                  # old form — still works but deprecated
+x = any items                  # old form -- still works but deprecated
 ```
 
 ### Assertions
@@ -224,19 +225,19 @@ role Node:
         self.cache = 0   # ephemeral
 ```
 
-Cross-role function calls can also be lost (message loss simulation) — model checker explores both delivery and loss.
+Cross-role function calls can also be lost (message loss simulation) -- model checker explores both delivery and loss.
 
 ---
 
 ## Gotchas
 
-1. **Cross-role return**: `self.x = role.fn()` crashes → use `tmp = role.fn(); self.x = tmp`
-2. **No tuple unpacking in for**: `for k, v in d.items()` fails → `for k in d: v = d[k]`
+1. **Cross-role return**: `self.x = role.fn()` crashes -> use `tmp = role.fn(); self.x = tmp`
+2. **No tuple unpacking in for**: `for k, v in d.items()` fails -> `for k in d: v = d[k]`
 3. **Role Init ordering**: create globals before creating roles that depend on them
-4. **`require` ≠ assertion**: `require x >= 0` disables action; use `always assertion` for invariants
+4. **`require` != assertion**: `require x >= 0` disables action; use `always assertion` for invariants
 5. **Lists break symmetry**: use `bag()` not `[]` to hold symmetric role instances
 6. **`oneof`/`any` on empty**: disables the action (no `require len > 0` needed)
-7. **`any` keyword vs Python `any()` function**: `x = any([cond for ...])` is a parse error — `any` is the deprecated nondeterministic choice keyword. Prefer `oneof` (no collision: `oneof` can't be an identifier). For boolean checks use `all([...])` or `len([x for x in xs if cond]) > 0`.
+7. **`any` keyword vs Python `any()` function**: `x = any([cond for ...])` is a parse error -- `any` is the deprecated nondeterministic choice keyword. Prefer `oneof` (no collision: `oneof` can't be an identifier). For boolean checks use `all([...])` or `len([x for x in xs if cond]) > 0`.
 8. **Function calls**: can only call fizz functions from atomic context or inside roles; extract to variable before using in expressions
 9. **`None` works**: use `== None`, not `is None` (no `is` operator)
 
@@ -308,18 +309,18 @@ action Fire:
 
 ## Modeling E2E Behavior and Requirements
 
-Use this pattern when modeling user-facing apps, UI flows, or product requirements — not just distributed protocols. The spec becomes both a formal model and a contract for model-based testing (MBT).
+Use this pattern when modeling user-facing apps, UI flows, or product requirements -- not just distributed protocols. The spec becomes both a formal model and a contract for model-based testing (MBT).
 
 ### Role Design
 
 | App type | Roles |
 |---|---|
-| Single-user local app (TodoMVC) | `role App` — one role for everything |
+| Single-user local app (TodoMVC) | `role App` -- one role for everything |
 | Client-server or localStorage | `role System` + `role User` |
 | Marketplace | `role System` + `role Seller` + `role Buyer` |
 | Multi-role service | `role System` + one role per user type |
 
-**`System`** holds the authoritative application state (what the DB / localStorage / server knows). It is implementation-agnostic — the same spec works whether state lives in localStorage, a REST API, or a database.
+**`System`** holds the authoritative application state (what the DB / localStorage / server knows). It is implementation-agnostic -- the same spec works whether state lives in localStorage, a REST API, or a database.
 
 **User roles** hold what the user sees and controls: their current view, selections, form inputs. Each user type gets its own role.
 
@@ -340,19 +341,19 @@ options:
 
 Four conventions make a spec directly usable for model-based testing:
 
-**1. Explicit view state** — store what the user sees as a separate field, not recomputed on the fly:
+**1. Explicit view state** -- store what the user sees as a separate field, not recomputed on the fly:
 
 ```python
 role System:
     action Init:
         self.todos = {}        # authoritative store (localStorage / DB)
-        self.shown_todos = []  # derived view — maps to visible DOM items
+        self.shown_todos = []  # derived view -- maps to visible DOM items
 
     atomic func refresh():
         self.shown_todos = [self.todos[id] for id in self.todos]
 ```
 
-**2. Index-based picks** — actions that select an item use an index into the view list, not an ID. This matches how the adapter calls the action (args[0] = index into rendered list):
+**2. Index-based picks** -- actions that select an item use an index into the view list, not an ID. This matches how the adapter calls the action (args[0] = index into rendered list):
 
 ```python
 atomic action DeleteTodo:
@@ -363,17 +364,17 @@ atomic action DeleteTodo:
     self.refresh()
 ```
 
-**3. IDs for generated records** — if the spec creates records with opaque IDs (todos, tickets, bookings), prefer symmetry values over integer counters. This keeps the state space compact without sacrificing correctness:
-- `symmetry.nominal` — only identity matters, no ordering (UUID v4-style IDs)
-- `symmetry.ordinal` — relative order matters but not distance (UUID v7-style IDs, insertion order)
-- `symmetry.interval` — numeric distance matters (sequence numbers, timestamps, version counters)
+**3. IDs for generated records** -- if the spec creates records with opaque IDs (todos, tickets, bookings), prefer symmetry values over integer counters. This keeps the state space compact without sacrificing correctness:
+- `symmetry.nominal` -- only identity matters, no ordering (UUID v4-style IDs)
+- `symmetry.ordinal` -- relative order matters but not distance (UUID v7-style IDs, insertion order)
+- `symmetry.interval` -- numeric distance matters (sequence numbers, timestamps, version counters)
 
 ```python
 IDS = symmetry.nominal(name="id", limit=MAX_ITEMS)  # limit = max coexisting IDs
 id = IDS.fresh()                                     # allocate a new unique ID
 ```
 
-**4. Named input constants** — collect all user-supplied strings into top-level constants so the adapter's `OverridesProvider` can replace them with fuzz-generated values:
+**4. Named input constants** -- collect all user-supplied strings into top-level constants so the adapter's `OverridesProvider` can replace them with fuzz-generated values:
 
 ```python
 TODO_STRINGS = ("Buy milk", "Walk dog", "Write spec")   # overridable
@@ -401,7 +402,7 @@ INPUT_STRINGS = ("hello", "world", "foo")
 
 role System:
     action Init:
-        self.items = {}        # id → record
+        self.items = {}        # id -> record
         self.view = []         # filtered/sorted view shown to user
 
     atomic func refresh():
@@ -437,13 +438,13 @@ Once the spec is ready, use the **`fizz-mbt` skill** to generate adapter code (T
 
 ## Reference Examples (by topic)
 
-Installed example specs (after `fizz install-skills`):
-- `~/.claude/skills/fizzbee-docs/examples/01-counter.fizz` — basics: init, atomic action, assertion
-- `~/.claude/skills/fizzbee-docs/examples/09-assertions.fizz` — always/exists/transition assertions
-- `~/.claude/skills/fizzbee-docs/examples/11-roles.fizz` — two-role communication
-- `~/.claude/skills/fizzbee-docs/examples/13-two-phase-commit.fizz` — distributed protocol
-- `~/.claude/skills/fizzbee-docs/examples/14-fault-injection.fizz` — crash-on-yield, ephemeral state
-- `~/.claude/skills/fizzbee-docs/examples/16-symmetry.fizz` — nominal symmetry, symmetric roles
+Reference specs in the fizzbee repo, one per feature:
+- [01-02-atomic-action](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/01-02-atomic-action) -- basics: init, atomic action, assertion
+- [09-01-always-assertion](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/09-01-always-assertion), [09-02-exists-assertion](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/09-02-exists-assertion), [09-03-transition-assertion](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/09-03-transition-assertion) -- always/exists/transition assertions
+- [11-01-simple-role](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/11-01-simple-role) -- two-role communication
+- [13-02-01-two-phase-commit](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/13-02-01-two-phase-commit) -- distributed protocol
+- [14-03-role-crash-ephemeral](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/14-03-role-crash-ephemeral) -- crash-on-yield, ephemeral state
+- [16-02-symmetric-roles](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/16-02-symmetric-roles), [16-05-nominal-symmetry](https://github.com/fizzbee-io/fizzbee/tree/main/examples/references/16-05-nominal-symmetry) -- symmetric roles, nominal symmetry
 
-Full examples index: `~/.claude/skills/fizzbee-docs/README.md`
+Full examples index: [examples/references/README.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/README.md)
 All 100+ examples on GitHub: https://github.com/fizzbee-io/fizzbee/tree/main/examples/references

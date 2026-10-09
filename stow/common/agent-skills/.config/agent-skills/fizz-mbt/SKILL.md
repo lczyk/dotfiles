@@ -1,4 +1,5 @@
 ---
+name: fizz-mbt
 description: >
   Create model-based tests (MBT) connecting a FizzBee spec to a real system
   under test (SUT). Use when the user has a .fizz spec and wants to generate
@@ -29,14 +30,14 @@ brew tap fizzbee-io/fizzbee-mbt && brew install fizzbee-mbt
 
 | Feature | TypeScript | Go | Rust | Java |
 |---|---|---|---|---|
-| Sequential testing | ✓ | ✓ | ✓ | ✓ |
-| Concurrent testing | ✓ (cooperative) | ✓ | ✓ | ✓ |
-| StateGetter | ✓ | ✓ | ✓ | ✓ |
-| SnapshotStateGetter | ✓ | ✓ | ✓ | ✓ |
-| Sentinel values (IGNORE) | ✓ | ✓ | ✓ | ✓ |
-| AfterActionHook | ✓ | — | — | — |
-| OverridesProvider (fuzzing) | ✓ | — | — | — |
-| Playwright utilities | ✓ | — | — | — |
+| Sequential testing | yes | yes | yes | yes |
+| Concurrent testing | yes (cooperative) | yes | yes | yes |
+| StateGetter | yes | yes | yes | yes |
+| SnapshotStateGetter | yes | yes | yes | yes |
+| Sentinel values (IGNORE) | yes | yes | yes | yes |
+| AfterActionHook | yes | -- | -- | -- |
+| OverridesProvider (fuzzing) | yes | -- | -- | -- |
+| Playwright utilities | yes | -- | -- | -- |
 
 TypeScript and Go have the broadest feature support. TypeScript is the primary language for UI/E2E testing.
 
@@ -44,7 +45,7 @@ TypeScript and Go have the broadest feature support. TypeScript is the primary l
 
 ## Workflow
 
-1. Write and verify the `.fizz` spec: `fizz spec.fizz` → PASSED
+1. Write and verify the `.fizz` spec: `fizz spec.fizz` -> PASSED
 2. Scaffold: `fizz mbt-scaffold --lang <lang> --gen-adapter --out-dir <dir> spec.fizz`
 3. Implement the adapter methods
 4. Start the MBT server: `fizzbee-mbt-server --states_file out/run_<timestamp>/`
@@ -97,22 +98,22 @@ export class MyModelAdapter implements MyModel, AfterActionHook, OverridesProvid
   private page?: Page;
 
   async init(): Promise<void> {
-    // Called before each test run — set up browser page, reset app state
+    // Called before each test run -- set up browser page, reset app state
     this.page = await browser.newPage();
     await this.page.goto('http://localhost:3000');
   }
 
   async cleanup(): Promise<void> {
-    // Called after each test run — close the page
+    // Called after each test run -- close the page
     await this.page?.close();
   }
 
   async cleanupAll(): Promise<void> {
-    // Called once at the very end — close the browser
+    // Called once at the very end -- close the browser
     await browser.close();
   }
 
-  // Called after every action — wait for UI to settle
+  // Called after every action -- wait for UI to settle
   async afterAction(): Promise<void> {
     await waitForDOMSettled(this.page!, { debounceTimeout: 1 });
   }
@@ -127,31 +128,31 @@ export class MyModelAdapter implements MyModel, AfterActionHook, OverridesProvid
 
 **Use `waitForDOMSettled`, never `waitForTimeout` or `slowMo`:**
 ```typescript
-// ✓ Precise: waits for DOM mutations to stop
+// Good: precise: waits for DOM mutations to stop
 await waitForDOMSettled(page, { debounceTimeout: 1 });
 
-// ✗ Fragile: arbitrary delay, flaky on slow machines
+// Bad: fragile: arbitrary delay, flaky on slow machines
 await page.waitForTimeout(500);
 ```
 
 **Use role-based and test-ID locators, not CSS selectors:**
 ```typescript
-// ✓ Semantic locators — survive UI refactors
+// Good: semantic locators -- survive UI refactors
 const input = page.getByRole('textbox', { name: 'What needs to be done?' });
 const item = page.getByTestId('todo-item').nth(index);
 const btn = item.getByRole('button', { name: 'Delete' });
 
-// ✗ Brittle — breaks on class/structure changes
+// Bad: brittle -- breaks on class/structure changes
 const item = page.locator('.todo-item').nth(index);
 ```
 
-**Do not use `expect` assertions in adapter actions.** FizzBee drives the assertions from the spec's `always assertion` blocks and state comparison — `expect` in the adapter fights against that model. Just execute the action:
+**Do not use `expect` assertions in adapter actions.** FizzBee drives the assertions from the spec's `always assertion` blocks and state comparison -- `expect` in the adapter fights against that model. Just execute the action:
 ```typescript
 async actionUserAddsItem(args: Arg[]): Promise<any> {
   const title = args[0].toString();
   await page.getByRole('textbox', { name: 'What needs to be done?' }).fill(title);
   await page.getByRole('textbox', { name: 'What needs to be done?' }).press('Enter');
-  // No expect() here — FizzBee handles validation
+  // No expect() here -- FizzBee handles validation
 }
 ```
 
@@ -271,7 +272,7 @@ go get github.com/fizzbee-io/fizzbee/mbt/lib/go
 
 ---
 
-## Starlark → Host Language Type Mapping
+## Starlark -> Host Language Type Mapping
 
 | Starlark | TypeScript | Go | Rust |
 |---|---|---|---|
@@ -289,7 +290,7 @@ go get github.com/fizzbee-io/fizzbee/mbt/lib/go
 ## Implementation Tips
 
 - Implement `Init()` + `getRoles()` first, run tests, then implement actions one by one
-- Return `NotImplementedError` / `mbt.ErrNotImplemented` for unimplemented actions — the runner skips them rather than failing
-- Keep `cleanup()` lightweight — it runs between every test trace
-- Keep `cleanupAll()` for expensive teardown (close browser, connection pool) — runs once at end
+- Return `NotImplementedError` / `mbt.ErrNotImplemented` for unimplemented actions -- the runner skips them rather than failing
+- Keep `cleanup()` lightweight -- it runs between every test trace
+- Keep `cleanupAll()` for expensive teardown (close browser, connection pool) -- runs once at end
 - For concurrent testing: if the SUT isn't thread-safe, set `max-parallel-runs: 0`

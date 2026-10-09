@@ -1,4 +1,5 @@
 ---
+name: fizz-check
 description: >
   Run the FizzBee model checker or simulator on a .fizz spec. Use when the
   user wants to verify a spec, run the model checker, simulate behavior,
@@ -32,14 +33,14 @@ Note: `fizz` is the installed binary. If building from source, use `./fizz` (wra
 | `--seed N` | 0 | Random seed for reproducible simulation / random exploration |
 | `--max_runs N` | 0 (unlimited) | Number of simulation runs (simulation mode only) |
 | `--exploration_strategy` | `bfs` | State exploration: `bfs`, `dfs`, or `random` (model checking) |
-| `--trace "line1\nline2"` | — | Guided trace: follow specific action sequence |
-| `--trace-file FILE` | — | Load guided trace from file |
+| `--trace "line1\nline2"` | -- | Guided trace: follow specific action sequence |
+| `--trace-file FILE` | -- | Load guided trace from file |
 | `--trace-extend N` | 0 | After trace, explore N more steps (shows enabled actions) |
-| `--preinit-hook "STMT"` | — | Override constants before Init runs |
-| `--preinit-hook-file FILE` | — | Load preinit hook from `.cfg` file |
+| `--preinit-hook "STMT"` | -- | Override constants before Init runs |
+| `--preinit-hook-file FILE` | -- | Load preinit hook from `.cfg` file |
 | `--output-dir DIR` | auto-timestamped | Where to write output |
 | `--no-copy-ast` | off | Don't copy AST to output dir |
-| `--experimental_processed_queue` | off | EXPERIMENTAL: queue holds processed yield-points instead of unprocessed action-starts. Dedupes successors before they enter the queue → smaller peak queue memory (~10× on BFS, ~3× on DFS). State space and assertion outcomes unchanged under BFS. **Under DFS / Random with `max_actions` set, exploration order differs and may visit a different subset within the bound** — see Gotchas. |
+| `--experimental_processed_queue` | off | EXPERIMENTAL: queue holds processed yield-points instead of unprocessed action-starts. Dedupes successors before they enter the queue -> smaller peak queue memory (~10x on BFS, ~3x on DFS). State space and assertion outcomes unchanged under BFS. **Under DFS / Random with `max_actions` set, exploration order differs and may visit a different subset within the bound** -- see Gotchas. |
 
 ---
 
@@ -61,8 +62,8 @@ PASSED: Model checker completed successfully
 - **PASSED / FAILED**: overall result
 
 Output files go to `<spec-dir>/out/run_<timestamp>/`:
-- `graph.dot` — state graph (auto-generated for < 250 nodes)
-- `communication.dot` — role interaction diagram
+- `graph.dot` -- state graph (auto-generated for < 250 nodes)
+- `communication.dot` -- role interaction diagram
 - Node/link JSON files for the explorer
 
 Convert to SVG for visual inspection:
@@ -76,14 +77,14 @@ dot -Tsvg out/*/graph.dot -o graph.svg && open graph.svg
 
 | Mode | Exhaustive? | Memory | Speed | Trace length | Liveness | `exists` |
 |---|---|---|---|---|---|---|
-| Model checking — BFS (default) | yes | high | slow on large graphs | shortest counterexample | yes | yes |
-| Model checking — DFS | yes* | low | fast on large graphs | not minimal | yes | yes |
-| Model checking — Random-order traversal | yes* | medium | varies | not minimal | yes | yes |
+| Model checking -- BFS (default) | yes | high | slow on large graphs | shortest counterexample | yes | yes |
+| Model checking -- DFS | yes* | low | fast on large graphs | not minimal | yes | yes |
+| Model checking -- Random-order traversal | yes* | medium | varies | not minimal | yes | yes |
 | Simulation (`-x`) | no | negligible | fastest | not minimal | per-trace only | no |
 
 \* DFS and Random-order traversal are exhaustive **only without a `max_actions` cap**. With a cap (global or per-action), paths past the limit are pruned and coverage is incomplete. BFS with `max_actions` still covers all states reachable within the cap.
 
-**Memory:** simulation is O(d) (depth only) — negligible. BFS is O(b^d). DFS is noticeably lower than BFS; random-order is in between. Simulation often finds bugs faster than exhaustive checking, at the cost of non-exhaustiveness.
+**Memory:** simulation is O(d) (depth only) -- negligible. BFS is O(b^d). DFS is noticeably lower than BFS; random-order is in between. Simulation often finds bugs faster than exhaustive checking, at the cost of non-exhaustiveness.
 
 ---
 
@@ -122,7 +123,7 @@ Client.Read" spec.fizz
 **Trace format rules:**
 - One transition per line
 - `#` comments and blank lines are ignored
-- Init is automatic — don't include it
+- Init is automatic -- don't include it
 - The `[fn.call]` suffix from simulation output can be omitted
 - `Any:varname=value` lines specify nondeterministic choices
 
@@ -168,14 +169,14 @@ options:
 
 ### Constant overrides (preinit-hook)
 
-Override constants without editing the spec — useful for testing different configurations:
+Override constants without editing the spec -- useful for testing different configurations:
 
 ```bash
 # Inline override
 fizz --preinit-hook "MAX_ITEMS = 3
 NUM_CLIENTS = 2" spec.fizz
 
-# From file (.cfg extension — NOT .star, which auto-imports as a module)
+# From file (.cfg extension -- NOT .star, which auto-imports as a module)
 fizz --preinit-hook-file small.cfg spec.fizz
 ```
 
@@ -198,10 +199,10 @@ NUM_SERVERS=10" spec.fizz
 ## Gotchas
 
 - **DFS / Random + `max_actions` is not exhaustive.** A `max_actions` cap (global or per-action in frontmatter) prunes paths past the limit. With BFS the bounded prefix is fully covered; with DFS / Random the cap interacts with the traversal order, so reachable states within the limit may still be missed. If you need exhaustive coverage with a cap, use BFS.
-- **`--experimental_processed_queue` shifts DFS/Random exploration order.** The flag dedupes successors before enqueue, which changes the order siblings are visited (drains them before descending). Under BFS this is purely a memory-layout change — same nodes, same unique-state count. Under DFS / Random, combined with a `max_actions` cap, the changed order can prune a *different* subset of reachable states than the existing path would. Without the cap (or with `max_actions` raised above the spec's natural diameter), both paths converge to the same canonical state set. If you compare baselines across the flag, set `max_actions` high enough that the bound never bites.
+- **`--experimental_processed_queue` shifts DFS/Random exploration order.** The flag dedupes successors before enqueue, which changes the order siblings are visited (drains them before descending). Under BFS this is purely a memory-layout change -- same nodes, same unique-state count. Under DFS / Random, combined with a `max_actions` cap, the changed order can prune a *different* subset of reachable states than the existing path would. Without the cap (or with `max_actions` raised above the spec's natural diameter), both paths converge to the same canonical state set. If you compare baselines across the flag, set `max_actions` high enough that the bound never bites.
 - **`exists` assertions are disabled in simulation mode.** Simulation checks individual execution traces only; `exists` requires evaluating branches across the state graph.
 - **Simulation traces are not minimal.** Simulation produces *a* failing path, not the *shortest* one. Once you have a failing seed, narrow the bug with a guided `--trace` or model-check a smaller config to get a minimal counterexample.
-- **Random-seed simulation: passing ≠ correct.** "Passed across 1000 seeds" raises confidence but is not a proof. For correctness claims, model-check.
+- **Random-seed simulation: passing != correct.** "Passed across 1000 seeds" raises confidence but is not a proof. For correctness claims, model-check.
 - **`crash_on_yield: true` matters.** When set, BFS/DFS/Random fork a crash branch at every yield, multiplying state count. Switch off (or omit) when you only care about the happy-path graph; switch on to verify crash recovery.
 - **Symmetry reduction is skipped in simulation.** It only matters within a single run, so simulation explores raw states. State counts in simulation output are not comparable to model-checker output.
 - **`--max_runs 0` in simulation means unlimited** (runs until interrupted). Always set `--max_runs N` when scripting.
@@ -237,10 +238,10 @@ Compare your output's `Nodes`, `Valid Nodes`, `Unique states` against the baseli
 
 ## Verification Checklist
 
-1. Simulate: `fizz -x --max_runs 1 --seed N spec.fizz` — try 3-5 seeds
+1. Simulate: `fizz -x --max_runs 1 --seed N spec.fizz` -- try 3-5 seeds
 2. Guided traces for key scenarios (happy path, race conditions, edge cases)
 3. Config variants: small configs for model checking, large for simulation
 4. Full model check: verify PASSED + state counts make sense
 5. If < 250 nodes: visualize with `dot -Tsvg`
 
-**Full guide**: `~/.claude/skills/fizzbee-docs/VERIFICATION_GUIDE.md`
+**Full guide**: [VERIFICATION_GUIDE.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/VERIFICATION_GUIDE.md)
