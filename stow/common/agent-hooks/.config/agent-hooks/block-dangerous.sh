@@ -569,7 +569,7 @@ MARKER_PATTERNS=(
     "(^|[ ;|&])env( [^;|&]*)? (-[A-Za-z0-9]*i[A-Za-z0-9]*|-|--ignore-environment)( |$)"
     # export -n drops the export attribute; fish `set -e` / --erase erases it.
     "(^|[ ;|&])export -n [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
-    "(^|[ ;|&])set (-[A-Za-z]*e[A-Za-z]*|--erase) [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
+    "(^|[ ;|&])set ([^;|&]* )?(-[A-Za-z]*e[A-Za-z]*|--erase) [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
 )
 MARKER_REASON="agent session markers are not yours to unset or rewrite -- the git hooks read them"
 
