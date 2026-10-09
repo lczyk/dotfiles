@@ -589,13 +589,18 @@ _push_names_url() {
         case "$tok" in
             (\>|\>\>|[0-9]\>|[0-9]\>\>|\<|[0-9]\<) skip=1; continue ;;
             (*\>*|\<*) continue ;;
-            (-o|--push-option|--receive-pack|--exec|--repo) skip=1; continue ;;
+            # -o / --push-option take a value; -o may end a short cluster (-uo)
+            (-o|-[A-Za-z]*o|--push-option|--receive-pack|--exec|--repo) skip=1; continue ;;
             (-*) continue ;;
-            (*://*|*@*:*|*.git) return 0 ;;
+            # @{u} / @{upstream} is a reflog ref, not a user@host:path url
+            (*@\{*) ;;
+            (*://*|*@*:*) return 0 ;;
         esac
         if ((!seen_remote)); then
             seen_remote=1
-            case "$tok" in (*:*|*/*|"~"*) return 0 ;; esac
+            # the remote slot: a path, a url, an scp host:path, a .git repo or a
+            # bare . / .. is not a configured remote name
+            case "$tok" in (*:*|*/*|"~"*|*.git|.|..) return 0 ;; esac
         fi
     done
     return 1
