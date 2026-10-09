@@ -1299,6 +1299,21 @@ origin feature/x"
     [ "$status" -eq 2 ]
 }
 
+@test "push does not lift an scp-style or bare-path remote" {
+    for cmd in "git push example.com:foo main" "git push host.com:path/repo.git" "git push vendor/thing main" \
+        "git push user@host.com:repo.git main"; do
+        AGENT_UNFENCE=push run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
+@test "push still allows a configured remote name with any refspec" {
+    for cmd in "git push origin main:main" "git push origin HEAD:refs/heads/x" "git push -o ci.skip origin main"; do
+        AGENT_UNFENCE=push run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
 # bulk
 
 @test "push does not lift --mirror" {
