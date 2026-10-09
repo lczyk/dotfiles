@@ -93,6 +93,14 @@ one file, `<component>.fizz`: frontmatter (bounds, options), header comment (wha
 
 `fizz-check` runs it and reads the output; `fizz-debug` when the run itself is the problem. two things they don't say: a failed `exists` prints `FAILED: Expected states never reached` then `Invariant 0: <Name>` (no colon after the word), and every run drops an `out/` tree plus a `<spec>.json` sidecar next to the spec.
 
+**run every fizzbee invocation under `timeout -k`** -- checker, simulator, guided trace, mutant, no exceptions, `-k` included:
+
+```sh
+timeout -k 10 <budget-seconds> fizz spec.fizz
+```
+
+exit 124 / 137 means the budget ran out: inconclusive, not a pass.
+
 first run is almost always red; triage each counterexample as one of:
 
 - **property wrong** -- it said more than the requirement. fix the property, note why.
@@ -113,7 +121,7 @@ python3 - <<'EOF'
 s = open('/path/to/spec.fizz').read()
 open('mut_no_clamp.fizz', 'w').write(s.replace("    top = min(top, N)", "    pass"))
 EOF
-fizz mut_no_clamp.fizz 2>&1 | grep -E '^(PASSED|FAILED|Invariant)'
+timeout -k 10 30 fizz mut_no_clamp.fizz 2>&1 | grep -E '^(PASSED|FAILED|Invariant)'
 ```
 
 report the table: mutant -> property that caught it.
