@@ -152,3 +152,11 @@ fire_raw_tool() {
     [[ "$output" == HINT:* ]]
     [[ "$output" != *permissionDecision* ]]
 }
+
+@test "Copilot adapter catches quoted and copy protected patches" {
+    for patch in $'diff --git a/keep.md b/keep.md\n--- a/keep.md\n+++ b/keep.md\n@@ -1 +1 @@\n-a\n+b\ndiff --git "a/.claude/settings.json" "b/x"\nsimilarity index 100%\nrename from ".claude/settings.json"\nrename to x' $'diff --git a/keep.md b/keep.md\n--- a/keep.md\n+++ b/keep.md\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/x b/stow/common/claude/.claude/hooks/evil.sh\nsimilarity index 100%\ncopy from x\ncopy to stow/common/claude/.claude/hooks/evil.sh'; do
+        run fire_raw_tool apply_patch "$patch"
+        [ "$status" -eq 0 ]
+        [ "$(printf '%s' "$output" | jq -r '.permissionDecision')" = "deny" ] || { echo "not denied"; false; }
+    done
+}

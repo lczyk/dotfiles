@@ -121,3 +121,10 @@ fire_codex_patch() {
         [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')" = "null" ]
     done
 }
+
+@test "Codex adapter catches quoted, copy and new-file protected patches" {
+    for patch in $'diff --git a/keep.md b/keep.md\n--- a/keep.md\n+++ b/keep.md\n@@ -1 +1 @@\n-a\n+b\ndiff --git "a/.claude/settings.json" "b/x"\nsimilarity index 100%\nrename from ".claude/settings.json"\nrename to x' $'diff --git a/keep.md b/keep.md\n--- a/keep.md\n+++ b/keep.md\n@@ -1 +1 @@\n-a\n+b\n--- "a/.claude/settings.json"\n+++ "b/.claude/settings.json"\n@@ -1 +1 @@\n-{"a":1}\n+{"a":2}' $'diff --git a/keep.md b/keep.md\n--- a/keep.md\n+++ b/keep.md\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/x b/stow/common/claude/.claude/hooks/evil.sh\nsimilarity index 100%\ncopy from x\ncopy to stow/common/claude/.claude/hooks/evil.sh' $'diff --git a/keep.md b/keep.md\n--- a/keep.md\n+++ b/keep.md\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/stow/common/claude/.claude/hooks/evil.sh b/stow/common/claude/.claude/hooks/evil.sh\nnew file mode 100644\nindex 0000000..e69de29'; do
+        run fire_codex_patch "$patch"
+        [ "$status" -eq 2 ] || { echo "allowed a protected patch"; false; }
+    done
+}
