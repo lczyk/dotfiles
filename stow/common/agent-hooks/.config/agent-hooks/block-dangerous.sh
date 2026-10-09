@@ -43,9 +43,9 @@ COMMAND=${COMMAND//\\git/git}
 # the remote helpers git runs. matched pre-strip -- the loop below erases
 # exactly the evidence being looked for. -i: config keys are case-insensitive.
 # known false positive: `git grep -c <key>` reads as an override.
-GIT_CFG_KEYS="core\.hookspath|commit\.gpgsign|tag\.gpgsign|gpg\.program|alias\."
+GIT_CFG_KEYS="core\.hookspath|commit\.gpgsign|tag\.gpgsign|gpg\.program|clean\.requireforce|alias\."
 if echo "$COMMAND" | grep -qiE -- "(^|[ ;|&])git [^;|&]*((-c ?|--config-env[= ])[\"']?(${GIT_CFG_KEYS})|--exec-path=)"; then
-    echo "BLOCKED: command overrides hook / signing / alias / exec-path config -- ask the user if you really need to" >&2
+    echo "BLOCKED: command overrides hook / signing / clean-safety / alias / exec-path config -- ask the user if you really need to" >&2
     exit 2
 fi
 
@@ -102,6 +102,9 @@ GIT_PATTERNS=(
     "git reflog (expire|delete)"
     # plumbing checkout: overwrites worktree files from the index
     "(^|[ ;|&])git checkout-index( |$)"
+    # read-tree -u / --reset discards worktree edits; mv -f overwrites the dest
+    "(^|[ ;|&])git read-tree ([^;|&]* )?(-[A-Za-z]*u[A-Za-z]*|--reset)( |$)"
+    "(^|[ ;|&])git mv ([^;|&]* )?(--force|-[A-Za-z]*f[A-Za-z]*)( |$)"
     "git gc --prune"
     # ref plumbing -- create / move / delete branch pointers directly
     "(^|[ ;|&])git update-ref( |$)"
@@ -129,7 +132,7 @@ GIT_WRITE_PATTERNS=(
     # commit plumbing: objects and refs written without the commit hooks.
     # `git replace` has its own case below -- its bare and -l forms list.
     "(^|[ ;|&])git commit-tree( |$)"
-    "(^|[ ;|&])git notes (add|append|copy|edit|merge|prune|remove)( |$)"
+    "(^|[ ;|&])git notes (--ref[= ][^ ]+ +)?(add|append|copy|edit|merge|prune|remove)( |$)"
 )
 GIT_WRITE_REASON="these git ops are user-run -- commits on the current branch ARE allowed, but run push / tag / etc yourself or disable the hook"
 
@@ -164,9 +167,10 @@ HISTORY_REASON="git rebase / cherry-pick rewrite or duplicate commits -- user pr
 
 # wide `git add` -- agent must stage explicit paths, not sweep the worktree.
 # blocks -A / --all / -u / --update / --no-ignore-removal (and short-flag
-# clusters containing A or u, e.g. -Au, -Av) and the `.` / `..` / `*` / `:/`
-# sweeps, wherever they sit in the add. pass file paths explicitly instead.
-GIT_ADD_WIDE_RE=" (-[A-Za-z]*[Au][A-Za-z]*|--all|--update|--no-ignore-removal|\\.|\\.\\.|\\*|:/)( |$)"
+# clusters containing A or u, e.g. -Au, -Av), the `.` / `..` / `./` / `../`
+# / `*` sweeps and the `:/` `:!` `:(` pathspec magic, wherever they sit in
+# the add. pass file paths explicitly instead.
+GIT_ADD_WIDE_RE=" (-[A-Za-z]*[Au][A-Za-z]*|--all|--update|--no-ignore-removal|\\.|\\.\\.|\\.\\.?/|\\*)( |$)| :[/!(]"
 GIT_ADD_REASON="stage explicit paths only -- wide \`git add\` may grab unrelated wip / scratch files"
 
 # any write `gh` op. read ops (view/list/status/api GET) are fine.
