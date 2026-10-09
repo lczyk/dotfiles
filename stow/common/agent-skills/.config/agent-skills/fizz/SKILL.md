@@ -86,7 +86,7 @@ one file, `<component>.fizz`: frontmatter (bounds, options), header comment (wha
 - `always assertion` for invariants.
 - `transition assertion Name(before, after)` for what one step may do; return `True` on the stutter / unrelated case first.
 - `always eventually` for progress, with `fair` on the action that must keep running; liveness w/out fairness is vacuous or false. weak `fair` by default.
-- `exists assertion` as **coverage**: every outcome reachable, every interesting state reached. an `exists` that `Init` already satisfies proves nothing: gate it on a counter of the transition it witnesses.
+- `exists assertion` as **coverage**: every outcome reachable, every interesting state reached. an `exists` that `Init` already satisfies proves nothing: tie it to a counter of the transition it witnesses.
 - the vacuity trap: `[A]p` holds when `A` is disabled. if an action must be possible, assert it (`exists`); if it must be blocked, assert that too.
 
 ### 5. run and read
