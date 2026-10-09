@@ -88,6 +88,16 @@ fire_raw_tool() {
     [ "$(printf '%s' "$output" | jq -r '.permissionDecision')" = "deny" ]
 }
 
+@test "Copilot adapter catches a CRLF delete and a protected rename" {
+    run fire_raw_tool apply_patch "*** Begin Patch"$'\r\n'"*** Delete File: $HOME/.codex/hooks.json"$'\r\n'"*** End Patch"
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.permissionDecision')" = "deny" ]
+
+    run fire_raw_tool apply_patch $'diff --git a/keep.md b/keep.md\n--- a/keep.md\n+++ b/keep.md\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/.claude/settings.json b/x/settings.json\nsimilarity index 100%\nrename from .claude/settings.json\nrename to x/settings.json'
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.permissionDecision')" = "deny" ]
+}
+
 @test "Copilot adapter fails closed on malformed writes and evaluator errors" {
     run fire_tool create '{"content":"x"}'
     [ "$status" -eq 0 ]

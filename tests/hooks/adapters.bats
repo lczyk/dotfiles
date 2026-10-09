@@ -96,6 +96,16 @@ fire_codex_patch() {
     [[ "$output" == *"cannot inspect Codex patch destinations"* ]]
 }
 
+@test "Codex adapter catches a CRLF delete of an exact-match config" {
+    run fire_codex_patch "*** Begin Patch"$'\r\n'"*** Delete File: $HOME/.codex/hooks.json"$'\r\n'"*** End Patch"
+    [ "$status" -eq 2 ]
+}
+
+@test "Codex adapter catches a protected rename beside a benign hunk" {
+    run fire_codex_patch $'diff --git a/keep.md b/keep.md\n--- a/keep.md\n+++ b/keep.md\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/.claude/settings.json b/x/settings.json\nsimilarity index 100%\nrename from .claude/settings.json\nrename to x/settings.json'
+    [ "$status" -eq 2 ]
+}
+
 @test "adapters fail closed when the evaluator fails" {
     run bash -c 'printf %s "$1" | env AGENT_HOOK_EVALUATOR=/usr/bin/false bash "$2" shell' \
         _ '{"tool_input":{"command":"git status"}}' "$CLAUDE"
