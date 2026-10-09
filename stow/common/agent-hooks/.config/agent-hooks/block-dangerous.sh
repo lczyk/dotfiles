@@ -98,7 +98,7 @@ _git_cmds() {
 # see the history capability.
 GIT_PATTERNS=(
     # force / interactive clean deletes untracked files; -n / -nd dry-runs stay allowed.
-    "git clean ((-[A-Za-z]*[fi])|--force|--interactive)"
+    "git clean ([^;|&]* )?(-[A-Za-z]*[fi]|--force|--interactive)"
     "git branch -D"
     "git merge( |$)"
     # pull = fetch + merge (or rebase) into the current branch
@@ -138,7 +138,7 @@ GIT_WRITE_PATTERNS=(
     # commit plumbing: objects and refs written without the commit hooks.
     # `git replace` has its own case below -- its bare and -l forms list.
     "(^|[ ;|&])git commit-tree( |$)"
-    "(^|[ ;|&])git notes (--ref[= ][^ ]+ +)?(add|append|copy|edit|merge|prune|remove)( |$)"
+    "(^|[ ;|&])git notes (--ref[= ][^ ]+ +)*(add|append|copy|edit|merge|prune|remove)( |$)"
 )
 GIT_WRITE_REASON="these git ops are user-run -- commits on the current branch ARE allowed, but run push / tag / etc yourself or disable the hook"
 
@@ -174,9 +174,9 @@ HISTORY_REASON="git rebase / cherry-pick rewrite or duplicate commits -- user pr
 # wide `git add` -- agent must stage explicit paths, not sweep the worktree.
 # blocks -A / --all / -u / --update / --no-ignore-removal (and short-flag
 # clusters containing A or u, e.g. -Au, -Av), the `.` / `..` / `./` / `../`
-# / `*` sweeps and the `:/` `:!` `:(` pathspec magic, wherever they sit in
+# / `*` sweeps and the `:/` `:!` `:^` `:(` pathspec magic, wherever they sit in
 # the add. pass file paths explicitly instead.
-GIT_ADD_WIDE_RE=" (-[A-Za-z]*[Au][A-Za-z]*|--all|--update|--no-ignore-removal|\\.|\\.\\.|\\.\\.?/|\\*)( |$)| :[/!(]"
+GIT_ADD_WIDE_RE=" (-[A-Za-z]*[Au][A-Za-z]*|--all|--update|--no-ignore-removal|\\.|\\.\\.|\\.\\.?/|\\*)( |$)| :[/!(^]"
 GIT_ADD_REASON="stage explicit paths only -- wide \`git add\` may grab unrelated wip / scratch files"
 
 # any write `gh` op. read ops (view/list/status/api GET) are fine.
