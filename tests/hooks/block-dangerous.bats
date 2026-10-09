@@ -1314,6 +1314,22 @@ origin feature/x"
     done
 }
 
+@test "push allows refspecs with @{u} or a .git suffix" {
+    for cmd in "git push origin HEAD@{u}:refs/heads/x" "git push origin HEAD:refs/heads/x.git" \
+        "git push origin 'main@{upstream}:main'"; do
+        AGENT_UNFENCE=push run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "push catches a url hidden behind a -o cluster or a bare . remote" {
+    for cmd in "git push -uo x example.com:repo main" "git push -uo ci.skip /tmp/x main" \
+        "git push . main" "git push .. main"; do
+        AGENT_UNFENCE=push run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+    done
+}
+
 # bulk
 
 @test "push does not lift --mirror" {
