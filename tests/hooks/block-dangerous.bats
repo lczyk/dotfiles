@@ -971,6 +971,29 @@ git push"
     done
 }
 
+@test "branch refuses expanded names in checkout / switch" {
+    for cmd in 'git switch "$b"' 'git switch ubuntu-$r' 'for r in 1 2; do git switch "ubuntu-$r"; done' \
+        'git switch -c "fix-$r" "origin/ubuntu-$r"' 'git checkout $(git rev-parse HEAD)' \
+        'git checkout ~/x' 'git switch feat-*'; do
+        AGENT_UNFENCE=branch run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
+        [[ "$output" == *"literal names only"* ]] || { echo "wrong reason: $cmd: $output"; false; }
+    done
+}
+
+@test "branch blocks name the offending token" {
+    AGENT_UNFENCE=branch run fire "git switch -f main"
+    [[ "$output" == *'`git switch -f`'* ]]
+    AGENT_UNFENCE=branch run fire "git checkout -q ."
+    [[ "$output" == *'`git checkout .`'* ]]
+    AGENT_UNFENCE=branch run fire "git branch -m new-name"
+    [[ "$output" == *'`git branch -m`'* ]]
+    AGENT_UNFENCE=branch run fire "git branch --delete=x"
+    [[ "$output" == *'`git branch --delete`'* ]]
+    AGENT_UNFENCE=branch run fire "git worktree remove ../wt"
+    [[ "$output" == *'`git worktree remove`'* ]]
+}
+
 @test "branch does not lift worktree remove, move or prune" {
     for cmd in "git worktree remove --force ../wt" "git worktree remove ../wt" \
         "git worktree move ../a ../b" "git worktree prune"; do

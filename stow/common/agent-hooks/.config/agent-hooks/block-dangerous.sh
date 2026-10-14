@@ -392,12 +392,19 @@ done < <(printf '%s' "$COMMAND" | sed -E 's/gh api/;gh api/g' | grep -oE -- "(^|
 # NOTE: word-splitting heuristic, not a shell parser. quoted paths with
 # spaces split into odd tokens but still land in the concrete branch. the
 # -d directory check is cwd-dependent (best effort).
+_expands() {
+    case "$1" in
+        "~"*) return 0 ;;                          # tilde -- shell expands to home
+        *'*'*|*'?'*|*'['*|*'$'*|*'`'*) return 0 ;; # glob / expansion
+    esac
+    return 1
+}
+
 _concrete_path() {
+    _expands "$1" && return 1
     case "$1" in
         .|..) return 1 ;;                          # cwd sweep
-        "~"*) return 1 ;;                          # tilde -- shell expands to home
         :*) return 1 ;;                            # pathspec magic
-        *'*'*|*'?'*|*'['*|*'$'*|*'`'*) return 1 ;; # glob / expansion
         */) return 1 ;;                            # explicit dir
     esac
     [[ ! -d "$1" ]]                                # dir sweep (best effort)
@@ -439,11 +446,12 @@ done < <(_git_cmds restore)
 # path reason rather than the branch one.
 CHECKOUT_PATH_REASON="a path checkout must be \`git checkout [-q] -- <explicit-file-paths>\` -- no other flags, no ref, no \`.\`, globs or dirs"
 BRANCH_LIFT_REASON="the branch capability covers creating and switching branches only -- deleting, forcing or moving a branch, a forced or sweeping checkout, and removing a worktree stay user-run"
+BRANCH_EXPANSION_REASON="expands at run time. checkout / switch take literal names only"
 
 # the arguments of a checkout / switch the branch capability lifts: create
 # and switch flags, branch names and named files. anything that forces,
 # discards or sweeps (-B, -C, -f, --discard-changes, --ours, `.`, globs,
-# dirs) or any unknown flag fails it.
+# dirs) or any unknown flag fails it, printing the offending token.
 _switch_ok() {
     local tok toks dashdash=0
     read -ra toks <<< "$1"
@@ -453,31 +461,37 @@ _switch_ok() {
             case "$tok" in
                 --) dashdash=1; continue ;;
                 -|-b|-c|--create|-q|--quiet|-t|--track|--no-track|--detach|-d|-m|--merge|--orphan|--guess|--no-guess|-l) continue ;;
-                -*) return 1 ;;
+                -*) printf '%s' "$tok"; return 1 ;;
             esac
         fi
-        _concrete_path "$tok" || return 1
+        _concrete_path "$tok" || { printf '%s' "$tok"; return 1; }
     done
     return 0
 }
 
 if _unfenced branch; then
     while IFS= read -r cmd; do
-        if printf '%s' " ${cmd#git branch} " | grep -qE -- " (-[A-Za-z]*[dDfmMC][A-Za-z]*|--(delete|force|move))( |=)"; then
-            echo "BLOCKED: $BRANCH_LIFT_REASON" >&2
+        bad=$(printf '%s' " ${cmd#git branch} " | grep -oE -- " (-[A-Za-z]*[dDfmMC][A-Za-z]*|--(delete|force|move))( |=)" | head -n1)
+        if [[ -n "$bad" ]]; then
+            bad=${bad# }
+            echo "BLOCKED: \`git branch ${bad%[ =]}\`: $BRANCH_LIFT_REASON" >&2
             exit 2
         fi
     done < <(_git_cmds branch)
     while IFS= read -r cmd; do
-        args=${cmd#git checkout}
-        [[ "$args" == "$cmd" ]] && args=${cmd#git switch}
-        if ! _switch_ok "$args"; then
-            echo "BLOCKED: $BRANCH_LIFT_REASON" >&2
-            exit 2
+        verb=checkout
+        [[ "$cmd" == "git switch"* ]] && verb=switch
+        bad=$(_switch_ok "${cmd#git "$verb"}") && continue
+        if _expands "$bad"; then
+            echo "BLOCKED: \`$bad\` $BRANCH_EXPANSION_REASON" >&2
+        else
+            echo "BLOCKED: \`git $verb $bad\`: $BRANCH_LIFT_REASON" >&2
         fi
+        exit 2
     done < <(_git_cmds 'checkout|switch')
-    if _git_cmds worktree | grep -qE -- "^git worktree (remove|move|prune)( |$)"; then
-        echo "BLOCKED: $BRANCH_LIFT_REASON" >&2
+    bad=$(_git_cmds worktree | grep -oE -- "^git worktree (remove|move|prune)( |$)" | head -n1)
+    if [[ -n "$bad" ]]; then
+        echo "BLOCKED: \`${bad% }\`: $BRANCH_LIFT_REASON" >&2
         exit 2
     fi
 fi
