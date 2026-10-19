@@ -13,6 +13,6 @@ if type -q claude
                 DISABLE_ERROR_REPORTING=1 \
                 DO_NOT_TRACK=1
         end
-        env $vars command claude $argv
+        env $vars claude $argv
     end
 end
