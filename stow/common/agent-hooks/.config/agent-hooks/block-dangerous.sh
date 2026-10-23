@@ -62,7 +62,8 @@ _strip_quoted_heredocs() {
 # `(git reset --hard)` and `` `git tag v1` `` must anchor like a bare `git`.
 # the bracket stays outside the inserted `;`, so a substitution is still
 # visible in the arguments of the command that holds it. backticks alternate
-# open / close. the gh text checks read RAW_COMMAND -- a PR title's `feat(x):`
+# open / close; a `(` counts only where a command can start, so a regex group
+# in a quoted pattern stays inert. the gh text checks read RAW_COMMAND -- a PR title's `feat(x):`
 # must survive intact.
 _split_substitutions() {
     local s=$1 out="" open=1
@@ -71,7 +72,7 @@ _split_substitutions() {
         s=${s#*\`}
         open=$((!open))
     done
-    printf '%s' "$out$s" | sed -E 's/\(/( ; /g; s/\)/ ; )/g; s/  +/ /g'
+    printf '%s' "$out$s" | sed -E 's/(^|[ ;|&$<>])\(/\1( ; /g; s/\)/ ; )/g; s/  +/ /g'
 }
 RAW_COMMAND=$COMMAND
 COMMAND=$(_split_substitutions "$(_strip_quoted_heredocs "$COMMAND")")
@@ -570,11 +571,15 @@ while IFS= read -r cmd; do
     exit 2
 done < <(_git_cmds replace)
 
-# `git rm <path>` deletes the worktree copy. allow `--cached` (index-only) and
-# `-n` / `--dry-run` (preview) -- on that rm, not anywhere on the line.
+# `git rm` -- allow `--cached` (index-only), `-n` / `--dry-run` (preview) and
+# named files: without -f git refuses a file whose content differs from HEAD,
+# so what it deletes is recoverable. -f, -r and anything broader than named
+# files stay blocked. flags count on that rm, not anywhere on the line.
 while IFS= read -r cmd; do
-    printf '%s' " ${cmd#git rm} " | grep -qE -- " (--cached|-n|--dry-run) " && continue
-    echo "BLOCKED: \`git rm\` deletes worktree files. $GIT_REASON" >&2
+    args=" ${cmd#git rm} "
+    printf '%s' "$args" | grep -qE -- " (--cached|-n|--dry-run) " && continue
+    paths_concrete "$args" && continue
+    echo "BLOCKED: \`git rm\` past named files deletes local edits or sweeps a tree. \`git rm <explicit-file-paths>\` is allowed -- no -f, -r, \`.\`, globs or dirs." >&2
     exit 2
 done < <(_git_cmds rm)
 

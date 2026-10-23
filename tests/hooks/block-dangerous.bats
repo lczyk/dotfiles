@@ -130,18 +130,30 @@ fire() {
 }
 
 # -- git rm -------------------------------------------------------------
-# rm deletes the worktree copy; only --cached and dry runs are excused, and
-# only by flags on that same rm.
+# rm of named files is recoverable from HEAD (git refuses a modified one
+# without -f); --cached and dry runs are excused, and only by flags on that
+# same rm.
 
 @test "git rm is judged on its own flags, not the rest of the line" {
-    for cmd in "git rm src/main.go && git log -n 3" "git rm x; git diff --cached" \
-        "git rm -n x; git rm y" "git rm -r src | head -n 5" "git rm x --dry-runner"; do
+    for cmd in "git rm -f src/main.go && git log -n 3" "git rm --force x; git diff --cached" \
+        "git rm -n x; git rm -f y" "git rm -r src | head -n 5" "git rm x --dry-runner"; do
         run fire "$cmd"
         [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
     done
     for cmd in "git rm --cached x && git log -n 3" "git rm -n x" "git rm -r --dry-run src" "git rm --cached -r src"; do
         run fire "$cmd"
         [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+}
+
+@test "git rm of named files is allowed, anything broader is not" {
+    for cmd in "git rm src/main.go && git log -n 3" "git rm x; git diff --cached" "git rm -q -- a.txt b.txt"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
+    done
+    for cmd in "git rm ." "git rm src/" "git rm '*.go'" "git rm :/x" "git rm -rf src" "git rm" "git rm -- \$f"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
     done
 }
 
@@ -1583,9 +1595,18 @@ origin feature/x"
         "echo \$(git push origin main)" "echo \`git push origin main\`" "(git -C /tmp/ai/x push origin main)" \
         "x=\$(git tag v1)" "git tag \`echo v1\`" "git config \$(echo user.name x)" \
         "echo \$(gh pr comment 1 -b x)" "\$(HOME=/tmp/ai/h git status)" \
-        "\$(git -c core.hooksPath=/dev/null commit -m x)"; do
+        "\$(git -c core.hooksPath=/dev/null commit -m x)" "true; (git reset --hard)" \
+        "cat <(git push origin main)" "true &&(git reset --hard)"; do
         run fire "$cmd"
         [ "$status" -eq 2 ] || { echo "allowed: $cmd"; return 1; }
+    done
+}
+
+@test "a regex group in a quoted pattern is not a subshell" {
+    local cmd
+    for cmd in "grep -nE '(git rm|rm)' f" "grep -E '(git push|x)' f" "rg '(git reset --hard)' f"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; return 1; }
     done
 }
 
