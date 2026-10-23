@@ -1564,6 +1564,19 @@ origin feature/x"
     [ "$status" -eq 0 ]
 }
 
+@test "env vars that only end in HOME or PATH stay allowed" {
+    run fire "env XDG_CACHE_HOME=/tmp/ai/cache go test ./..."
+    [ "$status" -eq 0 ]
+    run fire "export CARGO_HOME=/tmp/ai/cargo; git status"
+    [ "$status" -eq 0 ]
+    run fire "env PYTHONPATH=/tmp/ai/lib git log -1"
+    [ "$status" -eq 0 ]
+    run fire "env A=1 HOME=/tmp/ai/home git status"
+    [ "$status" -eq 2 ]
+    run fire "env A=1 PATH=/tmp/ai/evil git status"
+    [ "$status" -eq 2 ]
+}
+
 @test "PATH is not rewritten around git or gh" {
     AGENT_UNFENCE=push run fire "PATH=/tmp/ai/evil:\$PATH git push origin feature/x"
     [ "$status" -eq 2 ]

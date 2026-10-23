@@ -53,11 +53,11 @@ fi
 # the repo location, the exec path, the ssh / proxy commands git runs, and
 # PATH itself when git or gh is on the line (a shadowing git binary).
 GIT_ENV_VARS="GIT_CONFIG[A-Z_]*|GIT_DIR|GIT_WORK_TREE|GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_PROXY_COMMAND|GIT_NAMESPACE|GIT_CEILING_DIRECTORIES|XDG_CONFIG_HOME|HOME"
-if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])((env|export) [^;|&]*)?(${GIT_ENV_VARS})="; then
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])(${GIT_ENV_VARS})="; then
     echo "BLOCKED: command overrides git's config / repo / exec environment -- ask the user if you really need to" >&2
     exit 2
 fi
-if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])((env|export) [^;|&]*)?PATH=" && echo "$COMMAND" | grep -qE -- "(^|[ ;|&/])(git|gh)( |$)"; then
+if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])PATH=" && echo "$COMMAND" | grep -qE -- "(^|[ ;|&/])(git|gh)( |$)"; then
     echo "BLOCKED: command rewrites PATH around a git / gh call -- ask the user if you really need to" >&2
     exit 2
 fi
