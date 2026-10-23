@@ -45,7 +45,9 @@ function _under_ai() {
 
 # a quote character, kept out of the patterns below so they stay readable.
 Q='["'"'"']'
-PAT_TMPPATH="$Q?(/private)?/tmp(/[A-Za-z0-9._/-]*)?"
+# the path runs to the next shell delimiter, so `/tmpfile` is its own path
+# rather than `/tmp` with a tail.
+PAT_TMPPATH="$Q?(/private)?/tmp"'[^][:space:];|&<>()`"'"'"']*'
 
 bad=()
 
@@ -78,10 +80,11 @@ if [[ "$OPERATION" == shell && -n "$COMMAND" ]]; then
     done < <(printf '%s' "$COMMAND" | grep -oE -- "(>>?|tee)[[:space:]]*$PAT_TMPPATH")
 
     # touch / mkdir take destinations only, so every /tmp arg is a write.
+    # the arg has to start at /tmp -- `build/tmp/x` is a relative path.
     while IFS= read -r seg; do
         while IFS= read -r tok; do
-            _check_path "$tok"
-        done < <(printf '%s' "$seg" | grep -oE -- "$PAT_TMPPATH")
+            _check_path "${tok# }"
+        done < <(printf '%s' "$seg" | grep -oE -- "(^| )$PAT_TMPPATH")
     done < <(printf '%s' "$COMMAND" | grep -oE -- "(^|[ ;|&])(touch|mkdir)[[:space:]][^;|&]*")
 
     # cp / mv: only the final argument is the destination -- copying a file

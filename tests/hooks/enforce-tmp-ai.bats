@@ -172,6 +172,26 @@ fire_patch() {
     [ "$status" -eq 0 ]
 }
 
+@test "allows a relative path with a tmp dir in it" {
+    run fire "mkdir -p build/tmp/cache"
+    [ "$status" -eq 0 ]
+    run fire "touch ./vendor/tmp/stamp"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows a root path that only starts with tmp" {
+    local cmd
+    for cmd in "echo x > /tmpfile.txt" "dd if=x of=/tmpdata.img" "tar -xf a.tar -C /tmpx" "curl -o /tmpout https://example.com"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; return 1; }
+    done
+}
+
+@test "blocks a quoted mkdir under /tmp" {
+    run fire "mkdir \"/tmp/x\""
+    [ "$status" -eq 2 ]
+}
+
 @test "allows copying out of /tmp into the project" {
     run fire "cp /tmp/some-existing.txt ./notes.md"
     [ "$status" -eq 0 ]

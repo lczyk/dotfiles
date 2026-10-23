@@ -37,6 +37,45 @@ COMMAND=$(_fold "$(printf '%s' "$INPUT" | jq -r '.command')")
 # quoted 'git', read-flag-first flag soup (git branch -v -f main).
 COMMAND=${COMMAND//\\git/git}
 
+# a quoted heredoc ($(cat <<'EOF' ... EOF)) is literal text: nothing in it
+# runs, so the command checks skip it. the gh text checks still put its body
+# through the attribution and ascii scans, but not the substitution scan --
+# markdown code spans want backticks. an unquoted heredoc expands, so only
+# its opener is excused (GH_TEXT_HEREDOC_RE). newlines were folded to spaces,
+# so the terminator line reads " EOF )".
+GH_TEXT_QUOTED_HEREDOC_RE="\\\$\\(cat <<-?('([A-Za-z_]+)'|\"([A-Za-z_]+)\"|\\\\([A-Za-z_]+))"
+_strip_quoted_heredocs() {
+    local s=$1 open d before rest
+    while [[ $s =~ $GH_TEXT_QUOTED_HEREDOC_RE ]]; do
+        open=${BASH_REMATCH[0]}
+        d=${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}
+        before=${s%%"$open"*}
+        rest=${s#*"$open"}
+        [[ $rest == *" $d )"* ]] || break
+        rest=${rest#*" $d )"}
+        s="$before$rest"
+    done
+    printf '%s' "$s"
+}
+
+# a substitution, subshell or group opens a new command: `$(git push)`,
+# `(git reset --hard)` and `` `git tag v1` `` must anchor like a bare `git`.
+# the bracket stays outside the inserted `;`, so a substitution is still
+# visible in the arguments of the command that holds it. backticks alternate
+# open / close. the gh text checks read RAW_COMMAND -- a PR title's `feat(x):`
+# must survive intact.
+_split_substitutions() {
+    local s=$1 out="" open=1
+    while [[ "$s" == *'`'* ]]; do
+        if ((open)); then out+="${s%%\`*}\` ; "; else out+="${s%%\`*} ; \`"; fi
+        s=${s#*\`}
+        open=$((!open))
+    done
+    printf '%s' "$out$s" | sed -E 's/\(/( ; /g; s/\)/ ; )/g; s/  +/ /g'
+}
+RAW_COMMAND=$COMMAND
+COMMAND=$(_split_substitutions "$(_strip_quoted_heredocs "$COMMAND")")
+
 # `-c key=val` / `--config-env` overrides that neutralise the git-hook and
 # signing layers, or define a one-shot alias that hides a subcommand from
 # every anchor below (`git -c alias.p=push p`). `--exec-path=<dir>` swaps
@@ -301,15 +340,28 @@ done < <(_git_cmds add)
 # token unless that is a flag), and at most <max> positionals -- any number
 # once a listing flag is present.
 _read_form() {
-    local flags=$1 valued=$2 listing=$3 max=$4 tok toks want=0 list=0 n=0
+    local flags=$1 valued=$2 listing=$3 max=$4 tok toks want=0 skip=0 list=0 n=0
     read -ra toks <<< "$5"
     for tok in "${toks[@]}"; do
         tok=${tok//[\"\']/}
+        if ((skip)); then
+            skip=0
+            continue
+        fi
+        # a redirect (`2>/dev/null`, `> f`) is the shell's, not an argument;
+        # a bare operator takes the next token as its target.
+        if [[ "$tok" =~ ^[0-9]*[\<\>] ]]; then
+            [[ "$tok" =~ ^[0-9]*[\<\>]+$ ]] && skip=1
+            continue
+        fi
         if ((want)); then
             want=0
             [[ "$tok" == -* ]] || continue
         fi
-        if [[ "$tok" != -* ]]; then
+        if [[ "$tok" == *"\$("* || "$tok" == *"\`"* ]]; then
+            # a substitution expands to any number of arguments
+            n=$((max + 1))
+        elif [[ "$tok" != -* ]]; then
             ((n++))
         elif [[ "$tok" =~ ^($listing)$ ]]; then
             list=1
@@ -663,8 +715,7 @@ GH_TEXT_NON_ASCII_RE=$'[^\t -~]'
 GH_TEXT_HEREDOC_RE='\$\(cat <<-?["'"'"']?[A-Za-z_]+["'"'"']?'
 # $'...' is in the list: its escapes rebuild a banned string byte by byte.
 GH_TEXT_SUBST_RE='\$\(|`|\$\{|\$[A-Za-z_]|\$'"'"
-GH_TEXT_ENV_RE="GH_(REPO|HOST|TOKEN|ENTERPRISE_TOKEN|CONFIG_DIR)="
-GH_TEXT_QUOTED_HEREDOC_RE="\\\$\\(cat <<-?('([A-Za-z_]+)'|\"([A-Za-z_]+)\"|\\\\([A-Za-z_]+))"
+GH_TEXT_ENV_RE="(^|[^A-Za-z0-9_])GH_(REPO|HOST|TOKEN|ENTERPRISE_TOKEN|CONFIG_DIR)="
 GH_TEXT_QUOTED_RE="\"[^\"]*\"|'[^']*'"
 
 _gh_text_block() {
@@ -672,31 +723,13 @@ _gh_text_block() {
     exit 2
 }
 
-# a quoted heredoc ($(cat <<'EOF' ... EOF)) is literal text: its body still
-# gets the attribution and ascii scans with the rest of the command, but not
-# the substitution scan -- markdown code spans want backticks. an unquoted
-# heredoc expands, so only its opener is excused (GH_TEXT_HEREDOC_RE).
-# newlines were folded to spaces, so the terminator line reads " EOF )".
-_strip_quoted_heredocs() {
-    local s=$1 open d before rest
-    while [[ $s =~ $GH_TEXT_QUOTED_HEREDOC_RE ]]; do
-        open=${BASH_REMATCH[0]}
-        d=${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}
-        before=${s%%"$open"*}
-        rest=${s#*"$open"}
-        [[ $rest == *" $d )"* ]] || break
-        rest=${rest#*" $d )"}
-        s="$before$rest"
-    done
-    printf '%s' "$s"
-}
-
 # _gh_text <what: pr|issue> <sub: create|edit> <bool-shorts> <conventional-title: 0|1> <strict-flags: 0|1>
 # the capability named after <what> covers the text; labels on an edit come
 # from the labels capability, or from pr for a PR.
 _gh_text() {
     local what=$1 sub=$2 bools=$3 conventional=$4 strict=$5 seg bodyfile sp tok toks
-    local seg_re="(^|[ ;|&])gh $what $sub( [^;|&]*|$)"
+    local COMMAND=$RAW_COMMAND
+    local seg_re="(^|[ ;|&(\`])gh $what $sub( [^;|&]*|$)"
     local text_ok=0 labels_ok=0
     if [ -n "$bools" ]; then sp="-[$bools]*"; else sp="-"; fi
     local title_re="(^| )(${sp}t[ =]?|--title[= ])[\"']?(${GH_TEXT_HEREDOC_RE} )?(${GH_TEXT_TYPES})(\([a-z0-9._-]+\))?(!|\?)?: "

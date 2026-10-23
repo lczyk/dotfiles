@@ -1577,6 +1577,37 @@ origin feature/x"
     [ "$status" -eq 2 ]
 }
 
+@test "a command inside a substitution or subshell is fenced like a bare one" {
+    local cmd
+    for cmd in "echo \$(git reset --hard)" "(git reset --hard)" "x=\`git reset --hard\`" \
+        "echo \$(git push origin main)" "echo \`git push origin main\`" "(git -C /tmp/ai/x push origin main)" \
+        "x=\$(git tag v1)" "git tag \`echo v1\`" "git config \$(echo user.name x)" \
+        "echo \$(gh pr comment 1 -b x)" "\$(HOME=/tmp/ai/h git status)" \
+        "\$(git -c core.hooksPath=/dev/null commit -m x)"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; return 1; }
+    done
+}
+
+@test "read forms stay readable behind a redirect or a substitution" {
+    local cmd
+    for cmd in "git branch --show-current 2>/dev/null" "git branch --show-current 2>&1" \
+        "git branch --show-current > /tmp/ai/b" "x=\$(git branch --show-current)" \
+        "x=\`git branch --show-current\`" "echo \"\$(git branch --show-current)\"" \
+        "git branch --format='%(refname:short)'" "git config user.name 2>/dev/null" \
+        "git tag -l 'v*' 2>/dev/null"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd"; return 1; }
+    done
+}
+
+@test "gh env override names are matched whole" {
+    AGENT_UNFENCE=pr run fire "env MY_GH_TOKEN=x gh pr create -t 'feat: x' -b y"
+    [ "$status" -eq 0 ]
+    AGENT_UNFENCE=pr run fire "env GH_TOKEN=x gh pr create -t 'feat: x' -b y"
+    [ "$status" -eq 2 ]
+}
+
 @test "PATH is not rewritten around git or gh" {
     AGENT_UNFENCE=push run fire "PATH=/tmp/ai/evil:\$PATH git push origin feature/x"
     [ "$status" -eq 2 ]
