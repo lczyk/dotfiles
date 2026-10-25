@@ -127,7 +127,7 @@ lofi_hook() {
     [ -z "$(lofi_hook lofi-reminder.md)" ]
 }
 
-@test "Kimi config wires native startup and prompt hooks" {
+@test "Kimi config wires native tool, startup and prompt hooks" {
     run python3 - "$CONFIG" <<'PY'
 import sys
 import tomllib
@@ -135,13 +135,18 @@ with open(sys.argv[1], "rb") as file:
     config = tomllib.load(file)
 hooks = config["hooks"]
 assert [hook["event"] for hook in hooks] == [
-    "SessionStart", "SessionStart", "UserPromptSubmit", "UserPromptSubmit"
+    "PreToolUse", "PreToolUse", "SessionStart", "SessionStart",
+    "UserPromptSubmit", "UserPromptSubmit"
 ]
 assert all(hook["timeout"] == 5 for hook in hooks)
-assert "caveman-activate.js" in hooks[0]["command"]
-assert "agent-styles/lofi.md" in hooks[1]["command"]
-assert "caveman-mode-tracker.js" in hooks[2]["command"]
-assert "agent-styles/lofi-reminder.md" in hooks[3]["command"]
+assert hooks[0]["matcher"] == "Bash"
+assert "safety-adapter.sh\" shell" in hooks[0]["command"]
+assert hooks[1]["matcher"] == "Write|Edit"
+assert "safety-adapter.sh\" write" in hooks[1]["command"]
+assert "caveman-activate.js" in hooks[2]["command"]
+assert "agent-styles/lofi.md" in hooks[3]["command"]
+assert "caveman-mode-tracker.js" in hooks[4]["command"]
+assert "agent-styles/lofi-reminder.md" in hooks[5]["command"]
 PY
     [ "$status" -eq 0 ]
 }

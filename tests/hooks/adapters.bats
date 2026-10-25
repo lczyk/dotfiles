@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# contract tests for Claude- and Codex-shaped safety adapters.
+# contract tests for Claude-, Codex- and Kimi-shaped safety adapters.
 
 setup() {
     # a capability from the launching session would mask protect-hooks
@@ -8,6 +8,7 @@ setup() {
     EVALUATOR="$REPO/stow/common/agent-hooks/.config/agent-hooks/evaluate.sh"
     CLAUDE="$REPO/stow/common/claude/.claude/hooks/safety-adapter.sh"
     CODEX="$REPO/stow/common/codex/.codex/hooks/safety-adapter.sh"
+    KIMI="$REPO/stow/common/kimi-code/.kimi-code/hooks/safety-adapter.sh"
 }
 
 fire_shell() {
@@ -21,6 +22,12 @@ fire_claude_write() {
     local path="$1"
     printf '{"tool_input":{"file_path":%s}}' "$(printf '%s' "$path" | jq -Rs .)" |
         env AGENT_HOOK_EVALUATOR="$EVALUATOR" bash "$CLAUDE" write
+}
+
+fire_kimi_write() {
+    local path="$1"
+    printf '{"tool_input":{"path":%s}}' "$(printf '%s' "$path" | jq -Rs .)" |
+        env AGENT_HOOK_EVALUATOR="$EVALUATOR" bash "$KIMI" write
 }
 
 fire_codex_patch() {
@@ -53,6 +60,36 @@ fire_codex_patch() {
     run env AGENT_HOOK_EVALUATOR="$EVALUATOR" bash "$CLAUDE" write <<<'{"tool_input":{}}'
     [ "$status" -eq 2 ]
     [[ "$output" == *"cannot inspect Claude write destinations"* ]]
+}
+
+@test "Kimi adapter allows safe shell commands" {
+    run fire_shell "$KIMI" "git status"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "Kimi adapter translates policy denial to exit 2" {
+    run fire_shell "$KIMI" "git push origin main"
+    [ "$status" -eq 2 ]
+    [[ "$output" == BLOCKED:* ]]
+}
+
+@test "Kimi adapter normalizes native write paths" {
+    run fire_kimi_write "/tmp/note.md"
+    [ "$status" -eq 2 ]
+
+    run fire_kimi_write "/tmp/ai/note.md"
+    [ "$status" -eq 0 ]
+
+    run fire_kimi_write "$HOME/.kimi-code/config.toml"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"not agent-editable"* ]]
+}
+
+@test "Kimi adapter fails closed on unknown write payloads" {
+    run env AGENT_HOOK_EVALUATOR="$EVALUATOR" bash "$KIMI" write <<<'{"tool_input":{}}'
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cannot inspect Kimi write destinations"* ]]
 }
 
 @test "Codex adapter extracts patch write paths" {
@@ -107,10 +144,12 @@ fire_codex_patch() {
 }
 
 @test "adapters fail closed when the evaluator fails" {
-    run bash -c 'printf %s "$1" | env AGENT_HOOK_EVALUATOR=/usr/bin/false bash "$2" shell' \
-        _ '{"tool_input":{"command":"git status"}}' "$CLAUDE"
-    [ "$status" -eq 2 ]
-    [[ "$output" == *"safety evaluator failed"* ]]
+    for adapter in "$CLAUDE" "$CODEX" "$KIMI"; do
+        run bash -c 'printf %s "$1" | env AGENT_HOOK_EVALUATOR=/usr/bin/false bash "$2" shell' \
+            _ '{"tool_input":{"command":"git status"}}' "$adapter"
+        [ "$status" -eq 2 ]
+        [[ "$output" == *"safety evaluator failed"* ]]
+    done
 }
 
 @test "adapters return hints without permission overrides" {
@@ -120,6 +159,13 @@ fire_codex_patch() {
         [[ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')" == HINT:* ]]
         [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')" = "null" ]
     done
+}
+
+@test "Kimi adapter returns plain-text hints" {
+    run fire_shell "$KIMI" "cmd | tail"
+    [ "$status" -eq 0 ]
+    [[ "$output" == HINT:* ]]
+    [[ "$output" != \{* ]]
 }
 
 @test "Codex adapter catches quoted, copy and new-file protected patches" {

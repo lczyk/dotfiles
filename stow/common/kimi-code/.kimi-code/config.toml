@@ -82,6 +82,18 @@ storage = "file"
 key = "oauth/kimi-code"
 
 [[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash \"${KIMI_CODE_HOME:-$HOME/.kimi-code}/hooks/safety-adapter.sh\" shell"
+timeout = 5
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Write|Edit"
+command = "bash \"${KIMI_CODE_HOME:-$HOME/.kimi-code}/hooks/safety-adapter.sh\" write"
+timeout = 5
+
+[[hooks]]
 event = "SessionStart"
 command = "node \"${KIMI_CODE_HOME:-$HOME/.kimi-code}/hooks/caveman-activate.js\""
 timeout = 5

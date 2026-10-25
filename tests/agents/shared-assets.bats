@@ -61,6 +61,7 @@ setup() {
         "$TARGET/.kimi-code/hooks/caveman-config.js" \
         "$TARGET/.kimi-code/hooks/caveman-mode-tracker.js" \
         "$TARGET/.kimi-code/hooks/flag-io.js" \
+        "$TARGET/.kimi-code/hooks/safety-adapter.sh" \
         "$TARGET/.kimi-code/statusline.sh" \
         "$TARGET/.kimi-code/statusline-colour.sh" \
         "$TARGET/.kimi-code/statusline.d/14-unfence.sh" \
@@ -91,10 +92,11 @@ setup() {
         "$REPO/stow/common/opencode/.config/opencode/plugin/caveman.ts"
     [ "$status" -eq 0 ]
 
-    # claude and codex hand off to the shared adapter; it, copilot and
+    # claude, codex and kimi hand off to the shared adapter; it, copilot and
     # opencode reach the shared evaluator.
     for adapter in "$REPO/stow/common/claude/.claude/hooks/safety-adapter.sh" \
-        "$REPO/stow/common/codex/.codex/hooks/safety-adapter.sh"; do
+        "$REPO/stow/common/codex/.codex/hooks/safety-adapter.sh" \
+        "$REPO/stow/common/kimi-code/.kimi-code/hooks/safety-adapter.sh"; do
         run rg -F 'agent-hooks/.config/agent-hooks/adapter.sh' "$adapter"
         [ "$status" -eq 0 ] || { echo "no shared adapter: $adapter"; false; }
     done

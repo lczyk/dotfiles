@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Translate claude / codex PreToolUse payloads into evaluator requests, and
-# the evaluator's verdict back into the harness's answer. both harnesses
-# share the payload shape for shell calls and the exit-2 / hookSpecificOutput
-# contract, so only the request builders differ.
+# Translate claude / codex / kimi PreToolUse payloads into evaluator requests,
+# and the evaluator's verdict back into the harness's answer. shell and write
+# payloads share a shape; claude and codex use json hints, kimi uses plain text.
 #
-# usage: adapter.sh <claude|codex> <mode>
-#   claude: shell | write      codex: shell | patch
+# usage: adapter.sh <claude|codex|kimi> <mode>
+#   claude: shell | write      codex: shell | patch      kimi: shell | write
 
 HARNESS="${1:-}"
 MODE="${2:-}"
@@ -100,10 +99,16 @@ function _evaluate() {
     decision=$(printf '%s' "$verdict" | jq -er '.decision')
     case "$decision" in
         (allow)
-            printf '%s' "$verdict" | jq -c '
-                select((.hints // [] | length) > 0)
-                | {hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: (.hints | join("\n\n"))}}
-            '
+            if [ "$HARNESS" = "kimi" ]; then
+                printf '%s' "$verdict" | jq -r '
+                    select((.hints // [] | length) > 0) | .hints | join("\n\n")
+                '
+            else
+                printf '%s' "$verdict" | jq -c '
+                    select((.hints // [] | length) > 0)
+                    | {hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: (.hints | join("\n\n"))}}
+                '
+            fi
             return
             ;;
         (deny)
@@ -124,10 +129,11 @@ function main() {
     case "$HARNESS" in
         (claude) name=Claude ;;
         (codex) name=Codex ;;
+        (kimi) name=Kimi ;;
         (*) _deny "BLOCKED: unknown safety adapter harness: $HARNESS" ;;
     esac
     case "$HARNESS:$MODE" in
-        (claude:shell | claude:write | codex:shell | codex:patch) ;;
+        (claude:shell | claude:write | codex:shell | codex:patch | kimi:shell | kimi:write) ;;
         (*) _deny "BLOCKED: unknown $name safety adapter mode: $MODE" ;;
     esac
 
