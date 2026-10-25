@@ -2,42 +2,42 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "^Bash$",
         "hooks": [
           {
-            "type": "command",
-            "command": "bash \"$HOME/.codex/hooks/safety-adapter.sh\" shell"
+            "command": "bash \"$HOME/.codex/hooks/safety-adapter.sh\" shell",
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": "^Bash$"
       },
       {
-        "matcher": "^apply_patch$",
         "hooks": [
           {
-            "type": "command",
-            "command": "bash \"$HOME/.codex/hooks/safety-adapter.sh\" patch"
+            "command": "bash \"$HOME/.codex/hooks/safety-adapter.sh\" patch",
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": "^apply_patch$"
       }
     ],
     "SessionStart": [
       {
         "hooks": [
           {
-            "type": "command",
             "command": "cat \"$HOME/.config/agent-guidance/workflow.md\"",
-            "statusMessage": "Loading shared agent instructions..."
+            "statusMessage": "Loading shared agent instructions...",
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "node \"$HOME/.claude/hooks/caveman-activate.js\"",
+            "statusMessage": "Loading caveman mode...",
             "timeout": 5,
-            "statusMessage": "Loading caveman mode..."
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
-            "statusMessage": "Loading lofi style..."
+            "statusMessage": "Loading lofi style...",
+            "type": "command"
           }
         ]
       }
@@ -46,15 +46,15 @@
       {
         "hooks": [
           {
-            "type": "command",
             "command": "node \"$HOME/.claude/hooks/caveman-mode-tracker.js\"",
+            "statusMessage": "Tracking caveman mode...",
             "timeout": 5,
-            "statusMessage": "Tracking caveman mode..."
+            "type": "command"
           },
           {
-            "type": "command",
             "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi-reminder.md\"",
-            "statusMessage": "Loading lofi style reminder..."
+            "statusMessage": "Loading lofi style reminder...",
+            "type": "command"
           }
         ]
       }
