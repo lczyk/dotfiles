@@ -45,6 +45,10 @@ working-tree edits in them get staged too; a no-op if already clean.
 
 caveat: needs `jq`, and the filter def must be live (`make stow`) before committing that file from a fresh machine. the filter is marked `required`, so a missing def hard-fails `git add` rather than silently staging the raw file with the transient keys still in it.
 
+## claude model fallback
+
+`switchModelsOnFlag` in `stow/common/claude/.claude/settings.json` controls automatic model fallback when a safety classifier flags a request. `true` retries on the fallback model without asking; `false` asks first in interactive sessions. it does not affect manual `/model` switching.
+
 ## agent harnesses
 
 claude code is the primary harness. harness-neutral sources live under
