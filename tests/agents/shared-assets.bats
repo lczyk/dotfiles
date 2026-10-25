@@ -19,6 +19,7 @@ setup() {
     [ "$(readlink "$REPO/stow/common/claude/.claude/CLAUDE.md")" = "../../agent-guidance/.config/agent-guidance/workflow.md" ]
     [ "$(readlink "$REPO/stow/common/copilot/.copilot/copilot-instructions.md")" = "../../agent-guidance/.config/agent-guidance/workflow.md" ]
     [ "$(readlink "$REPO/stow/common/opencode/.config/opencode/AGENTS.md")" = "../../../agent-guidance/.config/agent-guidance/workflow.md" ]
+    [ "$(readlink "$REPO/stow/common/kimi-code/.kimi-code/AGENTS.md")" = "../../agent-guidance/.config/agent-guidance/workflow.md" ]
 
     for harness in claude codex copilot; do
         for skill in caveman caveman-commit grill-me lofi to-issue fizz fizz-check fizz-debug fizz-mbt fizz-spec; do
@@ -27,7 +28,7 @@ setup() {
     done
     [ "$(readlink "$REPO/stow/common/claude/.claude/skills/to-pr")" = "../../../agent-skills/.config/agent-skills/to-pr" ]
 
-    for skill in caveman caveman-commit lofi; do
+    for skill in caveman caveman-commit grill-me lofi to-issue to-pr fizz fizz-check fizz-debug fizz-mbt fizz-spec; do
         [ "$(readlink "$REPO/stow/common/kimi-code/.kimi-code/skills/$skill")" = "../../../agent-skills/.config/agent-skills/$skill" ]
     done
 
@@ -53,15 +54,13 @@ setup() {
         "$TARGET/.config/hax/config.json" \
         "$TARGET/.config/hax/skills/lofi/SKILL.md" \
         "$TARGET/.config/opencode/AGENTS.md" \
+        "$TARGET/.kimi-code/AGENTS.md" \
         "$TARGET/.kimi-code/config.toml" \
         "$TARGET/.kimi-code/tui.toml" \
         "$TARGET/.kimi-code/hooks/caveman-activate.js" \
         "$TARGET/.kimi-code/hooks/caveman-config.js" \
         "$TARGET/.kimi-code/hooks/caveman-mode-tracker.js" \
         "$TARGET/.kimi-code/hooks/flag-io.js" \
-        "$TARGET/.kimi-code/skills/caveman/SKILL.md" \
-        "$TARGET/.kimi-code/skills/caveman-commit/SKILL.md" \
-        "$TARGET/.kimi-code/skills/lofi/SKILL.md" \
         "$TARGET/.kimi-code/statusline.sh" \
         "$TARGET/.kimi-code/statusline-colour.sh" \
         "$TARGET/.kimi-code/statusline.d/14-unfence.sh" \
@@ -69,6 +68,9 @@ setup() {
         "$TARGET/.kimi-code/statusline.d/25-git-branch.sh" \
         "$TARGET/.kimi-code/statusline.d/30-context.sh"; do
         [ -r "$path" ]
+    done
+    for skill in caveman caveman-commit grill-me lofi to-issue to-pr fizz fizz-check fizz-debug fizz-mbt fizz-spec; do
+        [ -r "$TARGET/.kimi-code/skills/$skill/SKILL.md" ]
     done
 }
 
