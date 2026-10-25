@@ -64,10 +64,13 @@ PROTECTED_GLOBS=(
     "$HOME/.codex/hooks.json"
     "$HOME/.copilot/hooks"
     "$HOME/.copilot/hooks/*"
+    "$HOME/.kimi-code/hooks"
+    "$HOME/.kimi-code/hooks/*"
     # config that switches the hooks off without touching a hook file: every
     # git config that can set core.hooksPath (a repo's own .git/config wins
     # over the global one, and a worktree's config.worktree or a submodule's
-    # module config over that), codex's hook switch, and copilot's hook list.
+    # module config over that), codex's hook switch, copilot's hook list, and
+    # kimi's native hook declarations.
     "$HOME/.config/git/config"
     "$HOME/.config/git/config.local"
     "$HOME/.gitconfig"
@@ -81,10 +84,12 @@ PROTECTED_GLOBS=(
     '.git/modules/*/config'
     "$HOME/.codex/config.toml"
     "$HOME/.copilot/settings.json"
+    "$HOME/.kimi-code/config.toml"
     # the dirs themselves: a cp / mv / tee naming only the dir lands a file on
     # the protected config inside. reads are excused by command, not by path.
     "$HOME/.codex"
     "$HOME/.copilot"
+    "$HOME/.kimi-code"
     '*/stow/common/agent-hooks/.config/agent-hooks'
     '*/stow/common/agent-hooks/.config/agent-hooks/*'
     '*/stow/common/git/.config/git/hooks'
@@ -97,10 +102,13 @@ PROTECTED_GLOBS=(
     '*/stow/common/codex/.codex/hooks.json'
     '*/stow/common/copilot/.copilot/hooks'
     '*/stow/common/copilot/.copilot/hooks/*'
+    '*/stow/common/kimi-code/.kimi-code/hooks'
+    '*/stow/common/kimi-code/.kimi-code/hooks/*'
     '*/stow/common/git/.config/git/config'
     '*/stow/*/git/.config/git/config.local'
     '*/stow/common/codex/.codex/config.toml'
     '*/stow/common/copilot/.copilot/settings.json'
+    '*/stow/common/kimi-code/.kimi-code/config.toml'
 )
 
 # commands that cannot modify their arguments. deliberately excludes the ones

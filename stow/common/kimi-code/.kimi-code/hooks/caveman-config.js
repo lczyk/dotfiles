@@ -1,0 +1,1 @@
+../../../claude/.claude/hooks/caveman-config.js

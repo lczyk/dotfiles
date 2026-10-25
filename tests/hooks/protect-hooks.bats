@@ -99,6 +99,20 @@ fire_write() {
     [ "$status" -eq 0 ]
 }
 
+@test "blocks Kimi hook and config writes in installed and source locations" {
+    for path in "$HOME/.kimi-code/hooks/caveman-activate.js" "$HOME/.kimi-code/config.toml" \
+        "$HOME/.kimi-code" "$REPO/stow/common/kimi-code/.kimi-code/hooks/caveman-mode-tracker.js" \
+        "$REPO/stow/common/kimi-code/.kimi-code/config.toml"; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+
+    run fire "cat $HOME/.kimi-code/config.toml"
+    [ "$status" -eq 0 ]
+    run fire "cat $HOME/.kimi-code/tui.toml"
+    [ "$status" -eq 0 ]
+}
+
 # -- path spellings ------------------------------------------------------
 # the same protected file named another way must still be judged as itself.
 

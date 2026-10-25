@@ -26,6 +26,10 @@ setup() {
         done
     done
 
+    for skill in caveman caveman-commit lofi; do
+        [ "$(readlink "$REPO/stow/common/kimi-code/.kimi-code/skills/$skill")" = "../../../agent-skills/.config/agent-skills/$skill" ]
+    done
+
     for skill in caveman caveman-commit grill-me lofi to-issue to-pr fizzbee; do
         [ "$(readlink "$REPO/stow/common/hax/.config/hax/skills/$skill")" = "../../../../agent-skills/.config/agent-skills/$skill" ]
     done
@@ -47,7 +51,22 @@ setup() {
         "$TARGET/.config/hax/AGENTS.md" \
         "$TARGET/.config/hax/config.json" \
         "$TARGET/.config/hax/skills/lofi/SKILL.md" \
-        "$TARGET/.config/opencode/AGENTS.md"; do
+        "$TARGET/.config/opencode/AGENTS.md" \
+        "$TARGET/.kimi-code/config.toml" \
+        "$TARGET/.kimi-code/tui.toml" \
+        "$TARGET/.kimi-code/hooks/caveman-activate.js" \
+        "$TARGET/.kimi-code/hooks/caveman-config.js" \
+        "$TARGET/.kimi-code/hooks/caveman-mode-tracker.js" \
+        "$TARGET/.kimi-code/hooks/flag-io.js" \
+        "$TARGET/.kimi-code/skills/caveman/SKILL.md" \
+        "$TARGET/.kimi-code/skills/caveman-commit/SKILL.md" \
+        "$TARGET/.kimi-code/skills/lofi/SKILL.md" \
+        "$TARGET/.kimi-code/statusline.sh" \
+        "$TARGET/.kimi-code/statusline-colour.sh" \
+        "$TARGET/.kimi-code/statusline.d/14-unfence.sh" \
+        "$TARGET/.kimi-code/statusline.d/20-model.sh" \
+        "$TARGET/.kimi-code/statusline.d/25-git-branch.sh" \
+        "$TARGET/.kimi-code/statusline.d/30-context.sh"; do
         [ -r "$path" ]
     done
 }

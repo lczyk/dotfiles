@@ -1,0 +1,1 @@
+../../../claude/.claude/statusline.d/20-model.sh
