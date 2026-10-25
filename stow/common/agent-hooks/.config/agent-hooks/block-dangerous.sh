@@ -632,15 +632,25 @@ PUSH_PLUMBING_REASON="push plumbing bypasses the pre-push hook -- push through g
 
 # the git hooks read the agent markers from the environment; unsetting or
 # rewriting them for a child would hand the hooks a human session.
+#
+# env takes its own options only ahead of the first command word, so a flag
+# counts as env's iff every token before it is an env option (a value-taking
+# one swallows the next token) or a NAME=value. a `-i` or `-` further along
+# belongs to the command env runs (`sed -i`, `python3 -`).
+ENV_OPT_RE="-[A-Za-z0-9]*[uCSPLUa] [^ ]+|--(unset|chdir|argv0|split-string|block-signal|default-signal|ignore-signal) [^ ]+|-[^ ]+|[A-Za-z_][A-Za-z0-9_]*=[^ ]*"
+MARKERS="(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
 MARKER_PATTERNS=(
-    "(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)="
-    "(^|[ ;|&])unset [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
-    "(-u ?|--unset[ =])(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
+    "(^|[^A-Za-z0-9_])${MARKERS}="
+    "(^|[ ;|&])unset ([^;|&]* )?${MARKERS}([^A-Za-z0-9_]|$)"
+    "(^|[ ;|&/])env( (${ENV_OPT_RE}))* (-[A-Za-z0-9]*u ?|--unset[ =])${MARKERS}([^A-Za-z0-9_]|$)"
     # -i, a bare -, or -i inside a short-flag cluster: an emptied environment.
-    "(^|[ ;|&])env( [^;|&]*)? (-[A-Za-z0-9]*i[A-Za-z0-9]*|-|--ignore-environment)( |$)"
+    "(^|[ ;|&/])env( (${ENV_OPT_RE}))* (-[A-Za-z0-9]*i[A-Za-z0-9]*|-|--ignore-environment)( |$)"
+    # -S splits its value into further env options at run time, so a quoted
+    # '-i' or '-u MARKER' inside it never shows up as a token above.
+    "(^|[ ;|&/])env( (${ENV_OPT_RE}))* (-[A-Za-z0-9]*S|--split-string)"
     # export -n drops the export attribute; fish `set -e` / --erase erases it.
-    "(^|[ ;|&])export -n [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
-    "(^|[ ;|&])set ([^;|&]* )?(-[A-Za-z]*e[A-Za-z]*|--erase) [^;|&]*(CLAUDECODE|AGENT_SESSION|COPILOT_CLI|OPENCODE_PID)"
+    "(^|[ ;|&])export -n ([^;|&]* )?${MARKERS}([^A-Za-z0-9_]|$)"
+    "(^|[ ;|&])set ([^;|&]* )?(-[A-Za-z]*e[A-Za-z]*|--erase) ([^;|&]* )?${MARKERS}([^A-Za-z0-9_]|$)"
 )
 MARKER_REASON="agent session markers are not yours to unset or rewrite -- the git hooks read them"
 

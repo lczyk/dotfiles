@@ -873,13 +873,24 @@ git push"
         "env -u COPILOT_CLI git commit -F /tmp/ai/m" "COPILOT_CLI= git commit -F /tmp/ai/m" "unset COPILOT_CLI" \
         "export -n CLAUDECODE git commit -F /tmp/ai/m" "set -e CLAUDECODE" "set --erase AGENT_SESSION" "set -eU COPILOT_CLI" \
         "set -g -e CLAUDECODE" "set -U -e AGENT_SESSION" "set -g --erase COPILOT_CLI" \
-        "env -u HOME git commit -F /tmp/ai/m" "env --unset=XDG_CONFIG_HOME git push" "env -uHOME git commit" "unset HOME"; do
+        "env -u HOME git commit -F /tmp/ai/m" "env --unset=XDG_CONFIG_HOME git push" "env -uHOME git commit" "unset HOME" \
+        "env -u FOO -i git push" "env --unset FOO -i git push" "env -C /tmp -i git push" "env FOO=1 -i git push" \
+        "env -S '-i git push'" "env -S'-i git push'" "env -vS '- git push'" "env --split-string='-i git push'" \
+        "env --split-string '-u CLAUDECODE git push'" "env FOO=1 -S '-i git push'" \
+        "/usr/bin/env -u CLAUDECODE git commit -F /tmp/ai/m" "/usr/bin/env -i git commit -F /tmp/ai/m" \
+        "env -vu CLAUDECODE git push" "unset CLAUDECODE; git commit -F /tmp/ai/m" "export MY=1 CLAUDECODE="; do
         run fire "$cmd"
         [ "$status" -eq 2 ] || { echo "allowed: $cmd"; false; }
     done
+    # a -i / - past the first command word belongs to that command, not to env
     for cmd in "env -u FOO make test" "env FOO=1 make test" "env -v true" \
         "set -e" "set -gx MYVAR x" "export -n PATH" "env -u HOMEBREW_NO_AUTO_UPDATE make" "unset HOMEDIR" \
-        "set --show CLAUDECODE" "set -q AGENT_SESSION" "set -gx CLAUDECODE_NOTE x"; do
+        "set --show CLAUDECODE" "set -q AGENT_SESSION" "set -gx CLAUDECODE_NOTE x" \
+        "env FOO=1 sed -i s/a/b/ f" "env FOO=1 grep -i foo f" "env REL=x uv run python3 - <<'EOF'" \
+        "env -u FOO cmd -i" "env -u FOO cmd --ignore-environment" "env FOO=1 BAR=2 cmd -" \
+        "env FOO=1 cmd -S x" "env -u FOO sort -S 1G f" "environment -i" "printenv -i" \
+        "export MY_CLAUDECODE=1" "unset CLAUDECODE_NOTE" "set -e CLAUDECODE_NOTE" "env -u CLAUDECODE_NOTE make" \
+        "sort -u AGENT_SESSION.log" "export -n AGENT_SESSIONS"; do
         run fire "$cmd"
         [ "$status" -eq 0 ] || { echo "blocked: $cmd"; false; }
     done
