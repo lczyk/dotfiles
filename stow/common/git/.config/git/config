@@ -40,7 +40,7 @@ required = true
 # the raw file with the machine-local state still in it. required demands both
 # directions, so the smudge side needs an explicit pass-through `cat`.
 [filter "claudecfg"]
-	clean = "jq -S 'del(.effortLevel, .model, .theme, .tui, .voiceEnabled)'"
+	clean = "jq -S 'del(.effortLevel, .model, .skipWorkflowUsageWarning, .theme, .tui, .voice, .voiceEnabled) | if .modelSettings then .modelSettings |= with_entries(if .key == \"claude-haiku-5-5\" then . else (.value |= del(.effortLevel) | select(.value != {})) end) | if .modelSettings == {} then del(.modelSettings) else . end else . end'"
 	smudge = cat
 	required = true
 
