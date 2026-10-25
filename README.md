@@ -48,8 +48,8 @@ caveat: needs `jq`, and the filter def must be live (`make stow`) before committ
 ## agent harnesses
 
 claude code is the primary harness. harness-neutral sources live under
-`~/.config/agent-*`; the claude, codex, copilot, and opencode packages are thin
-adapters around them:
+`~/.config/agent-*`; the claude, codex, copilot, kimi, and opencode packages are
+thin adapters around them:
 
 - `agent-guidance` -- workflow rules.
 - `agent-styles` -- lofi and language-specific style guides.
@@ -58,9 +58,16 @@ adapters around them:
 - `agent-state` -- runtime mode state, created on demand and not tracked.
 - `agent-hooks` -- shared safety hooks.
 
-claude, codex, and copilot skill paths are symlinks to `agent-skills`; opencode
-reads the same canonical caveman skill directly. status lines, hook
+claude, codex, copilot, and kimi skill paths are symlinks to `agent-skills`;
+opencode reads the same canonical caveman skill directly. status lines, hook
 definitions, and plugin implementations remain harness-specific.
+
+the `kimi-code` package ports claude's status line through a thin JSON adapter.
+model, context, git and unfence badges are symlinks to claude's implementations.
+native SessionStart and UserPromptSubmit hooks inject caveman and lofi context,
+track their shared `agent-state`, and expose the canonical skills through
+`/skill:caveman`, `/skill:caveman-commit`, and `/skill:lofi`.
+`~/.kimi-code/tui.toml` enables the dispatcher through `[status_line].command`.
 
 the git hooks treat agent sessions more strictly than human ones (`pre-push`
 blocks agents outright unless the session carries `AGENT_UNFENCE=push`, and

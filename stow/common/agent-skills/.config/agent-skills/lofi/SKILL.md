@@ -8,9 +8,9 @@ description: >
 argument-hint: "[on|off|status]"
 ---
 
-lofi = the personal writing style. full rules: `~/.config/agent-styles/lofi.md`; per-turn digest: `~/.config/agent-styles/lofi-reminder.md`; optional expressive markers: `~/.config/agent-styles/lofi-extras.md`. the claude, codex and copilot adapters inject it; on by default, no levels.
+lofi = the personal writing style. full rules: `~/.config/agent-styles/lofi.md`; per-turn digest: `~/.config/agent-styles/lofi-reminder.md`; optional expressive markers: `~/.config/agent-styles/lofi-extras.md`. the claude, codex, copilot and kimi adapters inject it; on by default, no levels.
 
-state = marker file `${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off`. present -> adapters stay silent and the claude statusline badge shows `[x]`. absent -> style active, badge `[L]`.
+state = marker file `${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off`. present -> adapters stay silent and the claude and kimi statusline badges show `[x]`. absent -> style active, badge `[L]`.
 
 on invocation:
 
