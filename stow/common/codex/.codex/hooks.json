@@ -35,7 +35,7 @@
             "type": "command"
           },
           {
-            "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
+            "command": "[ -f \"${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
             "statusMessage": "Loading lofi style...",
             "type": "command"
           }
@@ -52,7 +52,7 @@
             "type": "command"
           },
           {
-            "command": "[ -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi-reminder.md\"",
+            "command": "[ -f \"${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi-reminder.md\"",
             "statusMessage": "Loading lofi style reminder...",
             "type": "command"
           }

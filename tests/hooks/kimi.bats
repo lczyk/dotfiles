@@ -31,7 +31,7 @@ flag() {
 
 lofi_hook() {
     local file="$1"
-    bash -c 'if [ ! -f "${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off" ]; then cat "${XDG_CONFIG_HOME:-$HOME/.config}/agent-styles/'"$file"'"; fi'
+    bash -c 'if [ ! -f "${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off" ]; then cat "${XDG_CONFIG_HOME:-$HOME/.config}/agent-styles/'"$file"'"; fi'
 }
 
 @test "startup emits plain filtered caveman rules and seeds the default" {
@@ -117,8 +117,8 @@ lofi_hook() {
     run lofi_hook lofi-reminder.md
     [[ "$output" == *"lofi on. lowercase everything"* ]]
 
-    mkdir -p "$XDG_CONFIG_HOME/agent-state"
-    touch "$XDG_CONFIG_HOME/agent-state/lofi-off"
+    mkdir -p "$AGENT_STATE_DIR"
+    touch "$AGENT_STATE_DIR/lofi-off"
     run lofi_hook lofi.md
     [ "$status" -eq 0 ]
     [ -z "$(lofi_hook lofi.md)" ]
@@ -147,6 +147,9 @@ assert "caveman-activate.js" in hooks[2]["command"]
 assert "agent-styles/lofi.md" in hooks[3]["command"]
 assert "caveman-mode-tracker.js" in hooks[4]["command"]
 assert "agent-styles/lofi-reminder.md" in hooks[5]["command"]
+state = "${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}"
+assert state in hooks[3]["command"]
+assert state in hooks[5]["command"]
 PY
     [ "$status" -eq 0 ]
 }

@@ -100,7 +100,7 @@ timeout = 5
 
 [[hooks]]
 event = "SessionStart"
-command = "if [ ! -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ]; then cat \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-styles/lofi.md\"; fi"
+command = "if [ ! -f \"${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off\" ]; then cat \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-styles/lofi.md\"; fi"
 timeout = 5
 
 [[hooks]]
@@ -110,5 +110,5 @@ timeout = 5
 
 [[hooks]]
 event = "UserPromptSubmit"
-command = "if [ ! -f \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-state/lofi-off\" ]; then cat \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-styles/lofi-reminder.md\"; fi"
+command = "if [ ! -f \"${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off\" ]; then cat \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-styles/lofi-reminder.md\"; fi"
 timeout = 5

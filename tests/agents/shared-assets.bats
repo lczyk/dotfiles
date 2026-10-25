@@ -85,10 +85,14 @@ setup() {
         "$REPO/stow/common/copilot/.copilot/hooks/context.js"
     [ "$status" -eq 0 ]
 
-    run rg -F 'agent-state' \
+    run rg -F 'AGENT_STATE_DIR' \
+        "$REPO/stow/common/agent-skills/.config/agent-skills/lofi/SKILL.md" \
+        "$REPO/stow/common/claude/.claude/settings.json" \
         "$REPO/stow/common/claude/.claude/hooks" \
         "$REPO/stow/common/claude/.claude/statusline.d" \
+        "$REPO/stow/common/codex/.codex/hooks.json" \
         "$REPO/stow/common/copilot/.copilot/hooks" \
+        "$REPO/stow/common/kimi-code/.kimi-code/config.toml" \
         "$REPO/stow/common/opencode/.config/opencode/plugin/caveman.ts"
     [ "$status" -eq 0 ]
 
