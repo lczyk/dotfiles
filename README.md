@@ -68,9 +68,10 @@ definitions, and plugin implementations remain harness-specific.
 
 the `kimi-code` package ports claude's status line through a thin JSON adapter.
 model, context, git and unfence badges are symlinks to claude's implementations.
-native SessionStart and UserPromptSubmit hooks inject caveman and lofi context,
-track their shared `agent-state`, and expose the canonical skills through
-`/skill:caveman`, `/skill:caveman-commit`, and `/skill:lofi`.
+native SessionStart and UserPromptSubmit hooks inject caveman and lofi context
+and track their shared `agent-state`; native skill links expose every canonical
+shared skill. PreToolUse hooks send Bash, Write and Edit through the shared
+safety adapter, returning denials on stderr with exit 2 and hints as plain text.
 `~/.kimi-code/tui.toml` enables the dispatcher through `[status_line].command`.
 
 the git hooks treat agent sessions more strictly than human ones (`pre-push`
@@ -83,17 +84,17 @@ inject into spawned shells, falling back to the native `CLAUDECODE`,
 markers.
 
 `workflow.md` reaches each harness through that harness's native instruction
-path: `~/.claude/CLAUDE.md`, `~/.copilot/copilot-instructions.md`, and
-`~/.config/opencode/AGENTS.md` are all symlinks to it. codex has no user-level
-instruction file, so its `SessionStart` hook `cat`s the same source. the
-opencode link is deliberate rather than redundant -- without it opencode falls
-back to reading `~/.claude/CLAUDE.md`, a migration-compat path that
-`OPENCODE_DISABLE_CLAUDE_CODE` switches off.
+path: `~/.claude/CLAUDE.md`, `~/.copilot/copilot-instructions.md`,
+`~/.config/opencode/AGENTS.md`, and `~/.kimi-code/AGENTS.md` are all symlinks to
+it. codex has no user-level instruction file, so its `SessionStart` hook `cat`s
+the same source. the opencode link is deliberate rather than redundant --
+without it opencode falls back to reading `~/.claude/CLAUDE.md`, a
+migration-compat path that `OPENCODE_DISABLE_CLAUDE_CODE` switches off.
 
 safety policies use a harness-neutral request/verdict contract through
 `~/.config/agent-hooks/evaluate.sh`. each harness adapter normalizes its native
 tool payload, invokes the evaluator, then translates a denial into that
-harness's blocking mechanism. claude and codex share one bash adapter,
+harness's blocking mechanism. claude, codex, and kimi share one bash adapter,
 `agent-hooks/adapter.sh`, and the policies, git hooks and unfence badge share
 their helpers through `agent-hooks/lib.sh`, which every caller loads
 fail-closed. shared policies take no harness payload fields and make no
