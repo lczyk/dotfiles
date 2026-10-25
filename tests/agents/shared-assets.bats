@@ -21,10 +21,11 @@ setup() {
     [ "$(readlink "$REPO/stow/common/opencode/.config/opencode/AGENTS.md")" = "../../../agent-guidance/.config/agent-guidance/workflow.md" ]
 
     for harness in claude codex copilot; do
-        for skill in caveman caveman-commit grill-me lofi fizz fizz-check fizz-debug fizz-mbt fizz-spec; do
+        for skill in caveman caveman-commit grill-me lofi to-issue fizz fizz-check fizz-debug fizz-mbt fizz-spec; do
             [ "$(readlink "$REPO/stow/common/$harness/.${harness}/skills/$skill")" = "../../../agent-skills/.config/agent-skills/$skill" ]
         done
     done
+    [ "$(readlink "$REPO/stow/common/claude/.claude/skills/to-pr")" = "../../../agent-skills/.config/agent-skills/to-pr" ]
 
     for skill in caveman caveman-commit lofi; do
         [ "$(readlink "$REPO/stow/common/kimi-code/.kimi-code/skills/$skill")" = "../../../agent-skills/.config/agent-skills/$skill" ]
