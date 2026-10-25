@@ -96,5 +96,6 @@
   "statusLine": {
     "command": "bash \"$HOME/.claude/statusline.sh\"",
     "type": "command"
-  }
+  },
+  "switchModelsOnFlag": false
 }
