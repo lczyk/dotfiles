@@ -87,7 +87,11 @@ def parse_args(argv)
 
   # -9 means -N 9 (same idea as nice/kill numeric shorts).
   argv = argv.flat_map { |arg| arg =~ /\A-(\d+)\z/ ? ["-N", $1] : [arg] }
-  parser.parse!(argv)
+  begin
+    parser.parse!(argv)
+  rescue OptionParser::ParseError => e
+    raise UsageError, "gh-retry: #{e.message} (see --help)"
+  end
   raise UsageError, parser.to_s if argv.empty?
 
   targets = argv.map do |target|
@@ -187,9 +191,8 @@ class Gh
     json(repo, "pr", "view", number, "--json", "statusCheckRollup")["statusCheckRollup"] || []
   end
 
-  # whatever gh printed, success or not; empty means not there (yet).
   def failed_logs(repo, run_id)
-    Open3.capture2e("gh", "run", "view", run_id, "--log-failed", "--repo", repo).first
+    capture(repo, "run", "view", run_id, "--log-failed")
   end
 
   def rerun(repo, run_id)
@@ -202,10 +205,15 @@ class Gh
 
   private
 
-  def json(repo, *args)
+  def capture(repo, *args)
     out, status = Open3.capture2e("gh", *args, "--repo", repo)
     raise GhError, out unless status.success?
 
+    out
+  end
+
+  def json(repo, *args)
+    out = capture(repo, *args)
     JSON.parse(out)
   rescue JSON::ParserError => e
     raise GhError, "#{e.message}\n#{out}"
@@ -319,8 +327,8 @@ class GiveUp < StandardError; end
 POLL_QUERY_RETRIES = 5
 POLL_QUERY_BACKOFF = 5 # seconds between failed-poll retries
 
-# `gh run view --log-failed` can come back empty right after a run completes,
-# before the logs have materialised. retry a few times so we don't mistake
+# `gh run view --log-failed` can come back empty, or fail, right after a run
+# completes, before the logs have materialised. retry a few times so we don't mistake
 # "logs not ready yet" for "no pattern matched".
 LOG_FETCH_RETRIES = 4
 LOG_FETCH_BACKOFF = 5 # seconds between empty-log retries
@@ -360,9 +368,11 @@ def state_for(env, repo, run_id)
 end
 
 def failed_logs(env, repo, run_id)
-  logs = with_retries(env, LOG_FETCH_RETRIES, LOG_FETCH_BACKOFF, "failed logs empty") do
+  logs = with_retries(env, LOG_FETCH_RETRIES, LOG_FETCH_BACKOFF, "failed logs unavailable") do
     out = env.gh.failed_logs(repo, run_id)
     out unless out.strip.empty?
+  rescue GhError
+    nil
   end
   logs || ""
 end
@@ -685,6 +695,10 @@ if ARGV.first == "--test"
     assert_raises(UsageError) { parse_args(%w[-- pattern]) }
     e = assert_raises(UsageError) { parse_args(%w[o/r/1 junk]) }
     assert_match(/could not parse target "junk"/, e.message)
+    e = assert_raises(UsageError) { parse_args(%w[o/r/1 --retries]) }
+    assert_equal "gh-retry: missing argument: --retries (see --help)", e.message
+    assert_raises(UsageError) { parse_args(%w[-N x o/r/1]) }
+    assert_raises(UsageError) { parse_args(%w[--bogus o/r/1]) }
   end
 
   test "match_pattern: case and order" do
@@ -771,7 +785,14 @@ if ARGV.first == "--test"
     assert_equal "boom", failed_logs(env, "o/r", "1")
     env, io = fake_env(FakeGh.new(logs: { "1" => [""] }))
     assert_equal "", failed_logs(env, "o/r", "1")
-    assert_equal LOG_FETCH_RETRIES, io.string.scan(/failed logs empty/).size
+    assert_equal LOG_FETCH_RETRIES, io.string.scan(/failed logs unavailable/).size
+  end
+
+  test "failed_logs: a gh error is not a log" do
+    env, = fake_env(FakeGh.new(logs: { "1" => [GhError.new("log not found"), "boom"] }))
+    assert_equal "boom", failed_logs(env, "o/r", "1")
+    env, = fake_env(FakeGh.new(logs: { "1" => [GhError.new("log not found")] }))
+    assert_equal "", failed_logs(env, "o/r", "1")
   end
 
   # --- watch ---
@@ -840,11 +861,13 @@ if ARGV.first == "--test"
   end
 
   test "watch: unreadable logs count as transient" do
-    gh = FakeGh.new(states: { "1" => [FAILED, RUNNING, PASSED] }, logs: { "1" => [""] })
-    env, io = fake_env(gh, patterns: ["flaky"])
-    assert watch(env, [:run, "o/r", "1"])
-    assert_equal [[:rerun, "1"]], gh.writes
-    assert_match(/assuming transient and rerunning/, io.string)
+    ["", GhError.new("log not found")].each do |unreadable|
+      gh = FakeGh.new(states: { "1" => [FAILED, RUNNING, PASSED] }, logs: { "1" => [unreadable] })
+      env, io = fake_env(gh, patterns: ["flaky"])
+      assert watch(env, [:run, "o/r", "1"])
+      assert_equal [[:rerun, "1"]], gh.writes
+      assert_match(/assuming transient and rerunning/, io.string)
+    end
   end
 
   test "watch: dry run never writes" do
