@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# tla+ model checker. jar: https://github.com/tlaplus/tlaplus/releases/latest/download/tla2tools.jar
+
+set -e
+
+TLA2TOOLS="${TLA2TOOLS:-${HOME}/opt/tlaplus/tla2tools.jar}"
+
+if [ ! -f "${TLA2TOOLS}" ]; then
+    printf 'error: %s not found (set TLA2TOOLS)\n' "${TLA2TOOLS}" >&2
+    exit 1
+fi
+
+exec java -XX:+UseParallelGC -cp "${TLA2TOOLS}" tlc2.TLC "$@"
