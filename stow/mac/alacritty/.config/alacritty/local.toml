@@ -82,12 +82,6 @@ mods = "Command"
 mode = "~Alt"
 action = "Copy"
 
-# cmd+k defaults to ClearHistory + ^L. forward it instead -- it's herdr's prefix.
-[[keyboard.bindings]]
-key = "K"
-mods = "Command"
-action = "ReceiveChar"
-
 # shift+left-click default in alacritty is PasteSelection (paste PRIMARY).
 # scope the default to the normal screen only -- in alt screen (TUI apps
 # like `edit`) the event must pass through so apps can extend-selection-to-
