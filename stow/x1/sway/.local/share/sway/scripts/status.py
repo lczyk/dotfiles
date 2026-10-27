@@ -150,29 +150,80 @@ def get_brightness(stdout: str | None = None) -> str:
     return f"b{brightness_int}"
 
 
-def run_wifi_and_vpn() -> str:
-    nmcli_output = sub.getoutput("nmcli con show --active")
-    return nmcli_output
+def run_network() -> tuple[str, str, str]:
+    """return nmcli device, active connection and wifi scan outputs"""
+    devices = sub.getoutput("nmcli -t -f TYPE,STATE,IP4-CONNECTIVITY,CONNECTION device")
+    connections = sub.getoutput("nmcli -t -f TYPE,NAME con show --active")
+    wifi_list = sub.getoutput("nmcli -t -f IN-USE,SIGNAL,FREQ device wifi list --rescan no")
+    return devices, connections, wifi_list
 
 
-def get_wifi_and_vpn(stdout: str | None = None) -> str:
-    nmcli_output = stdout if stdout else run_wifi_and_vpn()
-    wifi = ""
-    vpn = ""
-    for line in nmcli_output.splitlines():
-        if "wifi" in line:
-            wifi = line.split()[0]
-        elif "vpn" in line:
-            vpn = line.split()[0]
+def split_terse(line: str) -> list[str]:
+    """split a line of `nmcli -t` output on unescaped colons"""
+    fields = [""]
+    escaped = False
+    for char in line:
+        if escaped:
+            fields[-1] += char
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == ":":
+            fields.append("")
+        else:
+            fields[-1] += char
+    return fields
 
-    if not wifi:
-        return "no wifi"
 
-    wifi_and_vpn = wifi
-    if vpn:
-        wifi_and_vpn += f" ({vpn})"
+def get_network(stdout: tuple[str, str, str] | None = None) -> str:
+    devices, connections, wifi_list = stdout if stdout else run_network()
 
-    return wifi_and_vpn
+    # (name, connectivity) of the connected wifi / bluetooth device
+    wifi: tuple[str, str] | None = None
+    bt: tuple[str, str] | None = None
+    for line in devices.splitlines():
+        fields = split_terse(line)
+        if len(fields) < 4 or fields[1] != "connected":
+            continue
+        dev_type, _, connectivity, name = fields[:4]
+        if dev_type == "wifi" and not wifi:
+            wifi = (name, connectivity)
+        elif dev_type == "bt" and not bt:
+            bt = (name, connectivity)
+
+    vpns = []
+    for line in connections.splitlines():
+        fields = split_terse(line)
+        if len(fields) >= 2 and fields[0] in ("vpn", "wireguard"):
+            vpns.append(fields[1])
+
+    def problem(connectivity: str) -> str:
+        return "" if connectivity in ("full", "unknown") else f" !{connectivity}"
+
+    if wifi:
+        name, connectivity = wifi
+        out = name
+        for line in wifi_list.splitlines():
+            fields = split_terse(line)
+            if len(fields) >= 3 and fields[0] == "*":
+                signal, freq = fields[1], int(fields[2].split()[0])
+                band = "2g" if freq < 3000 else "5g" if freq < 5925 else "6g"
+                out += f" {band} {signal}%"
+                break
+        out += problem(connectivity)
+        if bt:
+            # NM penalises the default route of a device without full connectivity
+            out += " > bt" if problem(connectivity) else " +bt"
+    elif bt:
+        name, connectivity = bt
+        out = f"bt {name}{problem(connectivity)}"
+    else:
+        out = "no net"
+
+    if vpns:
+        out += f" ({', '.join(vpns)})"
+
+    return out
 
 
 def run_cpu() -> tuple[str, int]:
@@ -255,7 +306,7 @@ def main() -> None:
         "run_battery": threading.Thread(target=lambda: results.update({"run_battery": run_battery(battery_path=BATTERY_PATH)})),
         "run_volume": threading.Thread(target=lambda: results.update({"run_volume": run_volume()})),
         "run_brightness": threading.Thread(target=lambda: results.update({"run_brightness": run_brightness()})),
-        "run_wifi_and_vpn": threading.Thread(target=lambda: results.update({"run_wifi_and_vpn": run_wifi_and_vpn()})),
+        "run_network": threading.Thread(target=lambda: results.update({"run_network": run_network()})),
         "run_cpu": threading.Thread(target=lambda: results.update({"run_cpu": run_cpu()})),
     }
     
@@ -269,25 +320,25 @@ def main() -> None:
     battery_stdout = results.get("run_battery")
     volume_stdout = results.get("run_volume")
     brightness_stdout = results.get("run_brightness")
-    wifi_and_vpn_stdout = results.get("run_wifi_and_vpn")
+    network_stdout = results.get("run_network")
     ps_cpu = results.get("run_cpu", (None, None))
 
     # date_stdout = run_date()
     # battery_stdout = run_battery(battery_path=BATTERY_PATH)
     # volume_stdout = run_volume()
     # brightness_stdout = run_brightness()
-    # wifi_and_vpn_stdout = run_wifi_and_vpn()
+    # network_stdout = run_network()
     # ps_cpu = run_cpu()
 
     date = get_date(stdout=date_stdout)
     battery = get_battery(stdout=battery_stdout)
     volume = get_volume(stdout=volume_stdout)
     brightness = get_brightness(stdout=brightness_stdout)
-    wifi_and_vpn = get_wifi_and_vpn(stdout=wifi_and_vpn_stdout)
+    network = get_network(stdout=network_stdout)
     top = get_cpu(stdout=ps_cpu[0], ps_pid=ps_cpu[1])
     temp = get_temperature()
 
-    status = f"{top} | {temp} | {wifi_and_vpn} | {brightness} | {volume} | {battery} | {date}"
+    status = f"{top} | {temp} | {network} | {brightness} | {volume} | {battery} | {date}"
     print(status, end="")
 
 
