@@ -25,9 +25,8 @@ include /etc/sway/config-vars.d/*
 # set $background $(find ~/.local/share/backgrounds/ -type f -not -name '_*' | shuf -n 1)
 # output * bg $background fill
 
-# Use the wallpaper.sh script to set the background
-set $background $($scripts/wallpaper.sh)
-output * bg $background fill
+# sway has no $(...), so pick the wallpaper via a shell; no-op when none is selected
+exec_always sh -c 'bg=$($scripts/wallpaper.sh) && swaymsg output "*" bg "$bg" fill'
 
 # Example configuration:
 #
