@@ -2,7 +2,9 @@
 # spellchecker: ignore upower amixer nmcli milli battmgr
 import subprocess as sub
 import os
+import shutil
 import threading
+import time
 
 # import time
 # from contextlib import contextmanager
@@ -22,15 +24,7 @@ def run_date() -> str:
 
 def get_date(stdout: str | None = None) -> str:
     now = stdout if stdout else run_date()
-    time_fuzzer_path = ""
-    if os.path.isfile("/usr/bin/time_fuzzer") and os.access(
-        "/usr/bin/time_fuzzer", os.X_OK
-    ):
-        time_fuzzer_path = "/usr/bin/time_fuzzer"
-    elif os.path.isfile(os.path.expanduser("~/.cargo/bin/time_fuzzer")) and os.access(
-        os.path.expanduser("~/.cargo/bin/time_fuzzer"), os.X_OK
-    ):
-        time_fuzzer_path = os.path.expanduser("~/.cargo/bin/time_fuzzer")
+    time_fuzzer_path = shutil.which("time_fuzzer")
 
     out: str = ""
     if time_fuzzer_path:
@@ -150,12 +144,26 @@ def get_brightness(stdout: str | None = None) -> str:
     return f"b{brightness_int}"
 
 
-def run_network() -> tuple[str, str, str]:
-    """return nmcli device, active connection and wifi scan outputs"""
-    devices = sub.getoutput("nmcli -t -f TYPE,STATE,IP4-CONNECTIVITY,CONNECTION device")
+NETWATCH_STATE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "netwatch")
+NETWATCH_STALE = 60  # seconds; older probe results are ignored
+
+
+def run_network() -> tuple[str, str, str, str, str]:
+    """return nmcli device, active connection, wifi scan, default route and netwatch probe outputs"""
+    devices = sub.getoutput(
+        "nmcli -t -f GENERAL.TYPE,GENERAL.STATE,GENERAL.IP4-CONNECTIVITY,GENERAL.CONNECTION,GENERAL.IP-IFACE device show"
+    )
     connections = sub.getoutput("nmcli -t -f TYPE,NAME con show --active")
     wifi_list = sub.getoutput("nmcli -t -f IN-USE,SIGNAL,FREQ device wifi list --rescan no")
-    return devices, connections, wifi_list
+    routes = sub.getoutput("ip -4 route show default")
+    probe = ""
+    try:
+        if time.time() - os.path.getmtime(NETWATCH_STATE) < NETWATCH_STALE:
+            with open(NETWATCH_STATE) as f:
+                probe = f.read()
+    except OSError:
+        pass
+    return devices, connections, wifi_list, routes, probe
 
 
 def split_terse(line: str) -> list[str]:
@@ -175,21 +183,38 @@ def split_terse(line: str) -> list[str]:
     return fields
 
 
-def get_network(stdout: tuple[str, str, str] | None = None) -> str:
-    devices, connections, wifi_list = stdout if stdout else run_network()
-
-    # (name, connectivity) of the connected wifi / bluetooth device
-    wifi: tuple[str, str] | None = None
-    bt: tuple[str, str] | None = None
-    for line in devices.splitlines():
-        fields = split_terse(line)
-        if len(fields) < 4 or fields[1] != "connected":
+def primary_device(routes: str) -> str:
+    """device of the lowest-metric default route, or empty"""
+    best: tuple[int, str] | None = None
+    for line in routes.splitlines():
+        fields = line.split()
+        if "dev" not in fields:
             continue
-        dev_type, _, connectivity, name = fields[:4]
-        if dev_type == "wifi" and not wifi:
-            wifi = (name, connectivity)
-        elif dev_type == "bt" and not bt:
-            bt = (name, connectivity)
+        dev = fields[fields.index("dev") + 1]
+        metric = int(fields[fields.index("metric") + 1]) if "metric" in fields else 0
+        if best is None or metric < best[0]:
+            best = (metric, dev)
+    return best[1] if best else ""
+
+
+def get_network(stdout: tuple[str, str, str, str, str] | None = None) -> str:
+    devices, connections, wifi_list, routes, probe = stdout if stdout else run_network()
+
+    # (ip interface, name, connectivity) of the first connected wifi / bt / ethernet device
+    uplinks: dict[str, tuple[str, str, str]] = {}
+    for block in devices.split("\n\n"):
+        props: dict[str, str] = {}
+        for line in block.splitlines():
+            fields = split_terse(line)
+            if len(fields) >= 2:
+                props[fields[0]] = ":".join(fields[1:])
+        dev_type = props.get("GENERAL.TYPE", "")
+        if props.get("GENERAL.STATE", "") != "100 (connected)":
+            continue
+        if dev_type in ("wifi", "bt", "ethernet") and dev_type not in uplinks:
+            # connectivity is "4 (full)", "3 (limited)", ...
+            connectivity = props.get("GENERAL.IP4-CONNECTIVITY", "").partition("(")[2].rstrip(")")
+            uplinks[dev_type] = (props.get("GENERAL.IP-IFACE", ""), props.get("GENERAL.CONNECTION", ""), connectivity)
 
     vpns = []
     for line in connections.splitlines():
@@ -200,8 +225,12 @@ def get_network(stdout: tuple[str, str, str] | None = None) -> str:
     def problem(connectivity: str) -> str:
         return "" if connectivity in ("full", "unknown") else f" !{connectivity}"
 
+    primary = primary_device(routes)
+    wifi = uplinks.get("wifi")
+    backups = [(label, uplinks[kind]) for kind, label in (("ethernet", "eth"), ("bt", "bt")) if kind in uplinks]
+
     if wifi:
-        name, connectivity = wifi
+        dev, name, connectivity = wifi
         out = name
         for line in wifi_list.splitlines():
             fields = split_terse(line)
@@ -211,14 +240,25 @@ def get_network(stdout: tuple[str, str, str] | None = None) -> str:
                 out += f" {band} {signal}%"
                 break
         out += problem(connectivity)
-        if bt:
-            # NM penalises the default route of a device without full connectivity
-            out += " > bt" if problem(connectivity) else " +bt"
-    elif bt:
-        name, connectivity = bt
-        out = f"bt {name}{problem(connectivity)}"
+        for label, (bdev, _, _) in backups:
+            # with no route info fall back to nm, which penalises the default
+            # route of a device without full connectivity
+            active = primary == bdev if primary else bool(problem(connectivity))
+            out += f" > {label}" if active else f" +{label}"
+    elif backups:
+        label, (_, name, connectivity) = backups[0]
+        out = f"{label} {name}{problem(connectivity)}"
     else:
         out = "no net"
+
+    # netwatch writes "dev loss rtt ok|bad" after each probe of the primary
+    fields = probe.split()
+    if len(fields) == 4:
+        _, loss, rtt, verdict = fields
+        if verdict == "ok":
+            out += f" {rtt}ms"
+        else:
+            out += f" !{loss}%" if loss == "100" else f" !{rtt}ms"
 
     if vpns:
         out += f" ({', '.join(vpns)})"
