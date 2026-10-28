@@ -124,7 +124,7 @@ def main():
         if last_selected:
             last_selected = last_selected[0]
             debug("Last selected wallpaper:", last_selected)
-            if last_selected in paths:
+            if last_selected in paths and len(paths) > 1:
                 last_index = paths.index(last_selected)
                 weights[last_index] = 0
                 debug("Adjusted weights to avoid repetition:", weights)
