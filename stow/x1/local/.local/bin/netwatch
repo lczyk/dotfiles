@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# demote the primary uplink below the backup when it stops passing traffic.
+#
+# probes the lowest-metric default route with ping; after DOWN_AFTER bad rounds
+# (and a healthy backup) it raises that device's route metric above the backup's
+# via `nmcli device modify`, which needs no admin auth and does not touch the
+# saved profile. UP_AFTER good rounds restore the original metric. a reconnect
+# resets the metric on its own, so the state is dropped when the route vanishes.
+# every change of primary uplink or wifi network, its own or not, is reported
+# with notify-send.
+set -e
+
+INTERVAL="${NETWATCH_INTERVAL:-10}"   # seconds between rounds
+TARGET="${NETWATCH_TARGET:-1.1.1.1}"
+PROBES=3
+MAX_LOSS=50                           # percent; above this a round is bad
+MAX_RTT=1500                          # ms average; above this a round is bad
+DOWN_AFTER=2                          # consecutive bad rounds before demoting
+UP_AFTER=3                            # consecutive good rounds before restoring
+BUMP=50                               # demoted metric = backup metric + BUMP
+STATE="${XDG_RUNTIME_DIR:-/tmp}/netwatch"  # "dev loss rtt ok|bad", read by the sway status bar
+
+_DEMOTED_DEV=""
+_DEMOTED_METRIC=""
+_BAD=0
+_GOOD=0
+_LOSS=0
+_RTT=0
+_LAST_PRIMARY=""
+_LAST_BACKUP=""
+_LAST_WIFI=""
+
+function _log() { printf '%s %s\n' "$(date +%T)" "$*" >&2; }
+
+function _notify() {
+    _log "$*"
+    command -v notify-send >/dev/null || return 0
+    notify-send -a netwatch "$1" "${2:-}" || true
+}
+
+# sets _LOSS (percent) and _RTT (ms avg); returns 1 when the round is bad
+function _probe() {
+    local dev="$1" out
+    out=$(ping -I "${dev}" -c "${PROBES}" -i 0.3 -W 1 -q "${TARGET}" 2>/dev/null) || true
+    _LOSS=100
+    _RTT=0
+    if [[ "${out}" =~ ([0-9]+)(\.[0-9]+)?%\ packet\ loss ]]; then _LOSS="${BASH_REMATCH[1]}"; fi
+    if [[ "${out}" =~ rtt\ min/avg/max/mdev\ =\ [0-9.]+/([0-9]+) ]]; then _RTT="${BASH_REMATCH[1]}"; fi
+    local verdict=ok
+    if [ "${_LOSS}" -gt "${MAX_LOSS}" ] || [ "${_RTT}" -gt "${MAX_RTT}" ]; then verdict=bad; fi
+    printf '%s %s %s %s\n' "${dev}" "${_LOSS}" "${_RTT}" "${verdict}" > "${STATE}.tmp" && mv -f "${STATE}.tmp" "${STATE}"
+    [ "${verdict}" = ok ]
+}
+
+# prints "dev metric" per ipv4 default route, lowest metric first
+function _routes() {
+    ip -4 route show default | awk '{for (i=1; i<=NF; i++) if ($i=="dev") d=$(i+1); else if ($i=="metric") m=$(i+1); print d, m}' | sort -k2 -n
+}
+
+# prints the active wifi connection name, or "none"
+function _wifi() {
+    local line
+    line=$(nmcli -t -f TYPE,CONNECTION device 2>/dev/null | grep '^wifi:' | head -n1) || true
+    printf '%s\n' "${line#wifi:}"
+}
+
+function _set_metric() {
+    local dev="$1" metric="$2"
+    nmcli device modify "${dev}" ipv4.route-metric "${metric}" ipv6.route-metric "${metric}" >/dev/null
+}
+
+# notifies when the primary or backup uplink or the wifi network changed since last round
+function _report_changes() {
+    local primary="$1" backup="$2" wifi
+    wifi=$(_wifi)
+    if [ -n "${_LAST_PRIMARY}" ] && [ "${primary:-none}" != "${_LAST_PRIMARY}" ]; then
+        _notify "uplink: ${_LAST_PRIMARY} -> ${primary:-none}"
+    fi
+    if [ -n "${_LAST_BACKUP}" ] && [ "${backup:-none}" != "${_LAST_BACKUP}" ]; then
+        _notify "backup: ${_LAST_BACKUP} -> ${backup:-none}"
+    fi
+    if [ -n "${_LAST_WIFI}" ] && [ "${wifi:-none}" != "${_LAST_WIFI}" ]; then
+        _notify "wifi: ${_LAST_WIFI} -> ${wifi:-none}"
+    fi
+    _LAST_PRIMARY="${primary:-none}"
+    _LAST_BACKUP="${backup:-none}"
+    _LAST_WIFI="${wifi:-none}"
+}
+
+function _round() {
+    local routes primary pmetric backup bmetric
+    routes=$(_routes)
+    read -r primary pmetric <<<"$(sed -n 1p <<<"${routes}")"
+    read -r backup bmetric <<<"$(sed -n 2p <<<"${routes}")"
+    _report_changes "${primary}" "${backup}"
+
+    if [ -n "${_DEMOTED_DEV}" ]; then
+        if ! grep -q "^${_DEMOTED_DEV} " <<<"${routes}"; then
+            _log "${_DEMOTED_DEV} gone, forgetting demotion"
+            _DEMOTED_DEV=""
+            _GOOD=0
+            return
+        fi
+        if _probe "${_DEMOTED_DEV}"; then
+            _GOOD=$((_GOOD + 1))
+            _log "${_DEMOTED_DEV} ok (${_LOSS}% loss, ${_RTT}ms) ${_GOOD}/${UP_AFTER}"
+            if [ "${_GOOD}" -ge "${UP_AFTER}" ]; then
+                _set_metric "${_DEMOTED_DEV}" "${_DEMOTED_METRIC}"
+                _notify "restored ${_DEMOTED_DEV} to metric ${_DEMOTED_METRIC}" "${_LOSS}% loss, ${_RTT}ms"
+                _DEMOTED_DEV=""
+                _GOOD=0
+            fi
+        else
+            _GOOD=0
+        fi
+        return
+    fi
+
+    [ -n "${primary}" ] || return 0
+
+    if _probe "${primary}"; then
+        _BAD=0
+        return
+    fi
+    _BAD=$((_BAD + 1))
+    _log "${primary} bad (${_LOSS}% loss, ${_RTT}ms) ${_BAD}/${DOWN_AFTER}"
+    [ -n "${backup}" ] && [ "${_BAD}" -ge "${DOWN_AFTER}" ] || return 0
+    if ! _probe "${backup}"; then
+        _log "${backup} also bad (${_LOSS}% loss, ${_RTT}ms), staying put"
+        return
+    fi
+    _DEMOTED_DEV="${primary}"
+    _DEMOTED_METRIC="${pmetric}"
+    _set_metric "${primary}" "$((bmetric + BUMP))"
+    _notify "demoted ${primary} to metric $((bmetric + BUMP)), ${backup} (${_RTT}ms) now primary"
+    _BAD=0
+}
+
+function main() {
+    local rounds=0
+    case "${1:-}" in
+        (-h|--help)
+            printf 'usage: netwatch [--rounds N]\n  N rounds then exit (default: forever)\n  env: NETWATCH_INTERVAL (%ss), NETWATCH_TARGET (%s)\n' "${INTERVAL}" "${TARGET}"
+            exit 0 ;;
+        (--rounds)
+            rounds="${2:-}"
+            if ! [[ "${rounds}" =~ ^[0-9]+$ ]]; then printf 'netwatch: --rounds needs a number\n' >&2; exit 2; fi ;;
+        ("") ;;
+        (*) printf 'netwatch: unknown argument %s\n' "$1" >&2; exit 2 ;;
+    esac
+    _log "watching default routes every ${INTERVAL}s against ${TARGET}"
+    local i=0
+    while [ "${rounds}" -eq 0 ] || [ "${i}" -lt "${rounds}" ]; do
+        _round || true
+        i=$((i + 1))
+        if [ "${rounds}" -eq 0 ] || [ "${i}" -lt "${rounds}" ]; then sleep "${INTERVAL}"; fi
+    done
+}
+
+main "$@"

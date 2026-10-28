@@ -1,0 +1,10 @@
+[Unit]
+Description=demote a dead primary uplink below the backup
+
+[Service]
+ExecStart=%h/.local/bin/netwatch
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
