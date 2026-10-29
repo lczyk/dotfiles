@@ -1,10 +1,16 @@
 # auto-memory is off everywhere. in a private fish session (`fish -P`) also run
 # claude with local persistence and nonessential upstream traffic off. see
 # `claude --help` for what --bare would add; not used here because it also drops
-# hooks.
+# hooks. BUN_OPTIONS preloads the vendored agent_summary kill switch when it is
+# stowed; bun refuses to start on a missing preload. see
+# ~/.claude/preload/NOTICE-no-agent-summary.md.
 if type -q claude
     function claude --wraps claude
         set -l vars CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
+        set -l preload $HOME/.claude/preload/no-agent-summary.js
+        if test -r $preload
+            set -a vars BUN_OPTIONS=--preload=$preload
+        end
         if set -q fish_private_mode
             set -a vars \
                 CLAUDE_CODE_SKIP_PROMPT_HISTORY=1 \
