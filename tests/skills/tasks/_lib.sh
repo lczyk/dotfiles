@@ -66,8 +66,7 @@ _styles() {
 # the agent's HOME gets this repo's agent config, the way stow lays it out.
 # styles follow the task id's suite prefix -- lofi alone, caveman alone, or
 # both. a task that needs other starting state calls _styles again after.
-# SKILLS_LOFI_REMINDER_APPEND (host env) adds a line to the per-prompt lofi
-# reminder, to try out reminder wording without touching the stow tree.
+# SKILLS_OVERLAY (host env) names a dir of text to append, see _overlay.
 _seed_home() {
     [ -n "${PATS_AGENT_HOME}" ] || _fail "PATS_AGENT_HOME unset (needs pats >= 0.7.3)"
     command -v jq >/dev/null || _fail "jq not found"
@@ -80,10 +79,20 @@ _seed_home() {
         cave-*) _styles off full ;;
         *) _styles on off ;;
     esac
-    if [ -n "${SKILLS_LOFI_REMINDER_APPEND:-}" ]; then
-        printf '%s\n' "${SKILLS_LOFI_REMINDER_APPEND}" \
-            >>"${PATS_AGENT_HOME}/.config/agent-styles/lofi-reminder.md"
+    if [ -n "${SKILLS_OVERLAY:-}" ]; then
+        _overlay "${SKILLS_OVERLAY}"
     fi
+}
+
+# append each file under dir $1 to the seeded file at the same path under the
+# agent's HOME, to try out style / skill wording without touching the stow tree.
+_overlay() {
+    [ -d "$1" ] || _fail "SKILLS_OVERLAY: no such dir: $1"
+    (cd "$1" && find . -type f) | while IFS= read -r rel; do
+        dst="${PATS_AGENT_HOME}/${rel#./}"
+        [ -f "${dst}" ] || _fail "SKILLS_OVERLAY: ${rel#./} isn't a seeded file"
+        cat "$1/${rel}" >>"${dst}"
+    done || exit 1
 }
 
 # lines the reply may quote in their source case (repo template headers), one

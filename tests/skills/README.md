@@ -27,10 +27,12 @@ run the `canary` suite first after changing the hooks or the seeding. if it scor
 
 the task id prefix sets the styles the agent starts with (`_seed_home`): `lofi-*` lofi only, `cave-*` caveman only, `lofi-cave-*` both. a task that reruns another links its prompt and prepare script to it.
 
-to try out reminder wording without editing the stow tree, set `SKILLS_LOFI_REMINDER_APPEND` on the host. prepare appends it to the seeded `lofi-reminder.md`:
+to try out style or skill wording without editing the stow tree, point `SKILLS_OVERLAY` at a dir laid out like `$HOME`. prepare appends each file in it to the seeded file at the same path:
 
 ```sh
-env SKILLS_LOFI_REMINDER_APPEND="..." pats run -t lofi-pr-body
+mkdir -p /tmp/ai/ov/.config/agent-styles
+echo "..." >/tmp/ai/ov/.config/agent-styles/lofi-reminder.md
+env SKILLS_OVERLAY=/tmp/ai/ov pats run -t lofi-pr-body
 ```
 
 one run per pair is noisy. run a suite a few times and compare averages, not single scores.
