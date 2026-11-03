@@ -4,7 +4,7 @@
 
 - **match the repo first** if every script in the repo uses `#!/bin/bash`, match it. the defaults below are for greenfield scripts or repos with no pattern.
 - **dash-compatible by default** new scripts target `#!/bin/sh -e` (dash), no bash-isms. when bash is genuinely needed, be open about it: `#!/usr/bin/env bash` (finds bash in `$PATH`) plus a `set -e` line -- never `#!/usr/bin/env bash -e`, linux `env` can't split that. don't half-pretend to be dash-compatible.
-- **bash-only features stay in bash scripts** arrays, the `function` keyword, `[[`, `(( ))` and C-style `for`, `PIPESTATUS`, `set -o pipefail`. default to `[`; `[[` only where pattern matching or null-safety justify it.
+- **bash-only features stay in bash scripts** arrays, the `function` keyword, `[[`, `(( ))` and C-style `for`, `PIPESTATUS`, `set -o pipefail`. default to `[`, and `[[` only where pattern matching or null-safety justify it.
 - **skip `-e`** only when a `_fail`-style helper handles errors and calls `exit` directly. libraries use a source-guard shebang instead.
 
 ### structure
@@ -38,15 +38,15 @@
 
 - **`local` for every function variable** no global leaks. `local x=$(cmd)` needs no quotes (no word splitting in bash or dash), but it masks `cmd`'s exit status under `-e` -- write `local x; x=$(cmd)` when the status matters.
 - **quote every expansion** `"${name}"`, `"$@"`, `"${_TO_INSTALL[@]}"`. exception: intentional splitting with `# shellcheck disable=SC2086`.
-- **builtins and parameter expansion over external tools** `${cmd%%;}`, `${name:-default}` instead of `awk` / `sed` / `cut`; external tools only when the shell has no equivalent (`mktemp`, `grep`, `find`). in bash, numeric loops are `for ((i=0; i<n; i++))`, not `seq` or a `while` counter.
-- **`printf` over `echo`** `printf '%s\n' "${var}"`; `echo` varies across shells and mangles backslashes.
-- **never `set -o pipefail`** check `${PIPESTATUS[0]}` when a pipe's exit codes matter (bash-only; in dash, capture intermediate output and check each stage).
-- **`grep -q` for test assertions** `cmd | grep -q "expected"`; `-F` for literal strings; `-i` unless it weakens the test.
+- **builtins and parameter expansion over external tools** `${cmd%%;}`, `${name:-default}` instead of `awk` / `sed` / `cut`. external tools only when the shell has no equivalent (`mktemp`, `grep`, `find`). in bash, numeric loops are `for ((i=0; i<n; i++))`, not `seq` or a `while` counter.
+- **`printf` over `echo`** `printf '%s\n' "${var}"`, since `echo` varies across shells and mangles backslashes.
+- **never `set -o pipefail`** check `${PIPESTATUS[0]}` when a pipe's exit codes matter (bash-only -- in dash, capture intermediate output and check each stage).
+- **`grep -q` for test assertions** `cmd | grep -q "expected"`, `-F` for literal strings, `-i` unless it weakens the test.
 - **arrays for reused lists, `\` for one-shot** `slices=(a b c); cmd "${slices[@]}"` when the list is used more than once; `\` continuations for a single long command.
 
 ### output
 
-- **diagnostics to stderr** `printf 'error: ...\n' >&2`; stdout is for return values and intended output.
+- **diagnostics to stderr** `printf 'error: ...\n' >&2`. stdout is for return values and intended output.
 
 ### other
 
