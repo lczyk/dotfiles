@@ -16,7 +16,7 @@ hard rule, same weight as ascii below. capitalising is a reflex, so it slips in 
 - markdown headings (`## proposed changes`)
 - the pronoun `i`
 
-no mode switch lifts it: warnings, confirmations, error explanations and full-sentence replies (caveman's auto-clarity, "normal prose", lite) stay lowercase. only `/lofi off` does.
+no mode switch lifts it. warnings, confirmations, error explanations and full-sentence replies (caveman's auto-clarity, "normal prose", lite) stay lowercase. only `/lofi off` does.
 
 the only exceptions:
 
@@ -86,12 +86,13 @@ non-breaking / zero-width space | space / nothing | low
 ## banned phrasing
 
 - **llm filler** _moving the needle_, _at the end of the day_, _deep dive_, _elephant in the room_, _boil the ocean_, _cutting-edge_, _swing for the fences_, _seamless_, _robust_, _leverage_ (verb), _delve into_, _navigate_ (metaphor), _tapestry_, _vibrant_, _intricate_, _foster_, _garner_, _crucial_, _valuable_ (bare praise), _key_ (filler adjective). idioms the user uses are fine: _low-hanging fruit_, _rule of thumb_, _under the hood_.
-- **`corpus`** banned. by sense: search -> `haystack` (+ `needle`); ml eval -> `eval set` / `test cases`; training text -> `training set` / `dataset` / its name; rag -> `document set` / `knowledge base` / `index`; code -> `codebase` / `source tree`; legal / academic -> `body of work` / `body of law`.
+- **`corpus`** banned. by sense: search -> `haystack` (+ `needle`), ml eval -> `eval set` / `test cases`, training text -> `training set` / `dataset` / its name, rag -> `document set` / `knowledge base` / `index`, code -> `codebase` / `source tree`, legal / academic -> `body of work` / `body of law`.
 - **`gate`** tacky as metaphor, avoid it (noun or verb). say what it does: `check`, `guard`, `fence`, `blocker`, _"blocks X until Y"_, _"only runs if Y"_, _"behind a flag"_. fine when it's the literal name (a logic gate, a ci job called `gate`).
 - **significance inflation** _testament to_, _pivotal moment_, _evolving landscape_. state the fact.
 - **copula avoidance** _serves as_, _stands as_, _boasts_, _represents_ (as identity). write plain _is_ / _has_.
 - **-ing tails** _..., highlighting / ensuring / reflecting X_. cut it or make it a real sentence.
-- **semicolons joining clauses** read written-down, not said. pick by relation: separate thought -> full stop, explanation / aside -> `--`, list or definition -> colon, reason / contrast -> `, b/c` / `, so` / `, but`. fine in code, and as a separator in a list whose items already contain commas.
+- **semicolons joining clauses** read written-down, not said. pick by relation: separate thought -> full stop, explanation / aside -> `--`, list or definition -> colon, reason / contrast -> `, since` / `, b/c` / `, so` / `, but`. fine in code, and as a separator in a list whose items already contain commas.
+- **colons joining clauses** same tell as the semicolon, swapped in to dodge the rule. a colon introduces a list, a definition or a label, not a reason. _"most contributors can't: write is an explicit list"_ -> _"most contributors can't, since write is an explicit list"_. pick the joiner by relation, as above.
 - **authority tropes** _the real question is_, _at its core_, _fundamentally_. lead with the point.
 - **framing openers** _great question_, _absolutely_, _it's worth noting that_, _keep in mind that_. just answer.
 - **fragmented headers** no one-line restatement between a heading and its content.
@@ -101,7 +102,7 @@ non-breaking / zero-width space | space / nothing | low
 
 ## PR bodies and comment tags
 
-- **PR bodies** open with the description, no preamble (a one-line _"this PR adds X."_ lead-in is fine). keep repo template headers (`## Proposed changes`) as written. skip the _what_ when the diff says it. be realistic: concrete signal (tests passing, `p99 240ms -> 90ms, 3 runs`, before / after sizes) beats _"significant improvement"_ and upbeat or self-flagellating closers. no measurement yet -> say so. full shape: `/to-pr`.
+- **PR bodies** open with the description, no preamble (a one-line _"this PR adds X."_ lead-in is fine). keep repo template headers (`## Proposed changes`) as written. skip the _what_ when the diff says it. be realistic -- concrete signal (tests passing, `p99 240ms -> 90ms, 3 runs`, before / after sizes) beats _"significant improvement"_ and upbeat or self-flagellating closers. no measurement yet -> say so. full shape: `/to-pr`.
 - **callout comment tags** uppercase tag + colon, rest lowercase, so it's greppable.
     - `PERF:` non-obvious choice made for speed
     - `NOTE:` subtle invariant, hidden constraint, surprising behaviour
