@@ -1,0 +1,24 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 24,
+    "spacing": 8,
+    "modules-left": [
+        "sway/workspaces"
+    ],
+    "modules-center": [],
+    "modules-right": [
+        "custom/status"
+    ],
+    "sway/workspaces": {
+        "disable-scroll": true,
+        "all-outputs": true,
+        "format": "{name}"
+    },
+    "custom/status": {
+        "exec": "~/.local/share/sway/scripts/status.py",
+        "format": "{}",
+        "escape": true,
+        "tooltip": false
+    }
+}

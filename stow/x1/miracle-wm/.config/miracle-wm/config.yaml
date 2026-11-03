@@ -1,0 +1,39 @@
+terminal: alacritty
+
+keyboard:
+  keymap:
+    language: us
+    variant: ""
+
+cursor:
+  focus_mode: hover
+
+touchpad:
+  disable_while_typing: true
+  tap_to_click: false
+  click_mode: finger_count
+  acceleration_bias: 0.3
+  vscroll_speed: -1.0
+  hscroll_speed: -1.0
+
+default_action_overrides:
+  - name: quit_active_window
+    action: down
+    modifiers: [primary]
+    key: q
+
+startup_apps:
+  - command: miraclemsg for_window [app_id=launcher] floating toggle
+  - command: mako
+  - command: waybar
+    restart_on_death: true
+  - command: ~/.local/share/miracle-wm/scripts/wallpaper.sh
+    restart_on_death: true
+  - command: autotiling
+    restart_on_death: true
+
+custom_actions:
+  - command: ~/.local/share/miracle-wm/scripts/launcher.sh
+    action: down
+    modifiers: [primary]
+    key: space

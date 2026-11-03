@@ -65,7 +65,8 @@ def switch_splitting(i3, e, *, debug, outputs, workspaces, depth_limit, splitrat
 
         new_layout = "splitv" if con.rect.height > con.rect.width / splitratio else "splith"
         if new_layout != con.parent.layout:
-            result = i3.command(new_layout)
+            # miracle-wm only parses the long form; sway accepts both.
+            result = i3.command("split vertical" if new_layout == "splitv" else "split horizontal")
             if debug:
                 if result[0].success:
                     print(f"switched to {new_layout}", file=sys.stderr)
