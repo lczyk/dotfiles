@@ -1,0 +1,45 @@
+# agent-config eval via pats (https://github.com/lczyk/pats): does an agent
+# seeded with this repo's instructions, styles and hooks behave as they say?
+# run:   cd tests/skills && pats run      # runs the agent(s) in docker -- slow, live
+# score: cd tests/skills && pats score    # scores the latest run, offline
+# needs pats >= 0.7.3 (PATS_AGENT_HOME). pats builds the image itself.
+
+sandboxes:
+  # the stock pats image plus jq, which the safety hooks need on every call.
+  - id: docker
+    kind: container
+    driver: docker
+    build: .
+
+# single sandbox defined -> it's the default.
+agents:
+  - id: haiku
+    kind: claude-cli-keyless
+    model: claude-haiku-5-5
+
+# prepare seeds the agent's HOME with the stow packages (tasks/_lib.sh) and
+# builds the task's fixture repo. each task's setup lives in
+# tasks/prepare_<id>.sh. collect is uniform (tasks/collect.sh).
+tasks:
+  # harness check: the seeded hooks fire and their text reaches the agent.
+  # every other result is meaningless while this one fails.
+  - id: canary
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+    timeout: 5m
+
+# each scorer is a standalone uv script scorers/scorer_<id>.py (shared helpers
+# in scorers/_lib.py). first stdout line = float [0,1] or `na`.
+scorers:
+  - {id: canary-hooks,   score: "scorers/scorer_${id}.py"}
+  - {id: canary-context, score: "scorers/scorer_${id}.py"}
+
+suites:
+  - id: canary
+    agents: haiku
+    tasks: canary
+    scorers:
+      - canary-hooks
+      - canary-context
+      #
