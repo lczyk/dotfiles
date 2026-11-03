@@ -12,10 +12,10 @@ lofi = the personal writing style. full rules: `~/.config/agent-styles/lofi.md`;
 
 state = marker file `${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off`. present -> adapters stay silent and the claude and kimi statusline badges show `[x]`. absent -> style active, badge `[L]`.
 
-on invocation:
+on invocation, run the command below before replying. the marker file is the toggle -- saying lofi is off without creating it changes nothing, and the next prompt gets the style again.
 
 - `off` -- run `mkdir -p "${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}" && touch "${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off"`. stop applying the style for the rest of this session (normal capitalisation etc.). persists across sessions until turned back on.
 - `on` or no argument -- run `rm -f "${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off"`. apply the style from the next reply on. if this session started with lofi off, read `~/.config/agent-styles/lofi.md` now.
 - `status` -- report on / off from the marker file, change nothing.
 
-confirm the toggle in one short line. nothing else to do -- the hooks and statusline pick up the marker by themselves.
+confirm the toggle in one short line, only after the command has run. nothing else to do -- the hooks and statusline pick up the marker by themselves.
