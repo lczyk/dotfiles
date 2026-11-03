@@ -68,6 +68,10 @@ scorers:
   - {id: lofi-lowercase,  score: "scorers/scorer_${id}.py"}
   - {id: lofi-banned,     score: "scorers/scorer_${id}.py"}
   - {id: lofi-joiners,    score: "scorers/scorer_${id}.py"}
+  - {id: lofi-acronyms,   score: "scorers/scorer_${id}.py"}
+  - {id: lofi-format,     score: "scorers/scorer_${id}.py"}
+  - {id: lofi-enthusiasm, score: "scorers/scorer_${id}.py"}
+  - {id: lofi-pr-preamble, score: "scorers/scorer_${id}.py"}
   - {id: lofi-docs-case,  score: "scorers/scorer_${id}.py"}
   - {id: lofi-toggle-off, score: "scorers/scorer_${id}.py"}
 
@@ -93,6 +97,10 @@ suites:
       - lofi-lowercase
       - lofi-banned
       - lofi-joiners
+      - lofi-acronyms
+      - lofi-format
+      - lofi-enthusiasm
+      - lofi-pr-preamble
       - lofi-docs-case
       - lofi-toggle-off
       #

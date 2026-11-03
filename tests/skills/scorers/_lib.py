@@ -44,6 +44,7 @@ _FENCE = re.compile(r"^\s*(```|~~~)")
 _INLINE_CODE = re.compile(r"`[^`]*`")
 _URL = re.compile(r"https?://\S+")
 _DQUOTED = re.compile(r'"[^"\n]*"')
+_MD_LEAD = re.compile(r"^[\s>#*+-]*")
 
 OUT = Path(os.environ["PATS_OUTPUT_DIR"])
 TASK = os.environ.get("PATS_TASK_ID", "")
@@ -90,19 +91,41 @@ def lofi_raw() -> str:
     return text
 
 
-def lofi_prose() -> list[str]:
-    """lofi_raw() as prose lines: no fenced blocks, and inline code, urls and
-    double-quoted text cut out, since those keep their source spelling."""
+def _norm(line: str) -> str:
+    return _MD_LEAD.sub("", line).strip()
+
+
+def _diff_lines() -> set[str]:
+    """the file lines in diff.txt, so a reply quoting a file it edited (often in
+    the file's own case) isn't scored as the agent's prose."""
+    diff = OUT / "diff.txt"
+    if not diff.exists():
+        return set()
+    out = set()
+    for line in diff.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line[:1] in "+- " and not line.startswith(("+++", "---")):
+            body = _norm(line[1:])
+            if len(body.split()) >= 3:
+                out.add(body)
+    return out
+
+
+def lofi_prose(keep_blank: bool = False) -> list[str]:
+    """lofi_raw() as prose lines: no fenced blocks, no lines quoted from the
+    diff, and inline code, urls and double-quoted text cut out, since those
+    keep their source spelling. keep_blank keeps empty lines, so list and
+    paragraph breaks survive."""
+    quoted = _diff_lines()
     lines = []
     in_fence = False
     for line in lofi_raw().splitlines():
         if _FENCE.match(line):
             in_fence = not in_fence
             continue
-        if in_fence:
+        if in_fence or _norm(line) in quoted:
             continue
         line = _DQUOTED.sub(" ", _URL.sub(" ", _INLINE_CODE.sub(" ", line)))
-        if line.strip():
+        if line.strip() or keep_blank:
             lines.append(line)
     return lines
 
