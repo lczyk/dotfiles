@@ -17,12 +17,12 @@ write commit messages terse and exact. why over what. the workflow guidance ("co
 - suffix markers per the workflow guidance: `!:` = committed known-bad on purpose, `?:` = unverified. `!` does _not_ mean breaking change here.
 - imperative mood: _add_, _fix_, _remove_ -- not _added_ / _adds_ / _adding_
 - <=50 chars when possible, hard cap 72, no trailing full stop
-- name the kind of change, not the site; no framing verbs (_introduce_, _implement_)
+- name the kind of change, not the site. no framing verbs (_introduce_, _implement_)
 - match the project's case after the colon
 
 **body** (only if needed)
 - skip it when the subject says enough
-- add one for a non-obvious _why_, migration notes, linked issues -- and always for breaking changes, security fixes, data migrations and reverts; future debuggers need the context
+- add one for a non-obvious _why_, migration notes, linked issues -- and always for breaking changes, security fixes, data migrations and reverts, since future debuggers need the context
 - wrap at 72, `-` bullets
 - issue refs at the end: `Closes #42`, `Refs #17`
 

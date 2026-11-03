@@ -9,7 +9,7 @@ ask one question at a time. don't accept partial answers, answers wrapped in unc
 
 if the codebase can answer a question, explore the codebase instead of asking.
 
-before each question, print a rough progress marker for the decision tree (e.g. `progress: ~3/10 branches resolved`, or `progress: ~30%, still need to cover error handling + rollout`). a vibes-meter, not a contract; update it as new branches surface.
+before each question, print a rough progress marker for the decision tree (e.g. `progress: ~3/10 branches resolved`, or `progress: ~30%, still need to cover error handling + rollout`). a vibes-meter, not a contract. update it as new branches surface.
 
 ask in plain prose with lettered options inline -- no picker tools or multi-choice modes:
 

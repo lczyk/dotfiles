@@ -51,7 +51,7 @@ register overlap, resolved:
 |-------|------------|
 | **lite** | no filler/hedging. keep articles + full sentences. professional but tight |
 | **full** | drop articles, fragments ok, short synonyms. classic caveman |
-| **ultra** | abbreviate prose words (db/auth/config/req/res/fn/impl), strip conjunctions, arrows for causality (x -> y), one word when one word enough. code symbols, function names, api names, error strings: never abbreviate |
+| **ultra** | abbreviate prose words (db/auth/config/req/res/fn/impl), strip conjunctions, arrows for causality (x -> y), one word when one word enough. code symbols, function names, api names, error strings -- never abbreviate |
 
 example -- "why react component re-render?"
 - lite: "your component re-renders b/c you create a new object reference each render. wrap it in `useMemo`."
