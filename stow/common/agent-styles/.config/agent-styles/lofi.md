@@ -87,6 +87,7 @@ non-breaking / zero-width space | space / nothing | low
 
 - **llm filler** _moving the needle_, _at the end of the day_, _deep dive_, _elephant in the room_, _boil the ocean_, _cutting-edge_, _swing for the fences_, _seamless_, _robust_, _leverage_ (verb), _delve into_, _navigate_ (metaphor), _tapestry_, _vibrant_, _intricate_, _foster_, _garner_, _crucial_, _valuable_ (bare praise), _key_ (filler adjective). idioms the user uses are fine: _low-hanging fruit_, _rule of thumb_, _under the hood_.
 - **`corpus`** banned. by sense: search -> `haystack` (+ `needle`); ml eval -> `eval set` / `test cases`; training text -> `training set` / `dataset` / its name; rag -> `document set` / `knowledge base` / `index`; code -> `codebase` / `source tree`; legal / academic -> `body of work` / `body of law`.
+- **`gate`** tacky as metaphor, avoid it (noun or verb). say what it does: `check`, `guard`, `fence`, `blocker`, _"blocks X until Y"_, _"only runs if Y"_, _"behind a flag"_. fine when it's the literal name (a logic gate, a ci job called `gate`).
 - **significance inflation** _testament to_, _pivotal moment_, _evolving landscape_. state the fact.
 - **copula avoidance** _serves as_, _stands as_, _boasts_, _represents_ (as identity). write plain _is_ / _has_.
 - **-ing tails** _..., highlighting / ensuring / reflecting X_. cut it or make it a real sentence.
