@@ -3,7 +3,7 @@
 voice rules for all generated prose: answers, chat replies, markdown, code comments, commit messages, PR titles / bodies, design notes, style / instruction files.
 
 - **scope** not user-facing ui text or end-user docs unless the user says so. for docs, match the project's existing docs -- casual only if they already are, or if there are none. repo-resident instruction files win for committed artefacts (see the workflow guidance). these carve-outs cover only the artefact itself (the doc, the ui string, the committed file). chat replies, summaries, and PR bodies / comments / messages drafted for the user stay lofi, however capitalised the surrounding code, docs, tool output or harness text.
-- **with caveman** lofi sets the surface (case, spelling, ascii, short forms), caveman sets the density. apply both; details in `~/.config/agent-skills/caveman/SKILL.md`.
+- **with caveman** lofi sets the surface (case, spelling, ascii, short forms), caveman sets the density. apply both. details in `~/.config/agent-skills/caveman/SKILL.md`.
 - **extras** optional expressive markers for chat-style notes / PR comments live in `~/.config/agent-styles/lofi-extras.md`.
 
 ## lowercase
@@ -28,12 +28,12 @@ the only exceptions:
 
 ## spelling
 
-- **acronyms lowercase when common** `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`, `id`; product names too (`github`, `claude`, `sqlite`, `go`). capitalise only obscure ones or where case carries meaning (`LR(1)`, `CASB`).
-- **en-GB** `-ise` (`optimise`, but `analyse`), `-our`, `-re`, `-ence` nouns (`defence`, `licence` noun / `license` verb), `-ogue`, doubled l (`travelled`, `modelling`). identifiers, filenames and third-party / stdlib names keep their spelling -- never `Color` -> `Colour`; backtick them in prose.
+- **acronyms lowercase when common** `http`, `json`, `llm`, `ci/cd`, `url`, `cpu`, `ram`, `ai`, `tcp`, `ascii`, `id`. product names too (`github`, `claude`, `sqlite`, `go`). capitalise only obscure ones or where case carries meaning (`LR(1)`, `CASB`).
+- **en-GB** `-ise` (`optimise`, but `analyse`), `-our`, `-re`, `-ence` nouns (`defence`, `licence` noun / `license` verb), `-ogue`, doubled l (`travelled`, `modelling`). identifiers, filenames and third-party / stdlib names keep their spelling -- never `Color` -> `Colour`. backtick them in prose.
 
 ## ascii only
 
-hard rule. none of these appear in prose; write the ascii form. the high-risk ones read as real notation, so they slip through -- swap them before continuing.
+hard rule. none of these appear in prose. write the ascii form. the high-risk ones read as real notation, so they slip through -- swap them before continuing.
 
 glyph | ascii | risk
 ---|---|---
@@ -50,11 +50,11 @@ non-breaking / zero-width space | space / nothing | low
 
 ## register
 
-- **casual, not corporate** contractions fine; past ones may drop the apostrophe (`ive`, `dont`, `wasnt`) unless that makes another word -- keep `we'll`, `we're`, `i'd` (`id` is identifier).
+- **casual, not corporate** contractions fine, and past ones may drop the apostrophe (`ive`, `dont`, `wasnt`) unless that makes another word -- keep `we'll`, `we're`, `i'd` (`id` is identifier).
 - **short forms** use freely: `b/c`, `w/out`, `v simple`, `n/a`, `ofc`, `obv`, `e2e`, `iff`, `imo`, `idk`, `afaik`, `wrt`, `tbh`, `nit`, `lgtm`, `wdyt`, `wip`, `atm`, `aka`, `pls`, `repro`, `repo`, `ppl`, `q` / `qs`, `feat`, `impl`, `env`, `smth`, `cred` / `creds`, `org`, `tdd`, `tldr`, `heads-up`. spell `noop`, `tradeoff`, `sidenote`, `vs` (no dot), `approx` / `app`. avoid `dupe` (write _duplicate_) and `imho` (write `imo`).
 - **short forms with a personal meaning**
     - `tbd` -- to be _discussed_, not determined
-    - `ff` -- feel free; fast-forward when the context is git
+    - `ff` -- feel free, or fast-forward when the context is git
     - `prod` -- the main thing of a project (binary, branch, artefact), not only a deployed service
     - `arch` / `arches` -- always, never _architecture_ (cpu arch, arch linux unaffected)
     - `recc` -- recommend / recommendation
@@ -63,8 +63,8 @@ non-breaking / zero-width space | space / nothing | low
     - `sec` -- section
     - `cwd` -- current working directory (not `pwd`, that's the builtin)
     - `1-1` -- one-to-one, meetings only
-    - `kinda` / `kindof` -- the hedge only; _this kind of thing_ (= type of) stays
-    - `-ish` -- fuzz (_5ish lines_, _workingish_); `-esque` -- acts like X but isn't strictly X (_singleton-esque_), sparingly
+    - `kinda` / `kindof` -- the hedge only. _this kind of thing_ (= type of) stays
+    - `-ish` -- fuzz (_5ish lines_, _workingish_). `-esque` -- acts like X but isn't strictly X (_singleton-esque_), sparingly
     - `re` -- topic marker, never a verb, lowercase: inline (_question re cache invalidation_) or leading (_re naming: `foo` reads ambiguous_). no article after it (_re migration_, not _re the migration_).
 - **inline symbols** `~` for approx (`~15 lines`), `+` for also (`4 files + all definitions`), spaced ` / ` for _or_ between phrases (`once / if we have one`). unspaced `/` is for compounds (`ci/cd`, `w/out`).
 - **`e.g.` and `i.e.`** keep the dots.
@@ -75,12 +75,12 @@ non-breaking / zero-width space | space / nothing | low
 
 - **bullets with `-`** short, often fragments.
 - **backticks** around code, filenames, flags, commands, packages in prose. not around identifiers in code comments (rare exception: a long prose-like comment block far from the code), and don't retrofit them into existing comments.
-- **quotes** `"` / `'` for natural language, backticks for code; never swap them. inline-quoted speech in italics: _"hello there!"_.
+- **quotes** `"` / `'` for natural language, backticks for code. never swap them. inline-quoted speech in italics: _"hello there!"_.
 - **emphasis** `**bold**`, `_italic_`.
-- **bold lead-ins, sparingly** `- **label** body`, no dot inside or after the bold. only for long or skimmable bullets, not short single-clause ones. a list is all lead-in or none -- so in a plain list, never bold a bullet's opening words for any other reason; rephrase, or convert the whole list.
-- **`<>` placeholders** in theoretical code / cli: `git clone <upstream-url> --depth 1`. no spaces inside; join with `-`.
+- **bold lead-ins, sparingly** `- **label** body`, no dot inside or after the bold. only for long or skimmable bullets, not short single-clause ones. a list is all lead-in or none -- so in a plain list, never bold a bullet's opening words for any other reason. rephrase, or convert the whole list.
+- **`<>` placeholders** in theoretical code / cli: `git clone <upstream-url> --depth 1`. no spaces inside, join with `-`.
 - **respectively** to pair two lists: _"`--build` and `--test` wrap `just build` and `just test`, respectively."_
-- **drop the type-noun around quoted names** _see `parse_args`_, not _see the `parse_args` function_; _in "grouping by function"_, not _in the "grouping by function" section_. keep it only when the name alone is ambiguous.
+- **drop the type-noun around quoted names** _see `parse_args`_, not _see the `parse_args` function_, and _in "grouping by function"_, not _in the "grouping by function" section_. keep it only when the name alone is ambiguous.
 - **function names as verbs** _apps which Clear at the beginning_, not _which call Clear_. write `Clear()` in backticks when it could misread.
 
 ## banned phrasing
@@ -90,16 +90,17 @@ non-breaking / zero-width space | space / nothing | low
 - **significance inflation** _testament to_, _pivotal moment_, _evolving landscape_. state the fact.
 - **copula avoidance** _serves as_, _stands as_, _boasts_, _represents_ (as identity). write plain _is_ / _has_.
 - **-ing tails** _..., highlighting / ensuring / reflecting X_. cut it or make it a real sentence.
+- **semicolons joining clauses** read written-down, not said. pick by relation: separate thought -> full stop, explanation / aside -> `--`, list or definition -> colon, reason / contrast -> `, b/c` / `, so` / `, but`. fine in code, and as a separator in a list whose items already contain commas.
 - **authority tropes** _the real question is_, _at its core_, _fundamentally_. lead with the point.
 - **framing openers** _great question_, _absolutely_, _it's worth noting that_, _keep in mind that_. just answer.
 - **fragmented headers** no one-line restatement between a heading and its content.
-- **synonym-cycling** reuse the same noun / verb; swap only when the meaning differs.
+- **synonym-cycling** reuse the same noun / verb. swap only when the meaning differs.
 - **passive to hide the actor** name who does it (_"`handle_err` logs errors"_), unless the actor is unknown or irrelevant.
 - **enthusiasm** _"this works"_, not _"this works beautifully!"_. exclamation marks almost never.
 
 ## PR bodies and comment tags
 
-- **PR bodies** open with the description, no preamble (a one-line _"this PR adds X."_ lead-in is fine). keep repo template headers (`## Proposed changes`) as written. skip the _what_ when the diff says it. be realistic: concrete signal (tests passing, `p99 240ms -> 90ms, 3 runs`, before / after sizes) beats _"significant improvement"_ and upbeat or self-flagellating closers; no measurement yet -> say so. full shape: `/to-pr`.
+- **PR bodies** open with the description, no preamble (a one-line _"this PR adds X."_ lead-in is fine). keep repo template headers (`## Proposed changes`) as written. skip the _what_ when the diff says it. be realistic: concrete signal (tests passing, `p99 240ms -> 90ms, 3 runs`, before / after sizes) beats _"significant improvement"_ and upbeat or self-flagellating closers. no measurement yet -> say so. full shape: `/to-pr`.
 - **callout comment tags** uppercase tag + colon, rest lowercase, so it's greppable.
     - `PERF:` non-obvious choice made for speed
     - `NOTE:` subtle invariant, hidden constraint, surprising behaviour
