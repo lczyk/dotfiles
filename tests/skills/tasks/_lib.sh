@@ -68,12 +68,24 @@ _git() {
         git -C "${PATS_WORKDIR}" "$@"
 }
 
+# copy a cases/ dir's contents into the workdir, over whatever is there.
+_lay() {
+    cp -R "$(dirname "$0")/../cases/$1/." "${PATS_WORKDIR}/"
+}
+
+# HEAD as the point collect diffs the agent's work against. call again after
+# any fixture commits made past _init_repo.
+_mark_seed() {
+    _git rev-parse HEAD >"${PATS_OUTPUT_DIR}/seed.sha"
+}
+
 # commit whatever the task laid down in the workdir as the fixture's base.
 # pats stages prompt.txt into the workdir after prepare, so it's excluded up
-# front to keep it out of the agent's git status.
+# front to keep it out of the agent's git status and the collected diff.
 _init_repo() {
     _git init -q
     printf 'prompt.txt\n' >>"${PATS_WORKDIR}/.git/info/exclude"
     _git add -A
     _git commit -q -m "chore: seed fixture"
+    _mark_seed
 }

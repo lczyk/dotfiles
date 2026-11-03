@@ -28,12 +28,48 @@ tasks:
     prepare: tasks/prepare_${id}.sh
     collect: tasks/collect.sh
     timeout: 5m
+  # lofi: the writing style, on a small python repo (cases/ratelimit). each task
+  # tempts a different slip. the prompts never mention the style.
+  # chat reply walking through code -- headings, capitals, filler.
+  - id: lofi-explain
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # PR text -- template-ish capitalised headings, bold, emoji, enthusiasm.
+  - id: lofi-pr-body
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # a commit message for a fix already in the worktree.
+  - id: lofi-commit
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # the carve-out: edit formal docs in their own style, reply in lofi.
+  - id: lofi-docs-match
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # the skill itself: "lofi off" must flip its state file.
+  - id: lofi-toggle
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+    timeout: 5m
 
 # each scorer is a standalone uv script scorers/scorer_<id>.py (shared helpers
-# in scorers/_lib.py). first stdout line = float [0,1] or `na`.
+# in scorers/_lib.py). first stdout line = float [0,1] or `na`. the lofi prose
+# scorers read the reply + the agent's commit messages and are `na` on tasks
+# where lofi doesn't apply.
 scorers:
-  - {id: canary-hooks,   score: "scorers/scorer_${id}.py"}
-  - {id: canary-context, score: "scorers/scorer_${id}.py"}
+  - {id: canary-hooks,    score: "scorers/scorer_${id}.py"}
+  - {id: canary-context,  score: "scorers/scorer_${id}.py"}
+  - {id: lofi-ascii,      score: "scorers/scorer_${id}.py"}
+  - {id: lofi-lowercase,  score: "scorers/scorer_${id}.py"}
+  - {id: lofi-banned,     score: "scorers/scorer_${id}.py"}
+  - {id: lofi-joiners,    score: "scorers/scorer_${id}.py"}
+  - {id: lofi-docs-case,  score: "scorers/scorer_${id}.py"}
+  - {id: lofi-toggle-off, score: "scorers/scorer_${id}.py"}
 
 suites:
   - id: canary
@@ -42,4 +78,21 @@ suites:
     scorers:
       - canary-hooks
       - canary-context
+      #
+  - id: lofi
+    agents: haiku
+    tasks:
+      - lofi-explain
+      - lofi-pr-body
+      - lofi-commit
+      - lofi-docs-match
+      - lofi-toggle
+      #
+    scorers:
+      - lofi-ascii
+      - lofi-lowercase
+      - lofi-banned
+      - lofi-joiners
+      - lofi-docs-case
+      - lofi-toggle-off
       #

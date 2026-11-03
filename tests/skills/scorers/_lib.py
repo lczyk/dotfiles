@@ -6,7 +6,11 @@ tasks/collect.sh gathered:
 
     stdout.log, stderr.log  the harness transcript (written by pats)
     canary/<event>          marker files from the injected canary hooks
+    agent-state/            the skills' state dir (lofi-off, caveman mode)
+    seed.sha                the fixture's last commit before the agent ran
     git-log.txt             fixture repo log, `%H%n%B%n--` per commit
+    new-commits.txt         messages of the agent's commits, `%B%n--` each
+    diff.txt                everything changed since seed.sha, incl. uncommitted
     git-status.txt          `git status --porcelain` after the run
     git-branches.txt        local branch names
 
@@ -17,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -25,8 +30,20 @@ __all__ = [
     "OUT",
     "TASK",
     "emit",
+    "lofi_prose",
+    "lofi_raw",
+    "penalty",
+    "report",
     "transcript",
 ]
+
+# tasks whose chat reply and commit messages should be lofi.
+_LOFI_TASKS = {"lofi-explain", "lofi-pr-body", "lofi-commit", "lofi-docs-match"}
+
+_FENCE = re.compile(r"^\s*(```|~~~)")
+_INLINE_CODE = re.compile(r"`[^`]*`")
+_URL = re.compile(r"https?://\S+")
+_DQUOTED = re.compile(r'"[^"\n]*"')
 
 OUT = Path(os.environ["PATS_OUTPUT_DIR"])
 TASK = os.environ.get("PATS_TASK_ID", "")
@@ -46,6 +63,48 @@ def emit(fn: Callable[[], float]) -> None:
         print(f"{fn():.4f}")
     except NA:
         print("na")
+
+
+def report(what: str, hits: list[str]) -> None:
+    """list what a scorer counted against the pair, on stderr for debugging."""
+    for h in hits:
+        print(f"{what}: {h}", file=sys.stderr)
+
+
+def penalty(hits: int, per_hit: float) -> float:
+    return max(0.0, 1.0 - per_hit * hits)
+
+
+def lofi_raw() -> str:
+    """the lofi text under test, as written: the agent's own output plus the
+    messages of any commits it made. NA outside the lofi prose tasks."""
+    if TASK not in _LOFI_TASKS:
+        raise NA
+    parts = list(transcript()["texts"])
+    commits = OUT / "new-commits.txt"
+    if commits.exists():
+        parts.append(commits.read_text(encoding="utf-8", errors="replace"))
+    text = "\n".join(parts).strip()
+    if not text:
+        raise NA
+    return text
+
+
+def lofi_prose() -> list[str]:
+    """lofi_raw() as prose lines: no fenced blocks, and inline code, urls and
+    double-quoted text cut out, since those keep their source spelling."""
+    lines = []
+    in_fence = False
+    for line in lofi_raw().splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        line = _DQUOTED.sub(" ", _URL.sub(" ", _INLINE_CODE.sub(" ", line)))
+        if line.strip():
+            lines.append(line)
+    return lines
 
 
 def _jsonl(path: Path):

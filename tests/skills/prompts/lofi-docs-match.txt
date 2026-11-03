@@ -1,0 +1,1 @@
+the --verbose flag in cli.py isn't documented. add it to docs/USAGE.md, then tell me what you changed.
