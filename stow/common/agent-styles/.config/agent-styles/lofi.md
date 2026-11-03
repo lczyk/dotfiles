@@ -108,5 +108,5 @@ non-breaking / zero-width space | space / nothing | low
     - `NOTE:` subtle invariant, hidden constraint, surprising behaviour
     - `TODO:` deferred work, with enough context to act on
     - `COVER:` why an oddly specific coverage-driven test exists, so it isn't deleted as redundant
-    - `NOCOMMIT:` -- marks code that must not be committed: scratch files, temporary debug prints, WIP scaffolding, etc. a pre-commit hook rejects any staged change containing `nocommit` (case-insensitive) in added lines. use the short inline form (`// nocommit` or `# nocommit`) for quick guards on single lines; use the full tag (`NOCOMMIT: <reason>`) when there's a non-obvious explanation worth leaving for your future self.
+    - `NOCOMMIT:` -- marks code that must not be committed: scratch files, temporary debug prints, WIP scaffolding, etc. a pre-commit hook rejects any staged change containing `nocommit` (case-insensitive) in added lines. use the short inline form (`// nocommit` or `# nocommit`) for quick guards on single lines, and the full tag (`NOCOMMIT: <reason>`) when there's a non-obvious explanation worth leaving for your future self.
     - `FIXME:`, `HACK:` sparingly
