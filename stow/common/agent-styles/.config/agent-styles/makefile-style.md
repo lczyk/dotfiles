@@ -19,6 +19,6 @@ iff a repo has no automation and the user has explicitly asked to add some, pref
 - **`mkdir -p` before writes** any rule that produces a file in a directory creates the directory first.
 - **optional tools are soft** wrap with `command -v <tool> >/dev/null 2>&1` and either fall back (e.g. `gotest` -> `go test`) or skip with a message. don't hard-fail on a missing nice-to-have.
 - **overridable knobs** `VAR ?= <default>` for the plain case, `$(or $(VAR),<default>)` / `$(if $(strip $(VAR)),...)` when an explicitly-empty value should also fall back (e.g. `make images VER=`). lets the caller narrow or retune w/out touching the makefile.
-- **aggregate gate target** a `verify` target that chains `lint typecheck test ...` -- one entry point for "is this commit healthy", and what ci should call.
+- **aggregate check target** a `verify` target that chains `lint typecheck test ...` -- one entry point for "is this commit healthy", and what ci should call.
 - **kebab-case target names** `cover-open`, `generate-version`, not `cover_open` or `coverOpen`.
 - **expensive non-file work gets a stamp** for rules whose output is not a file make can date-compare (container images, uploads), write the rule as `.stamp/<name>: FORCE | .stamp` with the change-detection (input hashing) inside the called script. `clean-<thing>` removes the stamps.

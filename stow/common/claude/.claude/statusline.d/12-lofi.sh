@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lofi badge. [L] when the lofi style hooks are wired in settings.json and
 # not switched off, [x] otherwise. off-state = shared agent-state marker
-# (written by the /lofi skill; the adapters gate on it too).
+# (written by the /lofi skill, and the adapters check it too).
 
 CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 SETTINGS="${CONFIG_DIR}/settings.json"

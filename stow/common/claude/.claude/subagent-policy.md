@@ -1,6 +1,6 @@
 # subagent model policy
 
-subagents in this harness always run **haiku at `medium` effort**, whatever the main session's model or effort. (`CLAUDE_CODE_SUBAGENT_MODEL=haiku` + `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` override the per-spawn `model` and agent frontmatter; `maxEffortLevel = "medium"` clamps every effort setting.)
+subagents in this harness always run **haiku at `medium` effort**, whatever the main session's model or effort. (`CLAUDE_CODE_SUBAGENT_MODEL=haiku` + `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` override the per-spawn `model` and agent frontmatter. `maxEffortLevel = "medium"` clamps every effort setting.)
 
 - passing `model: opus` / fable / sonnet or a higher effort to a spawn has no effect -- don't bother.
 - delegate tightly scoped, explicit work: search, fan-out, mechanical edits, verification. keep open-ended reasoning in the main session.

@@ -3,7 +3,7 @@ name: caveman-compress
 description: >
   compress natural-language memory files (CLAUDE.md, todos, preferences) into
   caveman format to save input tokens. preserves all technical substance, code,
-  urls and structure. the compressed version overwrites the original; a
+  urls and structure. the compressed version overwrites the original. a
   human-readable backup goes out-of-tree under $XDG_DATA_HOME/caveman-compress/backups/.
   trigger: /caveman-compress FILEPATH or "compress memory file"
 ---
@@ -22,7 +22,7 @@ any yaml frontmatter is split off before compression and re-prepended verbatim, 
 
 ## process
 
-1. this SKILL.md sits next to `scripts/`; find that directory.
+1. this SKILL.md sits next to `scripts/`. find that directory.
 2. run:
 
     ```
@@ -63,7 +63,7 @@ any yaml frontmatter is split off before compression and re-prepended verbatim, 
 
 ### preserve structure
 
-- all markdown headings (exact heading text; compress the body below)
+- all markdown headings (exact heading text, compress only the body below)
 - bullet hierarchy (keep nesting level)
 - numbered lists (keep numbering)
 - tables (compress cell text, keep structure)
@@ -79,7 +79,7 @@ any yaml frontmatter is split off before compression and re-prepended verbatim, 
 
 **critical** anything inside ``` ... ``` is copied exactly. don't remove comments, remove spacing, reorder lines, shorten commands or simplify anything. inline code (`...`) is preserved exactly too -- nothing inside backticks changes.
 
-if the file has code blocks: treat them as read-only regions, compress only the text outside them, and don't merge sections around code.
+if the file has code blocks, treat them as read-only regions, compress only the text outside them, and don't merge sections around code.
 
 ## pattern
 

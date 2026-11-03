@@ -1,7 +1,7 @@
 # codex harness bridge
 
 claude code is the primary harness. the harness-neutral personal workflow rules
-in `~/.config/agent-guidance/workflow.md` remain the source of truth; a codex
+in `~/.config/agent-guidance/workflow.md` remain the source of truth. a codex
 `SessionStart` hook injects that file as developer context.
 
 if codex reports that the hook is untrusted or skipped, read
