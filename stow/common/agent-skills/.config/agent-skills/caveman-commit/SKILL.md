@@ -61,4 +61,4 @@ test!: pin stale-edge eviction before the fix
 
 ## boundaries
 
-only writes the message -- doesn't stage, commit or amend. output it as a fenced block ready to paste. "stop caveman-commit" or "normal mode": back to verbose commit style.
+only writes the message -- doesn't stage, commit or amend. output it as a fenced block ready to paste. "stop caveman-commit" or "normal mode" -> back to verbose commit style.

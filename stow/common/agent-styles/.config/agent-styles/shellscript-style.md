@@ -42,7 +42,7 @@
 - **`printf` over `echo`** `printf '%s\n' "${var}"`, since `echo` varies across shells and mangles backslashes.
 - **never `set -o pipefail`** check `${PIPESTATUS[0]}` when a pipe's exit codes matter (bash-only -- in dash, capture intermediate output and check each stage).
 - **`grep -q` for test assertions** `cmd | grep -q "expected"`, `-F` for literal strings, `-i` unless it weakens the test.
-- **arrays for reused lists, `\` for one-shot** `slices=(a b c); cmd "${slices[@]}"` when the list is used more than once; `\` continuations for a single long command.
+- **arrays for reused lists, `\` for one-shot** `slices=(a b c); cmd "${slices[@]}"` when the list is used more than once, `\` continuations for a single long command.
 
 ### output
 

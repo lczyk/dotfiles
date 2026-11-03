@@ -66,7 +66,7 @@ cross-cutting:
 - a tangent goes in round brackets as its own paragraph, spaces inside: `( i was looking into some driveby fixes but they went a bit deep ... )`.
 - bold marks a flag on one entry of a reference / forward-port list (`**(this PR)**`, `**(new)**`, `**(not new but was also v broken)**`) or labels a bullet group in place of a heading (`**fixes**`, `**hardening / ci**`, `**aarch64**`).
 - credit inline (`ty @handle`, `thanks @handle for catching this`), not in a section.
-- close a substantial PR with an out-of-scope note (_"btw, still needs ...; kept this PR small"_) or a direct q to a named reviewer (`wdyt @person ??`).
+- close a substantial PR with an out-of-scope note (_"btw, still needs ... -- kept this PR small"_) or a direct q to a named reviewer (`wdyt @person ??`).
 - a substantially ai-authored change gets a bold disclosure: `**AI DISCLOSURE**: ...`.
 - no tables, no `<details>`, no self-review checklist in a freeform body. checkboxes only inside a repo template.
 
@@ -77,4 +77,4 @@ references: same-repo issues / PRs as bare `#N` in prose (_"follow-up to #321"_)
 - the **title** on its own line as inline code, for the title field
 - the **body** as plain markdown, not fenced -- it has fences of its own and an outer one breaks the paste
 
-don't push or open the PR; `gh` writes are blocked anyway. the user reviews and opens it -- if they want a command, give them the matching `gh pr create`.
+don't push or open the PR -- `gh` writes are blocked anyway. the user reviews and opens it -- if they want a command, give them the matching `gh pr create`.
