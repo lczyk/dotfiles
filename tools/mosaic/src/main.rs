@@ -692,10 +692,9 @@ impl Mosaic {
                 n += 1;
             }
         }
-        if n == 0 {
-            egui::Color32::from_rgb(18, 18, 18)
-        } else {
-            egui::Color32::from_rgb((r / n) as u8, (g / n) as u8, (b / n) as u8)
+        match std::num::NonZeroU32::new(n) {
+            None => egui::Color32::from_rgb(18, 18, 18),
+            Some(n) => egui::Color32::from_rgb((r / n) as u8, (g / n) as u8, (b / n) as u8),
         }
     }
 
