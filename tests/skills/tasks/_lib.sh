@@ -69,8 +69,11 @@ _git() {
 }
 
 # commit whatever the task laid down in the workdir as the fixture's base.
+# pats stages prompt.txt into the workdir after prepare, so it's excluded up
+# front to keep it out of the agent's git status.
 _init_repo() {
     _git init -q
+    printf 'prompt.txt\n' >>"${PATS_WORKDIR}/.git/info/exclude"
     _git add -A
     _git commit -q -m "chore: seed fixture"
 }
