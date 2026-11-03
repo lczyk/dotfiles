@@ -1256,7 +1256,7 @@ fn plan_prefill(
     now: std::time::SystemTime,
 ) -> Vec<(PathBuf, usize)> {
     let mut by_age: Vec<&(PathBuf, std::time::SystemTime)> = files.iter().collect();
-    by_age.sort_by(|a, b| b.1.cmp(&a.1)); // newest first
+    by_age.sort_by_key(|a| std::cmp::Reverse(a.1)); // newest first
     let mut taken = 0usize;
     let mut plan_rev: Vec<(PathBuf, usize)> = Vec::new();
     for (path, mtime) in by_age {
