@@ -1,0 +1,1 @@
+can you summarize the limiter's behavior at a window boundary, and whether we should optimize or reorganize the initialization? also, is the color of the README badge a favorite thing to standardize?

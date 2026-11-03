@@ -20,6 +20,10 @@ agents:
 # prepare seeds the agent's HOME with the stow packages (tasks/_lib.sh) and
 # builds the task's fixture repo. each task's setup lives in
 # tasks/prepare_<id>.sh. collect is uniform (tasks/collect.sh).
+#
+# the id prefix sets the styles the agent starts with (_seed_home) -- lofi-*
+# lofi only, cave-* caveman only, lofi-cave-* both. a lofi-cave-* or cave-*
+# task that reruns a lofi-* one links its prompt and prepare script to it.
 tasks:
   # harness check: the seeded hooks fire and their text reaches the agent.
   # every other result is meaningless while this one fails.
@@ -50,30 +54,126 @@ tasks:
     prompt: prompts/${id}.txt
     prepare: tasks/prepare_${id}.sh
     collect: tasks/collect.sh
-  # the skill itself: "lofi off" must flip its state file.
+  # code comments the agent writes.
+  - id: lofi-comments
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # a prompt full of us spellings to echo.
+  - id: lofi-engb
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # an AGENTS.md wants capitalised commit bodies. the commit follows it,
+  # the reply stays lofi.
+  - id: lofi-repo-rules
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # lofi-pr-body with a PR template, whose headers stay as written.
+  - id: lofi-pr-template
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # fix, test, docs, commit, summary -- does the style wear off?
+  - id: lofi-long
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+    timeout: 15m
+  # the skill itself: "lofi off" must create its marker file.
   - id: lofi-toggle
     prompt: prompts/${id}.txt
     prepare: tasks/prepare_${id}.sh
     collect: tasks/collect.sh
     timeout: 5m
+  # lofi starts off. "lofi on" must remove the marker.
+  - id: lofi-toggle-on
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+    timeout: 5m
+  # lofi starts off. asking for the status must not flip it.
+  - id: lofi-status
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+    timeout: 5m
+  # lofi starts off. the hooks stay quiet, the reply is in normal case.
+  - id: lofi-seeded-off
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # "lofi off" and a question in one prompt. the answer is in normal case.
+  - id: lofi-off-then
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # caveman: the density mode, lofi off.
+  # terse chat reply, no preamble around tool calls.
+  - id: cave-explain
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # the commit message is persisted, so full sentences.
+  - id: cave-commit
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  # a bare "normal mode" prompt switches it off.
+  - id: cave-stop
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+    timeout: 5m
+  # lofi x caveman: lofi-* tasks rerun with both on -- lofi's surface on
+  # caveman's density.
+  - id: lofi-cave-explain
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  - id: lofi-cave-pr-body
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  - id: lofi-cave-commit
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
+  - id: lofi-cave-docs-match
+    prompt: prompts/${id}.txt
+    prepare: tasks/prepare_${id}.sh
+    collect: tasks/collect.sh
 
 # each scorer is a standalone uv script scorers/scorer_<id>.py (shared helpers
-# in scorers/_lib.py). first stdout line = float [0,1] or `na`. the lofi prose
-# scorers read the reply + the agent's commit messages and are `na` on tasks
-# where lofi doesn't apply.
+# in scorers/_lib.py). first stdout line = float [0,1] or `na`. a scorer is
+# `na` on the tasks it doesn't apply to, so suites can list them all.
 scorers:
-  - {id: canary-hooks,    score: "scorers/scorer_${id}.py"}
-  - {id: canary-context,  score: "scorers/scorer_${id}.py"}
-  - {id: lofi-ascii,      score: "scorers/scorer_${id}.py"}
-  - {id: lofi-lowercase,  score: "scorers/scorer_${id}.py"}
-  - {id: lofi-banned,     score: "scorers/scorer_${id}.py"}
-  - {id: lofi-joiners,    score: "scorers/scorer_${id}.py"}
-  - {id: lofi-acronyms,   score: "scorers/scorer_${id}.py"}
-  - {id: lofi-format,     score: "scorers/scorer_${id}.py"}
-  - {id: lofi-enthusiasm, score: "scorers/scorer_${id}.py"}
-  - {id: lofi-pr-preamble, score: "scorers/scorer_${id}.py"}
-  - {id: lofi-docs-case,  score: "scorers/scorer_${id}.py"}
-  - {id: lofi-toggle-off, score: "scorers/scorer_${id}.py"}
+  - {id: canary-hooks,           score: "scorers/scorer_${id}.py"}
+  - {id: canary-context,         score: "scorers/scorer_${id}.py"}
+  - {id: lofi-ascii,             score: "scorers/scorer_${id}.py"}
+  - {id: lofi-lowercase,         score: "scorers/scorer_${id}.py"}
+  - {id: lofi-lowercase-commits, score: "scorers/scorer_${id}.py"}
+  - {id: lofi-lowercase-last,    score: "scorers/scorer_${id}.py"}
+  - {id: lofi-banned,            score: "scorers/scorer_${id}.py"}
+  - {id: lofi-engb,              score: "scorers/scorer_${id}.py"}
+  - {id: lofi-joiners,           score: "scorers/scorer_${id}.py"}
+  - {id: lofi-acronyms,          score: "scorers/scorer_${id}.py"}
+  - {id: lofi-format,            score: "scorers/scorer_${id}.py"}
+  - {id: lofi-enthusiasm,        score: "scorers/scorer_${id}.py"}
+  - {id: lofi-pr-preamble,       score: "scorers/scorer_${id}.py"}
+  - {id: lofi-pr-template,       score: "scorers/scorer_${id}.py"}
+  - {id: lofi-docs-case,         score: "scorers/scorer_${id}.py"}
+  - {id: lofi-comments,          score: "scorers/scorer_${id}.py"}
+  - {id: lofi-repo-commit,       score: "scorers/scorer_${id}.py"}
+  - {id: lofi-toggle-off,        score: "scorers/scorer_${id}.py"}
+  - {id: lofi-toggle-state,      score: "scorers/scorer_${id}.py"}
+  - {id: lofi-off-case,          score: "scorers/scorer_${id}.py"}
+  - {id: cave-articles,          score: "scorers/scorer_${id}.py"}
+  - {id: cave-filler,            score: "scorers/scorer_${id}.py"}
+  - {id: cave-preamble,          score: "scorers/scorer_${id}.py"}
+  - {id: cave-commit-prose,      score: "scorers/scorer_${id}.py"}
+  - {id: cave-stop,              score: "scorers/scorer_${id}.py"}
 
 suites:
   - id: canary
@@ -90,17 +190,78 @@ suites:
       - lofi-pr-body
       - lofi-commit
       - lofi-docs-match
+      - lofi-comments
+      - lofi-engb
+      - lofi-repo-rules
+      - lofi-pr-template
+      - lofi-long
       - lofi-toggle
+      - lofi-toggle-on
+      - lofi-status
+      - lofi-seeded-off
+      - lofi-off-then
       #
     scorers:
       - lofi-ascii
       - lofi-lowercase
+      - lofi-lowercase-commits
+      - lofi-lowercase-last
       - lofi-banned
+      - lofi-engb
       - lofi-joiners
       - lofi-acronyms
       - lofi-format
       - lofi-enthusiasm
       - lofi-pr-preamble
+      - lofi-pr-template
       - lofi-docs-case
+      - lofi-comments
+      - lofi-repo-commit
       - lofi-toggle-off
+      - lofi-toggle-state
+      - lofi-off-case
+      #
+  - id: caveman
+    agents: haiku
+    tasks:
+      - cave-explain
+      - cave-commit
+      - cave-stop
+      #
+    scorers:
+      - cave-articles
+      - cave-filler
+      - cave-preamble
+      - cave-commit-prose
+      - cave-stop
+      #
+  - id: lofi-caveman
+    agents: haiku
+    tasks:
+      - lofi-cave-explain
+      - lofi-cave-pr-body
+      - lofi-cave-commit
+      - lofi-cave-docs-match
+      #
+    scorers:
+      - lofi-ascii
+      - lofi-lowercase
+      - lofi-lowercase-commits
+      - lofi-lowercase-last
+      - lofi-banned
+      - lofi-engb
+      - lofi-joiners
+      - lofi-acronyms
+      - lofi-format
+      - lofi-enthusiasm
+      - lofi-pr-preamble
+      - lofi-pr-template
+      - lofi-docs-case
+      - lofi-comments
+      - lofi-repo-commit
+      - cave-articles
+      - cave-filler
+      - cave-preamble
+      - cave-commit-prose
+      - cave-stop
       #

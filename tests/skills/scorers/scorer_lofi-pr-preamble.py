@@ -3,9 +3,9 @@
 # requires-python = ">=3.10"
 # ///
 """lofi-pr-preamble: a PR body opens with the description. 0 when its first
-line is a heading (the fixture repo has no template to keep) or a stock
-opener (`here's`, `summary`, `overview`, ...), else 1. a one-line "this PR
-adds X." lead-in is fine.
+line is a stock opener (`here's`, `summary`, `overview`, ...) or a heading
+that isn't a repo template header, else 1. a one-line "this PR adds X."
+lead-in is fine.
 
 the body is the longest fenced block in the reply, or the whole reply when
 there is none.
@@ -35,8 +35,13 @@ def _blocks(text: str) -> list[list[str]]:
     return blocks
 
 
+def _template_headers() -> set[str]:
+    p = OUT / "verbatim.txt"
+    return {v.strip() for v in p.read_text(encoding="utf-8").splitlines()} if p.exists() else set()
+
+
 def score() -> float:
-    if TASK != "lofi-pr-body":
+    if BASE not in ("lofi-pr-body", "lofi-pr-template"):
         raise NA
     reply = "\n".join(transcript()["texts"])
     blocks = _blocks(reply)
@@ -44,7 +49,8 @@ def score() -> float:
     first = next((line for line in body if line.strip()), "")
     if not first:
         raise NA
-    bad = first.lstrip().startswith("#") or _OPENER.match(first)
+    template = _template_headers()
+    bad = (first.lstrip().startswith("#") and first.strip() not in template) or _OPENER.match(first)
     report("preamble", [repr(first.strip()[:80])] if bad else [])
     return 0.0 if bad else 1.0
 

@@ -3,7 +3,7 @@
 # requires-python = ">=3.10"
 # ///
 """lofi-banned: none of lofi's banned phrasing (llm filler, framing openers,
-`gate` / `corpus`) and no us spellings where en-gb differs. -0.25 per hit.
+`gate` / `corpus`). -0.25 per hit. us spellings are lofi-engb.
 
 word lists, not judgement: only unambiguous entries. `key`, `navigate` and
 `license` stay out, since their banned sense needs context.
@@ -24,16 +24,7 @@ _BANNED = [
     #
 ]
 
-_US = [
-    r"behaviors?", r"behavioral", r"colors?", r"colored", r"favorite", r"favors?",
-    r"honors?", r"initializ\w*", r"organiz\w*", r"optimiz\w*", r"analyz\w*", r"recogniz\w*",
-    r"customiz\w*", r"serializ\w*", r"normaliz\w*", r"prioritiz\w*", r"minimiz\w*",
-    r"maximiz\w*", r"summariz\w*", r"utiliz\w*", r"canceled", r"canceling", r"modeling",
-    r"modeled", r"traveled", r"traveling", r"labeled", r"labeling", r"catalog", r"defense",
-    #
-]
-
-_RE = re.compile(r"\b(?:" + "|".join(_BANNED + _US) + r")\b", re.IGNORECASE)
+_RE = re.compile(r"\b(?:" + "|".join(_BANNED) + r")\b", re.IGNORECASE)
 
 
 def score() -> float:

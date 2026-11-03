@@ -49,7 +49,25 @@ _patch_settings() {
     mv "${tmp}" "${settings}"
 }
 
+# the styles the agent starts with. $1 lofi on|off (the skill's marker file),
+# $2 the caveman default mode the caveman hooks read (off|lite|full|ultra).
+_styles() {
+    state="${PATS_AGENT_HOME}/.config/agent-state"
+    modes="${PATS_AGENT_HOME}/.config/agent-modes"
+    mkdir -p "${state}" "${modes}"
+    printf '{"defaultMode": "%s"}\n' "$2" >"${modes}/caveman.json"
+    if [ "$1" = off ]; then
+        touch "${state}/lofi-off"
+    else
+        rm -f "${state}/lofi-off"
+    fi
+}
+
 # the agent's HOME gets this repo's agent config, the way stow lays it out.
+# styles follow the task id's suite prefix -- lofi alone, caveman alone, or
+# both. a task that needs other starting state calls _styles again after.
+# SKILLS_LOFI_REMINDER_APPEND (host env) adds a line to the per-prompt lofi
+# reminder, to try out reminder wording without touching the stow tree.
 _seed_home() {
     [ -n "${PATS_AGENT_HOME}" ] || _fail "PATS_AGENT_HOME unset (needs pats >= 0.7.3)"
     command -v jq >/dev/null || _fail "jq not found"
@@ -57,6 +75,21 @@ _seed_home() {
         _seed_package "${pkg}"
     done
     _patch_settings
+    case "${PATS_TASK_ID}" in
+        lofi-cave-*) _styles on full ;;
+        cave-*) _styles off full ;;
+        *) _styles on off ;;
+    esac
+    if [ -n "${SKILLS_LOFI_REMINDER_APPEND:-}" ]; then
+        printf '%s\n' "${SKILLS_LOFI_REMINDER_APPEND}" \
+            >>"${PATS_AGENT_HOME}/.config/agent-styles/lofi-reminder.md"
+    fi
+}
+
+# lines the reply may quote in their source case (repo template headers), one
+# per line. the lofi prose scorers skip them.
+_verbatim() {
+    printf '%s\n' "$@" >>"${PATS_OUTPUT_DIR}/verbatim.txt"
 }
 
 # git as the sandbox runs it: the seeded config and git hooks, no signing. the

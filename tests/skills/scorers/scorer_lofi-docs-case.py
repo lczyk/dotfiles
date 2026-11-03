@@ -27,7 +27,7 @@ def _added_lines(diff: str) -> list[str]:
 
 
 def score() -> float:
-    if TASK != "lofi-docs-match":
+    if BASE != "lofi-docs-match":
         raise NA
     diff = OUT / "diff.txt"
     added = _added_lines(diff.read_text(encoding="utf-8")) if diff.exists() else []

@@ -1,0 +1,1 @@
+add a remaining() method to RateLimiter in ratelimit/bucket.py that returns how many calls are still allowed in the current window. comment anything non-obvious. don't commit.

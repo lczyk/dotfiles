@@ -17,3 +17,20 @@ not part of `make test`.
 - `scorers/scorer_<id>.py` -- uv scripts, shared helpers in `scorers/_lib.py`.
 
 run the `canary` suite first after changing the hooks or the seeding. if it scores under 1, the other results don't mean anything.
+
+## suites
+
+- `canary` -- the seeded hooks fire and their text reaches the agent.
+- `lofi` -- the writing style, caveman off. prose tasks (chat walk-through, PR text, commit, docs, comments, en-GB, repo rules, PR template, a long run) and the skill's toggles (off, on, status, starting off, off mid-prompt).
+- `caveman` -- the density mode, lofi off. a terse reply, a full-sentence commit, the `normal mode` switch.
+- `lofi-caveman` -- four `lofi-*` tasks rerun with both on.
+
+the task id prefix sets the styles the agent starts with (`_seed_home`): `lofi-*` lofi only, `cave-*` caveman only, `lofi-cave-*` both. a task that reruns another links its prompt and prepare script to it.
+
+to try out reminder wording without editing the stow tree, set `SKILLS_LOFI_REMINDER_APPEND` on the host. prepare appends it to the seeded `lofi-reminder.md`:
+
+```sh
+env SKILLS_LOFI_REMINDER_APPEND="..." pats run -t lofi-pr-body
+```
+
+one run per pair is noisy. run a suite a few times and compare averages, not single scores.
