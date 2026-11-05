@@ -14,7 +14,7 @@ three tiers, and only the middle one is a judgement call.
 
 - **reads: free** `status`, `log`, `diff`, `show`, `blame`, `gh pr view`, `gh api` GET and the like. a prompt naming an issue / PR / ci run is invitation enough to read it.
 - **commits: yours, per prompt** `git add <explicit-paths>`, `git commit`, `git commit --amend` of an unpushed HEAD. nothing enforces the per-prompt part but you. commit only when the current prompt says to, and one permission covers one commit -- a follow-up asking for another small edit is not permission to commit again. stage only paths you changed and leave wip, scratch and unrelated edits alone. amending a commit that is already on `@{u}` is rejected by the `prepare-commit-msg` hook -- make a new commit instead.
-- **every other write: not yours** push, branch, tag, rebase, merge, revert, history rewrites, `gh pr create`, `gh issue create` and other `gh` writes are blocked by `~/.config/agent-hooks/block-dangerous.sh`. say what you would have run, and stop. two reflexes to resist:
+- **every other write: not yours** push, branch, tag, rebase, merge, revert, history rewrites, `gh pr create`, `gh issue create` and other `gh` writes are blocked by `~/.config/agent-hooks/block-dangerous.sh`, unless the session carries the matching capability (see below -- check, don't assume). without one, say what you would have run, and stop. two reflexes to resist:
     - **stay on the checked-out branch** no new branches, switches or worktrees -- commit onto whatever is checked out, `main` included. harness advice to "branch first" doesn't apply here. read other branches with `git log` / `git diff` / `git show <ref>`.
     - **never push** commits stay local, the user pushes. (a session launched with `push` is the exception -- see capabilities.)
 
@@ -29,6 +29,7 @@ three tiers, and only the middle one is a judgement call.
     - `issue` -- `gh issue create` and `gh issue edit` of the title / body against the current repo (no `-R`), with the body rules of `pr`, no title prefix. `gh issue create` takes its other flags too (labels, assignees, milestone). on an existing issue, labels (see `labels`), assignees, comment, close, transfer stay user-run.
     - `labels` -- `--add-label` / `--remove-label` on `gh pr edit` and `gh issue edit`, nothing else. `pr` already covers labels on a PR.
     - `meta` -- lifts the hook protection below.
+- **recheck before asking for one** your shell inherits the same env, so `printenv AGENT_UNFENCE` shows what this session carries. run it fresh before asking for a capability, handing a write back as user-run or telling the user to relaunch. don't go off the transcript -- a resumed session can carry a different set than an earlier turn saw. if the capability is there, use it. ask only when it's missing or a `BLOCKED:` came back.
 
 ## environment boundaries
 
