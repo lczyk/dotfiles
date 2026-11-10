@@ -54,6 +54,13 @@ strip_ansi() {
     [ "$output" = $'\033[34m[F51]\033[0m' ]
 }
 
+@test "fable 5.2 aliases to F52 and is an ordinary badge" {
+    run bash -c "echo '{\"model\":{\"display_name\":\"Fable 5.2\"}}' | '$BADGE'"
+    [ "$output" = $'\033[34m[F52]\033[0m' ]
+    run bash -c "echo '{\"model\":{\"display_name\":\"Fable 5.2 (1M context)\"}}' | '$BADGE'"
+    [ "$output" = $'\033[34m[F52-1M]\033[0m' ]
+}
+
 @test "fable 5 badge fires on the raw model id too, 5.1 does not" {
     run bash -c "echo '{\"model\":{\"id\":\"claude-fable-5\"}}' | '$BADGE'"
     [[ "$output" == *$'\033[1;97;41m'* ]]
