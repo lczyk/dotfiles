@@ -113,6 +113,69 @@ fire_write() {
     [ "$status" -eq 0 ]
 }
 
+# -- the agents' own prompts --------------------------------------------
+# guidance, styles, skills and each harness's instruction file and prompt
+# wiring. an agent rewriting its instructions rewrites the rules.
+
+@test "blocks Write to installed agent prompts" {
+    for path in "$HOME/.config/agent-guidance/workflow.md" "$HOME/.config/agent-styles/lofi.md" \
+        "$HOME/.config/agent-skills/lofi/SKILL.md" "$HOME/.config/agent-skills/new-skill/SKILL.md" \
+        "$HOME/.claude/CLAUDE.md" "$HOME/.claude/subagent-policy.md" \
+        "$HOME/.claude/skills/caveman-compress/SKILL.md" "$HOME/.claude/commands/foo.md" \
+        "$HOME/.claude/agents/foo.md" "$HOME/.codex/AGENTS.md" "$HOME/.codex/skills/x/SKILL.md" \
+        "$HOME/.copilot/copilot-instructions.md" "$HOME/.copilot/skills/x/SKILL.md" \
+        "$HOME/.kimi-code/AGENTS.md" "$HOME/.kimi-code/skills/x/SKILL.md" \
+        "$HOME/.config/opencode/AGENTS.md" "$HOME/.config/hax/AGENTS.md" \
+        "$HOME/.config/hax/config.json" "$HOME/.config/hax/skills/x/SKILL.md"; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+}
+
+@test "blocks Write to agent prompt sources in the checkout" {
+    for path in "$REPO/stow/common/agent-guidance/.config/agent-guidance/workflow.md" \
+        "$REPO/stow/common/agent-styles/.config/agent-styles/lofi.md" \
+        "$REPO/stow/common/agent-skills/.config/agent-skills/fizz/SKILL.md" \
+        "$REPO/stow/common/claude/.claude/subagent-policy.md" \
+        "$REPO/stow/common/claude/.claude/skills/caveman-compress/SKILL.md" \
+        "$REPO/stow/common/codex/.codex/AGENTS.md" \
+        "$REPO/stow/common/hax/.config/hax/AGENTS.md" \
+        "$REPO/stow/common/hax/.config/hax/config.json"; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+}
+
+@test "blocks opencode plugin and wiring writes" {
+    for path in "$HOME/.config/opencode/plugin/safety.ts" "$HOME/.config/opencode/opencode.json" \
+        "$REPO/stow/common/opencode/.config/opencode/plugin/caveman.ts" \
+        "$REPO/stow/common/opencode/.config/opencode/opencode.json"; do
+        run fire_write "$path"
+        [ "$status" -eq 2 ] || { echo "allowed: $path"; false; }
+    done
+}
+
+@test "blocks shell writes to agent prompts, reads stay free" {
+    run fire "sed -i '' s/a/b/ $HOME/.config/agent-styles/lofi.md"
+    [ "$status" -eq 2 ]
+    run fire "echo x >> $HOME/.claude/CLAUDE.md"
+    [ "$status" -eq 2 ]
+    run fire "rm -r $HOME/.config/agent-skills/grill-me"
+    [ "$status" -eq 2 ]
+    run fire "cat $HOME/.config/agent-guidance/workflow.md $HOME/.config/agent-skills/lofi/SKILL.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "allows writes to agent runtime state, memory and project instructions" {
+    for path in "$HOME/.config/agent-state/caveman-mode" \
+        "$HOME/.claude/projects/-Users-marcin-x/memory/MEMORY.md" \
+        "/Users/marcin/someproj/CLAUDE.md" "/Users/marcin/someproj/AGENTS.md" \
+        "$HOME/.config/opencode/themes/term-bg.json"; do
+        run fire_write "$path"
+        [ "$status" -eq 0 ] || { echo "blocked: $path"; false; }
+    done
+}
+
 # -- path spellings ------------------------------------------------------
 # the same protected file named another way must still be judged as itself.
 
@@ -156,7 +219,7 @@ fire_write() {
 }
 
 @test "allows Write to unrelated config and gitignore files" {
-    for path in "$HOME/.config/git/ignore" "$REPO/.gitignore" "/tmp/ai/x/.git/info/exclude" "$HOME/.codex/AGENTS.md"; do
+    for path in "$HOME/.config/git/ignore" "$REPO/.gitignore" "/tmp/ai/x/.git/info/exclude"; do
         run fire_write "$path"
         [ "$status" -eq 0 ] || { echo "blocked: $path"; false; }
     done

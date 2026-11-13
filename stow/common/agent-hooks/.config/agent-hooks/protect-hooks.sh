@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Shell/write policy. the agent safety hooks -- and the harness config that
-# wires them in -- are not agent-editable: a fence the agent can rewrite is not
-# a fence. exit 2 means policy denial; evaluate.sh translates that into a
+# Shell/write policy. the agent safety hooks, the harness config that wires
+# them in, and the agents' own prompts are not agent-editable: a fence the
+# agent can rewrite is not a fence. exit 2 means policy denial; evaluate.sh translates that into a
 # harness-neutral verdict.
 #
 # request channels:
@@ -85,6 +85,40 @@ PROTECTED_GLOBS=(
     "$HOME/.codex/config.toml"
     "$HOME/.copilot/settings.json"
     "$HOME/.kimi-code/config.toml"
+    "$HOME/.config/opencode/opencode.json"
+    "$HOME/.config/opencode/plugin"
+    "$HOME/.config/opencode/plugin/*"
+    # the agents' own prompts: shared guidance, styles and skills, plus each
+    # harness's instruction file, skill dir and prompt wiring. an agent that
+    # can rewrite its instructions can rewrite the rules the fences back up.
+    "$HOME/.config/agent-guidance"
+    "$HOME/.config/agent-guidance/*"
+    "$HOME/.config/agent-styles"
+    "$HOME/.config/agent-styles/*"
+    "$HOME/.config/agent-skills"
+    "$HOME/.config/agent-skills/*"
+    "$HOME/.claude/CLAUDE.md"
+    "$HOME/.claude/subagent-policy.md"
+    "$HOME/.claude/skills"
+    "$HOME/.claude/skills/*"
+    "$HOME/.claude/commands"
+    "$HOME/.claude/commands/*"
+    "$HOME/.claude/agents"
+    "$HOME/.claude/agents/*"
+    "$HOME/.codex/AGENTS.md"
+    "$HOME/.codex/skills"
+    "$HOME/.codex/skills/*"
+    "$HOME/.copilot/copilot-instructions.md"
+    "$HOME/.copilot/skills"
+    "$HOME/.copilot/skills/*"
+    "$HOME/.kimi-code/AGENTS.md"
+    "$HOME/.kimi-code/skills"
+    "$HOME/.kimi-code/skills/*"
+    "$HOME/.config/opencode/AGENTS.md"
+    "$HOME/.config/hax/AGENTS.md"
+    "$HOME/.config/hax/config.json"
+    "$HOME/.config/hax/skills"
+    "$HOME/.config/hax/skills/*"
     # the dirs themselves: a cp / mv / tee naming only the dir lands a file on
     # the protected config inside. reads are excused by command, not by path.
     "$HOME/.codex"
@@ -109,6 +143,37 @@ PROTECTED_GLOBS=(
     '*/stow/common/codex/.codex/config.toml'
     '*/stow/common/copilot/.copilot/settings.json'
     '*/stow/common/kimi-code/.kimi-code/config.toml'
+    '*/stow/common/opencode/.config/opencode/opencode.json'
+    '*/stow/common/opencode/.config/opencode/plugin'
+    '*/stow/common/opencode/.config/opencode/plugin/*'
+    '*/stow/common/agent-guidance'
+    '*/stow/common/agent-guidance/*'
+    '*/stow/common/agent-styles'
+    '*/stow/common/agent-styles/*'
+    '*/stow/common/agent-skills'
+    '*/stow/common/agent-skills/*'
+    '*/stow/common/claude/.claude/CLAUDE.md'
+    '*/stow/common/claude/.claude/subagent-policy.md'
+    '*/stow/common/claude/.claude/skills'
+    '*/stow/common/claude/.claude/skills/*'
+    '*/stow/common/claude/.claude/commands'
+    '*/stow/common/claude/.claude/commands/*'
+    '*/stow/common/claude/.claude/agents'
+    '*/stow/common/claude/.claude/agents/*'
+    '*/stow/common/codex/.codex/AGENTS.md'
+    '*/stow/common/codex/.codex/skills'
+    '*/stow/common/codex/.codex/skills/*'
+    '*/stow/common/copilot/.copilot/copilot-instructions.md'
+    '*/stow/common/copilot/.copilot/skills'
+    '*/stow/common/copilot/.copilot/skills/*'
+    '*/stow/common/kimi-code/.kimi-code/AGENTS.md'
+    '*/stow/common/kimi-code/.kimi-code/skills'
+    '*/stow/common/kimi-code/.kimi-code/skills/*'
+    '*/stow/common/opencode/.config/opencode/AGENTS.md'
+    '*/stow/common/hax/.config/hax/AGENTS.md'
+    '*/stow/common/hax/.config/hax/config.json'
+    '*/stow/common/hax/.config/hax/skills'
+    '*/stow/common/hax/.config/hax/skills/*'
 )
 
 # commands that cannot modify their arguments. deliberately excludes the ones
@@ -272,12 +337,13 @@ fi
 
 if ((${#bad[@]})); then
     {
-        printf 'BLOCKED: agent safety hooks are not agent-editable:\n\n'
+        printf 'BLOCKED: agent safety hooks and prompts are not agent-editable:\n\n'
         for t in "${bad[@]}"; do printf '    %s\n' "$t"; done
         printf '\na fence the agent can rewrite is not a fence -- this covers the policy\n'
-        printf 'scripts, the harness adapters, the git hooks, and the settings that wire\n'
-        printf 'them in, in both ~/ and the dotfiles checkout.\n\n'
-        printf 'if the user asked for a hook change, they relaunch with the meta\n'
+        printf 'scripts, the harness adapters, the git hooks, the settings that wire\n'
+        printf 'them in, and the agent instructions, styles and skills, in both ~/ and\n'
+        printf 'the dotfiles checkout.\n\n'
+        printf 'if the user asked for a hook or prompt change, they relaunch with the meta\n'
         printf 'capability: env AGENT_UNFENCE=meta <agent>. until then, say what you\n'
         printf 'would have changed and stop. reads via the Read tool are unaffected.\n'
     } >&2
