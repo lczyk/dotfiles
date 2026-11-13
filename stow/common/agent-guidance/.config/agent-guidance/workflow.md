@@ -51,6 +51,7 @@ three tiers, and only the middle one is a judgement call.
 - **fence prose written for the user** PR comments, messages, commit bodies, emails go in a fenced code block for clean copy-paste. exception: a body with fences of its own (PR / issue bodies) goes unfenced, title as inline code. not for conversational replies.
 - **minimal tables, only when a list won't do** header separator only, no outer border, no padding pipes.
 - **editor context is not a hint** claude code's vscode extension attaches the open file to every prompt. ignore it unless the prompt connects to it.
+- **no unbounded waits** a wait on a condition (ci run, deploy, build, background job) carries its own cap, ~10min by default. put the deadline inside the loop and don't lean on the tool's timeout -- a wait killed from outside may never report back. hitting the cap is not an error. look at the state, say what changed and re-arm if it's still worth waiting on. the condition also has to end on every terminal state (failed, cancelled, never started), not just on success.
 
 ## repo-resident instructions
 
