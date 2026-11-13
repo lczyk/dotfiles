@@ -35,6 +35,8 @@ docs: https://github.com/fizzbee-io/fizzbee (language reference, gotchas, exampl
 
 formal analysis as a working step, not a paper -- write down what the thing must do, model it small, let the checker argue, keep the spec where the next reader finds it. method from blog.fizzbee.ai ("your .md file is not a specification"). the language reference is [LANGUAGE_REFERENCE.md](https://github.com/fizzbee-io/fizzbee/blob/main/examples/references/LANGUAGE_REFERENCE.md). `fizz-spec` links the rest.
 
+**the docs run ahead of the release.** `main`'s reference documents features the latest release lacks. read the reference at the installed tag (`brew info fizzbee` gives the version, then `.../blob/v<version>/examples/references/LANGUAGE_REFERENCE.md`). not in 0.5.4, though `main` documents them: `possibly` / `always possibly`, `fair<fault>`, `@assume`, and fizz `func`s called inside assertions -- each is a parse error or an `undefined` panic there. without `fair<fault>`, a modelled failure that liveness must outlast gets a `max_actions` bound instead.
+
 ### when it earns its keep
 
 a model pays off when behaviour depends on **interleaving or time**: several actors or events (user, timer, disk, network, retries, signals), a cache that must agree with the truth, a mode switch, a lifecycle. the checker enumerates orderings no test author would.
@@ -78,6 +80,9 @@ one file, `<component>.fizz`: frontmatter (bounds, options), header comment (wha
 - **the checker injects crashes at yield points by default** (`crash_on_yield`). goroutines and threads don't vanish mid-call, so turn it off for in-process models, or every trace carries a `crash` step.
 - **a process that died stays dead**: an `alive` flag plus `require alive` at the top of each later block of an in-flight serial action. a failed mid-action `require` parks that thread without a deadlock report.
 - **a marker or cache that is a snapshot lags**. put the property on the transition that refreshes it, and write the lag down as a decision.
+- **`oneof` over a list hands back a copy.** `r = oneof [x for x in runs if ...]` then `r.status = "done"` changes the copy, not `runs`, and the model silently stops moving (a state count far too small is the tell). pick an index and mutate through it: `i = oneof [j for j in range(len(runs)) if runs[j].status == "pending"]`, then `runs[i].status = ...`.
+- **a top-level `def` sees no state.** a plain python `def` is evaluated with the constants only: a helper reading a state variable fails `undefined`. pass the state in (`def spent_of(finished, live)`), or use an `atomic func`, which reads state but must be called as `x = f(...)` and, in 0.5.4, not from an assertion.
+- **write down what the model merges.** every action that stands for several code steps hides interleavings, and a reviewer's first finding is nearly always one of them. in the header, say which calls each atomic action merges and why that is safe (one lock, one goroutine, nothing else touches that state). where it is not safe, split it. a read and the act on it are two steps unless a lock spans them, and a clock sample is a read: model whether it comes before or after the other read (`now` sampled before a lease is read is the safe order, after it is not).
 - **counters for "only via"** (`loads`, `resumes`): `loads <= presses + 1` says "never loads on its own" w/out naming the action.
 - nothing in a model is "the code" -- a transcription of `main()` proves the transcription. say so in the header. the real function gets a test.
 
@@ -88,6 +93,8 @@ one file, `<component>.fizz`: frontmatter (bounds, options), header comment (wha
 - `always eventually` for progress, with `fair` on the action that must keep running, since liveness w/out fairness is vacuous or false. weak `fair` by default.
 - `exists assertion` as **coverage**: every outcome reachable, every interesting state reached. an `exists` that `Init` already satisfies proves nothing. tie it to a counter of the transition it witnesses.
 - the vacuity trap: `[A]p` holds when `A` is disabled. if an action must be possible, assert it (`exists`). if it must be blocked, assert that too.
+- **witness the event, not a state after it.** `exists ... return removed and proc == "dead"` is met by "removed while alive, then died". set a flag in the action at the moment the case happens (`removed_dead = True` inside the removal, only when the process was dead then) and assert the flag.
+- **coverage of a design's fix.** when a header names a failing design and a fixed one, check both with `--preinit-hook` (one assignment per line: a newline inside the quoted hook sets several constants), and keep the failing ones failing in the make target, so a later edit that makes them pass by accident is caught.
 
 ### 5. run and read
 
@@ -108,6 +115,8 @@ first run is almost always red. triage each counterexample as one of:
 - **real finding** -- the requirement list has a hole or the code has a bug. each one is a decision. put it in front of the user with the trace in two lines and the options, record the decision in the header.
 
 iterate until green. a `max_actions` budget running out looks like a liveness failure with a `stutter` at the end. bound differently, don't weaken the property.
+
+a second opinion catches what the checker can't: a model faithful to the wrong reading of the code passes. when a reviewer (another model, codex) is at hand, give it the spec and the code paths and ask whether the actions match the code's atomicity, what actor or failure is missing, and which properties could pass vacuously. expect two or three rounds. each finding is a model fix, a property fix, or a real finding to check in the code before reporting.
 
 ### 6. mutation-test the spec
 
