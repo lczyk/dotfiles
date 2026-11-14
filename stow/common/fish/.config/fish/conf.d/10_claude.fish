@@ -19,6 +19,6 @@ if type -q claude
                 DISABLE_ERROR_REPORTING=1 \
                 DO_NOT_TRACK=1
         end
-        env $vars claude $argv
+        __agent_run claude $vars claude $argv
     end
 end
