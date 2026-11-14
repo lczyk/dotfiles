@@ -197,7 +197,7 @@ BRANCH_PATTERNS=(
     # read form too -- use git branch --show-current instead.
     "(^|[ ;|&])git symbolic-ref( |$)"
 )
-BRANCH_REASON="stay on the current branch -- don't create or switch branches / worktrees. you CAN commit on this branch (commits aren't blocked); just don't branch off it. to read other branches use git log / diff / show <ref>. (the user can lift this for a session with env AGENT_UNFENCE=branch.)"
+BRANCH_REASON="stay on the current branch -- don't create or switch branches / worktrees. you CAN commit on this branch (commits aren't blocked); just don't branch off it. to read other branches use git log / diff / show <ref>. (the user can lift this for a session with AGENT_UNFENCE=branch.)"
 
 # history-mutating git ops -- rewrite or duplicate commits, distinct risk
 # class from branch nav (which never loses work). reflog-recoverable but
@@ -209,7 +209,7 @@ HISTORY_PATTERNS=(
     "git rebase"
     "(^|[ ;|&])git cherry-pick( |$)"
 )
-HISTORY_REASON="git rebase / cherry-pick rewrite or duplicate commits -- user prevents this by default. (the user can lift this for a session with env AGENT_UNFENCE=history.)"
+HISTORY_REASON="git rebase / cherry-pick rewrite or duplicate commits -- user prevents this by default. (the user can lift this for a session with AGENT_UNFENCE=history.)"
 
 # wide `git add` -- agent must stage explicit paths, not sweep the worktree.
 # blocks -A / --all / -u / --update / --no-ignore-removal (and short-flag
@@ -309,7 +309,7 @@ REMOTE_PATTERNS=(
     "kubectl exec"
     "gcloud compute ssh"
 )
-REMOTE_REASON="do not work in remote envs without explicit permission. (the user can lift this for a session with env AGENT_UNFENCE=remote.)"
+REMOTE_REASON="do not work in remote envs without explicit permission. (the user can lift this for a session with AGENT_UNFENCE=remote.)"
 
 # NOTE: BLOCKED messages never echo the command back. the agent already has
 # it, and a truncated echo hid the part that tripped the fence.
@@ -597,7 +597,7 @@ while IFS= read -r cmd; do
         ! printf '%s' "$args" | grep -qE -- " --(hard|mixed|merge|keep) "; then
         continue
     fi
-    echo "BLOCKED: \`git reset\` is destructive past --soft. $GIT_REASON. (\`--soft\` alone is liftable with env AGENT_UNFENCE=history.)" >&2
+    echo "BLOCKED: \`git reset\` is destructive past --soft. $GIT_REASON. (\`--soft\` alone is liftable with AGENT_UNFENCE=history.)" >&2
     exit 2
 done < <(_git_cmds reset)
 
@@ -620,7 +620,7 @@ PUSH_HARD_REFSPEC_RE=" (\+[^ ]+|:[^ ]*)( |$)"
 # push origin HEAD names the current branch without one.
 PUSH_SUBST_RE='\$\(|`|\$\{|\$[A-Za-z_]|\$'"'"
 PUSH_HARD_REASON="force / delete / bulk / hook-skipping pushes and url targets are user-run under every capability"
-PUSH_REASON="git push is user-run. (the user can lift fast-forward pushes to a configured remote for a session with env AGENT_UNFENCE=push.)"
+PUSH_REASON="git push is user-run. (the user can lift fast-forward pushes to a configured remote for a session with AGENT_UNFENCE=push.)"
 
 # plumbing that pushes without running pre-push, and the transport helpers
 # `git push` drives underneath.
@@ -753,9 +753,9 @@ _gh_text() {
     _unfenced labels && labels_ok=1
     [ "$what" = pr ] && [ "$text_ok" = 1 ] && labels_ok=1
     if [ "$sub" = create ]; then
-        [ "$text_ok" = 1 ] || _gh_text_block "gh $what create is user-run. (the user can lift it for a session with env AGENT_UNFENCE=$what.)"
+        [ "$text_ok" = 1 ] || _gh_text_block "gh $what create is user-run. (the user can lift it for a session with AGENT_UNFENCE=$what.)"
     else
-        [ "$text_ok" = 1 ] || [ "$labels_ok" = 1 ] || _gh_text_block "gh $what edit is user-run. (the user can lift it for a session with env AGENT_UNFENCE=$what for the title and body, or AGENT_UNFENCE=labels for labels.)"
+        [ "$text_ok" = 1 ] || [ "$labels_ok" = 1 ] || _gh_text_block "gh $what edit is user-run. (the user can lift it for a session with AGENT_UNFENCE=$what for the title and body, or AGENT_UNFENCE=labels for labels.)"
     fi
     while IFS= read -r seg; do
         if echo "$seg" | grep -qE -- " (${sp}R|--repo)"; then

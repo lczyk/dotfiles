@@ -344,7 +344,7 @@ if ((${#bad[@]})); then
         printf 'them in, and the agent instructions, styles and skills, in both ~/ and\n'
         printf 'the dotfiles checkout.\n\n'
         printf 'if the user asked for a hook or prompt change, they relaunch with the meta\n'
-        printf 'capability: env AGENT_UNFENCE=meta <agent>. until then, say what you\n'
+        printf 'capability: AGENT_UNFENCE=meta <agent>. until then, say what you\n'
         printf 'would have changed and stop. reads via the Read tool are unaffected.\n'
     } >&2
     exit 2

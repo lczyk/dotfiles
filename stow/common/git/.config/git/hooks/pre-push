@@ -24,7 +24,7 @@ _lib="$(dirname "$(readlink -f "$0")")/../../../../agent-hooks/.config/agent-hoo
 AGENT=0
 if is_agent; then
     if ! _unfenced push; then
-        printf 'rejected: agents are not allowed to push. hand off to the user (the user can lift fast-forward pushes for a session with env AGENT_UNFENCE=push).\n' >&2
+        printf 'rejected: agents are not allowed to push. hand off to the user (the user can lift fast-forward pushes for a session with AGENT_UNFENCE=push).\n' >&2
         exit 1
     fi
     AGENT=1

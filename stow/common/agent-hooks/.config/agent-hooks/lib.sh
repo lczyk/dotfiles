@@ -19,7 +19,7 @@ _segments() {
 }
 
 # capability opt-outs, comma-separated, read from this process's OWN
-# environment (`env AGENT_UNFENCE=branch claude`). an agent cannot grant
+# environment (`AGENT_UNFENCE=branch claude`). an agent cannot grant
 # itself one: a command's env-prefix reaches a policy as text on stdin, never
 # as an actual variable.
 _unfenced() {
