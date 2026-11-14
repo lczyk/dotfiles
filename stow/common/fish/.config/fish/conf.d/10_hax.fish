@@ -1,3 +1,5 @@
 if type -q hax
-    alias hax='env AGENT_SESSION=1 hax'
+    function hax --wraps hax
+        __agent_run hax AGENT_SESSION=1 hax $argv
+    end
 end

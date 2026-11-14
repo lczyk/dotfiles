@@ -84,7 +84,7 @@ _run_fish() {
 
 @test "harness shims go through the claim" {
     local t
-    for t in claude codex copilot opencode; do
+    for t in claude codex copilot hax kimi opencode; do
         cp "$BIN/fake" "$BIN/$t"
         run env HOME="$BATS_TEST_TMPDIR/home" PATH="$BIN:$JQ_DIR:/usr/bin:/bin" "$FISH" --no-config --command \
             "cd $WORK; source $CONFD/09_agent_run.fish; source $CONFD/10_$t.fish; $t hi"
