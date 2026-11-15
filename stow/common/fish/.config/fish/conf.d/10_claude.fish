@@ -1,9 +1,10 @@
-# auto-memory is off everywhere. in a private fish session (`fish -P`) also run
-# claude with local persistence and nonessential upstream traffic off. see
-# `claude --help` for what --bare would add; not used here because it also drops
-# hooks. BUN_OPTIONS preloads the vendored agent_summary kill switch when it is
-# stowed; bun refuses to start on a missing preload. see
-# ~/.claude/preload/NOTICE-no-agent-summary.md.
+# always start in bypass-permissions mode (shift+tab leaves it) -- without the
+# flag at launch the mode can't be entered at all. auto-memory is off everywhere.
+# in a private fish session (`fish -P`) also run claude with local persistence
+# and nonessential upstream traffic off. see `claude --help` for what --bare
+# would add; not used here because it also drops hooks. BUN_OPTIONS preloads the
+# vendored agent_summary kill switch when it is stowed; bun refuses to start on
+# a missing preload. see ~/.claude/preload/NOTICE-no-agent-summary.md.
 if type -q claude
     function claude --wraps claude
         set -l vars CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
@@ -19,6 +20,6 @@ if type -q claude
                 DISABLE_ERROR_REPORTING=1 \
                 DO_NOT_TRACK=1
         end
-        __agent_run claude $vars claude $argv
+        __agent_run claude $vars claude --dangerously-skip-permissions $argv
     end
 end
