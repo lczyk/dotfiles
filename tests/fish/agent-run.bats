@@ -20,8 +20,10 @@ EOF
     chmod +x "$BIN/fake"
 }
 
+# the suite runs from inside an agent session: its claim must not pass for
+# one the shim made.
 _run_fish() {
-    run env HOME="$BATS_TEST_TMPDIR/home" PATH="$BIN:$JQ_DIR:/usr/bin:/bin" \
+    run env -u AGENT_CLAIM HOME="$BATS_TEST_TMPDIR/home" PATH="$BIN:$JQ_DIR:/usr/bin:/bin" \
         "$FISH" --no-config --command "cd $WORK; source $CONFD/09_agent_run.fish; $1"
 }
 
@@ -86,7 +88,7 @@ _run_fish() {
     local t
     for t in claude codex copilot hax kimi opencode; do
         cp "$BIN/fake" "$BIN/$t"
-        run env HOME="$BATS_TEST_TMPDIR/home" PATH="$BIN:$JQ_DIR:/usr/bin:/bin" "$FISH" --no-config --command \
+        run env -u AGENT_CLAIM HOME="$BATS_TEST_TMPDIR/home" PATH="$BIN:$JQ_DIR:/usr/bin:/bin" "$FISH" --no-config --command \
             "cd $WORK; source $CONFD/09_agent_run.fish; source $CONFD/10_$t.fish; $t hi"
         [ "$status" -eq 0 ]
         [[ "$output" == *"claim=$WORK/.agents/sessions/$t-"* ]]

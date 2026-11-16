@@ -3,6 +3,9 @@
 
 setup() {
     EVALUATOR="$BATS_TEST_DIRNAME/../../stow/common/agent-hooks/.config/agent-hooks/evaluate.sh"
+    # the suite runs from inside an agent session, whose capabilities would
+    # lift the fences the policies are asked about here.
+    unset AGENT_UNFENCE
 }
 
 fire_shell() {
