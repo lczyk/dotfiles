@@ -100,13 +100,17 @@ one file, `<component>.fizz`: frontmatter (bounds, options), header comment (wha
 
 `fizz-check` runs it and reads the output, `fizz-debug` when the run itself is the problem. two things they don't say: a failed `exists` prints `FAILED: Expected states never reached` then `Invariant 0: <Name>` (no colon after the word), and every run drops an `out/` tree plus a `<spec>.json` sidecar next to the spec.
 
-**run every fizzbee invocation under `timeout -k`** -- checker, simulator, guided trace, mutant, no exceptions, `-k` included:
+**run every fizzbee invocation under `timeout -s KILL`** -- checker, simulator, guided trace, mutant, no exceptions:
 
 ```sh
-timeout -k 10 <budget-seconds> fizz spec.fizz
+timeout -s KILL <budget-seconds> fizz spec.fizz
 ```
 
-exit 124 / 137 means the budget ran out -- inconclusive, not a pass.
+exit 137 means the budget ran out -- inconclusive, not a pass.
+
+`-s KILL`, not the default `TERM` with `-k`: on `SIGTERM` fizzbee prints `Interrupted. Stopping state exploration`, then a verdict for the part it explored, and exits when it is done. `timeout` has returned 124 by then and never sends the `-k` kill, so the checker runs on as an orphan and holds a `$(...)` open. worse, that verdict is of a truncated state space: `exists` properties fail that hold, and a `PASSED` proves nothing. an output with `Interrupted.` in it is no result, whatever follows.
+
+a script that greps the output for `PASSED` / `FAILED` loses the exit code to the pipe: check for 137 or for `Interrupted.` first.
 
 first run is almost always red. triage each counterexample as one of:
 
@@ -130,7 +134,7 @@ python3 - <<'EOF'
 s = open('/path/to/spec.fizz').read()
 open('mut_no_clamp.fizz', 'w').write(s.replace("    top = min(top, N)", "    pass"))
 EOF
-timeout -k 10 30 fizz mut_no_clamp.fizz 2>&1 | grep -E '^(PASSED|FAILED|Invariant)'
+timeout -s KILL 30 fizz mut_no_clamp.fizz 2>&1 | grep -E '^(Interrupted|PASSED|FAILED|Invariant)'
 ```
 
 report the table: mutant -> property that caught it.
