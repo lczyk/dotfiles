@@ -143,6 +143,8 @@ report the table: mutant -> property that caught it.
 
 ### 7. keep it
 
+keeping the spec is the user's call, not a default step. don't commit it unless the user says to. at hand-back, ask whether they want it kept. when they do:
+
 - the spec lives with the docs (`doc/spec/<name>.fizz` or the repo's equivalent). for a package headed for extraction, inside the package dir so it travels. header first: purpose, run line, requirements, decisions.
 - gitignore `out/` and `*.json` in the spec dir, a make / just target wrapping the run, a one-line pointer from the component's doc.
 - the properties map onto tests: an `always` becomes a sanity check at the chokepoint, a `transition` a test case, a race finding a test that injects the interleaving. prove each fails on the unfixed code first.
@@ -154,3 +156,4 @@ report the table: mutant -> property that caught it.
 - the findings as decisions, each: what the trace showed, the options, your recc.
 - the mutation table.
 - what the model does not cover (startup, torn reads, anything abstracted away) in one list.
+- the question whether to keep and commit the spec, unless the user already answered it.
