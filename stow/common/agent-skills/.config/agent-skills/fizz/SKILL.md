@@ -120,11 +120,13 @@ first run is almost always red. triage each counterexample as one of:
 
 iterate until green. a `max_actions` budget running out looks like a liveness failure with a `stutter` at the end. bound differently, don't weaken the property.
 
-a second opinion catches what the checker can't: a model faithful to the wrong reading of the code passes. when a reviewer (another model, codex) is at hand, give it the spec and the code paths and ask whether the actions match the code's atomicity, what actor or failure is missing, and which properties could pass vacuously. expect two or three rounds. each finding is a model fix, a property fix, or a real finding to check in the code before reporting.
+when reviewing the spec, check whether the actions match the code's atomicity, what actor or failure is missing, and which properties could pass vacuously. each finding is a model fix, a property fix, or a real finding to check in the code before reporting.
+
+review is cheap and a checker run is not. run the review rounds back to back, folding each round's fixes into the spec text without rerunning the checker, until a round comes back with nothing new. then rerun once. go back to the checker mid-review only when a finding can't be settled without a trace.
 
 ### 6. mutation-test the spec
 
-a green spec may be vacuous. for each property, break the model on purpose in a copy (drop the clamp, skip the lock, make the tick load, make it unfair), rerun, confirm the intended property is the one that fails. a mutant that passes means a property is missing or too weak. one property catching every mutant means it is too coarse to name the defect.
+a green spec may be vacuous. mutation testing is a check that every property fires, not a hunt for the perfect mutant. for each property, write one mutant that should break it (drop the clamp, skip the lock, make the tick load, make it unfair), run them all in one pass and read the table. a mutant that passes means a property is missing or too weak. a mutant caught by several properties is fine, since each of them still fires. stop once every property has failed at least once and no mutant passed. add a mutant only to cover a property that hasn't failed yet.
 
 hygiene: mutants live in a scratch dir, never next to the spec, since each run litters `out/` and a `.json` beside whatever file it ran. shape:
 
