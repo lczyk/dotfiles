@@ -104,6 +104,11 @@ command = "if [ ! -f \"${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agen
 timeout = 5
 
 [[hooks]]
+event = "SessionStart"
+command = "bash \"${XDG_CONFIG_HOME:-$HOME/.config}/agent-hooks/session-capabilities.sh\""
+timeout = 5
+
+[[hooks]]
 event = "UserPromptSubmit"
 command = "node \"${KIMI_CODE_HOME:-$HOME/.kimi-code}/hooks/caveman-mode-tracker.js\""
 timeout = 5

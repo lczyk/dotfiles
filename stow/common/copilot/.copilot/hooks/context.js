@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+const childProcess = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -145,6 +146,15 @@ function activateMode(name, contexts) {
   contexts.push(modeContext(name, mode));
 }
 
+function sessionCapabilities() {
+  const script = path.join(configHome, 'agent-hooks', 'session-capabilities.sh');
+  try {
+    return childProcess.execFileSync('bash', [script], { encoding: 'utf8', timeout: 3000 }).trim();
+  } catch {
+    return 'AGENT_UNFENCE: unknown (session-capabilities.sh failed) -- run printenv AGENT_UNFENCE before saying what this session can or can\'t do.';
+  }
+}
+
 function sessionStart() {
   const contexts = [];
   const lofiOff = path.join(stateDir, 'lofi-off');
@@ -153,6 +163,7 @@ function sessionStart() {
   }
 
   activateMode('caveman', contexts);
+  contexts.push(sessionCapabilities());
 
   process.stdout.write(JSON.stringify({
     additionalContext: contexts.join('\n\n---\n\n'),

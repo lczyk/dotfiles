@@ -38,6 +38,12 @@
             "command": "[ -f \"${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}/lofi-off\" ] || cat \"$HOME/.config/agent-styles/lofi.md\"",
             "statusMessage": "Loading lofi style...",
             "type": "command"
+          },
+          {
+            "command": "bash \"$HOME/.config/agent-hooks/session-capabilities.sh\"",
+            "statusMessage": "Loading session capabilities...",
+            "timeout": 5,
+            "type": "command"
           }
         ]
       }

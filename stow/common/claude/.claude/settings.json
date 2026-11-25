@@ -61,6 +61,12 @@
             "statusMessage": "Loading subagent model policy...",
             "timeout": 5,
             "type": "command"
+          },
+          {
+            "command": "bash \"$HOME/.config/agent-hooks/session-capabilities.sh\"",
+            "statusMessage": "Loading session capabilities...",
+            "timeout": 5,
+            "type": "command"
           }
         ]
       }

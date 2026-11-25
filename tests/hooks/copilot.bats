@@ -118,6 +118,13 @@ fire_raw_tool() {
     [ "$(cat "$STATE_DIR/caveman-active")" = "full" ]
 }
 
+@test "session start injects the session's capabilities" {
+    run env XDG_CONFIG_HOME="$CONFIG_HOME" AGENT_STATE_DIR="$STATE_DIR" AGENT_UNFENCE=meta \
+        node "$CONTEXT" session-start <<<'{"source":"startup"}'
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.additionalContext' | grep -c 'AGENT_UNFENCE: meta')" -eq 1 ]
+}
+
 @test "session start honors the shared lofi marker" {
     touch "$STATE_DIR/lofi-off"
     run env XDG_CONFIG_HOME="$CONFIG_HOME" AGENT_STATE_DIR="$STATE_DIR" \

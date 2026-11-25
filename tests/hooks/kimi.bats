@@ -136,7 +136,7 @@ with open(sys.argv[1], "rb") as file:
 hooks = config["hooks"]
 assert [hook["event"] for hook in hooks] == [
     "PreToolUse", "PreToolUse", "SessionStart", "SessionStart",
-    "UserPromptSubmit", "UserPromptSubmit"
+    "SessionStart", "UserPromptSubmit", "UserPromptSubmit"
 ]
 assert all(hook["timeout"] == 5 for hook in hooks)
 assert hooks[0]["matcher"] == "Bash"
@@ -145,11 +145,12 @@ assert hooks[1]["matcher"] == "Write|Edit"
 assert "safety-adapter.sh\" write" in hooks[1]["command"]
 assert "caveman-activate.js" in hooks[2]["command"]
 assert "agent-styles/lofi.md" in hooks[3]["command"]
-assert "caveman-mode-tracker.js" in hooks[4]["command"]
-assert "agent-styles/lofi-reminder.md" in hooks[5]["command"]
+assert "agent-hooks/session-capabilities.sh" in hooks[4]["command"]
+assert "caveman-mode-tracker.js" in hooks[5]["command"]
+assert "agent-styles/lofi-reminder.md" in hooks[6]["command"]
 state = "${AGENT_STATE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-state}"
 assert state in hooks[3]["command"]
-assert state in hooks[5]["command"]
+assert state in hooks[6]["command"]
 PY
     [ "$status" -eq 0 ]
 }
