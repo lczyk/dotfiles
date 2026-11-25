@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# unfence badge. [U:branch,meta] (coloured) when the session was launched
+# unfence badge. [U:branch,meta] (bright red) when the session was launched
 # with AGENT_UNFENCE capabilities, plain [u] (no colour) otherwise -- the
 # failure mode this guards is forgetting a fence is down, so the badge always
 # renders and a plain [u] still says "no fence lifted" rather than nothing.
@@ -18,16 +18,30 @@ if ! . "$_lib" 2>/dev/null; then
     exit 0
 fi
 
-caps=$(_unfence_tokens | tr '\n' ',')
-caps=${caps%,}
+caps=$(_unfence_tokens)
 
-if [ -n "$caps" ]; then
-    # meta lifts the hook fence itself, so it gets the same loud bold white on red as fable 5
-    if _unfenced meta; then
-        printf '\033[1;%s;4%sm[U:%s]\033[0m' "$SL_BWHITE" "${SL_RED#3}" "${caps:0:40}"
-    else
-        sl_paint "$SL_BRED" "[U:${caps:0:40}]"
-    fi
-else
+if [ -z "$caps" ]; then
     printf '[u]'
+    exit 0
 fi
+
+# meta lifts the hook fence itself and history rewrites commits, so those two
+# words alone get the same loud bold white on red as fable 5. the list is cut
+# at 40 visible chars, and a token is judged whole so a cut `metal` stays plain.
+left=40 plain="[U:" sep=
+while IFS= read -r tok; do
+    left=$((left - ${#sep}))
+    [ "$left" -gt 0 ] || break
+    plain+=$sep sep=,
+    shown=${tok:0:left}
+    left=$((left - ${#tok}))
+    case $tok in
+        meta | history)
+            sl_paint "$SL_BRED" "$plain"
+            printf '\033[1;%s;4%sm%s\033[0m' "$SL_BWHITE" "${SL_RED#3}" "$shown"
+            plain=
+            ;;
+        *) plain+=$shown ;;
+    esac
+done <<< "$caps"
+sl_paint "$SL_BRED" "$plain]"

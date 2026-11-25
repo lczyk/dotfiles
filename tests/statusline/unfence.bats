@@ -58,9 +58,30 @@ fire() { printf '{}' | "$BADGE"; }
     [ "$out" = "[U:branch,meta]" ]
 }
 
-@test "meta gets the loud fable-style badge" {
+@test "only the word meta gets the loud fable-style background" {
     AGENT_UNFENCE=branch,meta run fire
-    [ "$output" = $'\033[1;97;41m[U:branch,meta]\033[0m' ]
+    [ "$output" = $'\033[91m[U:branch,\033[0m\033[1;97;41mmeta\033[0m\033[91m]\033[0m' ]
+}
+
+@test "history gets the loud background too" {
+    AGENT_UNFENCE=history,push run fire
+    [ "$output" = $'\033[91m[U:\033[0m\033[1;97;41mhistory\033[0m\033[91m,push]\033[0m' ]
+}
+
+@test "meta and history are each loud, the comma between them is not" {
+    AGENT_UNFENCE=meta,history run fire
+    [ "$output" = $'\033[91m[U:\033[0m\033[1;97;41mmeta\033[0m\033[91m,\033[0m\033[1;97;41mhistory\033[0m\033[91m]\033[0m' ]
+}
+
+@test "long capability lists are cut at 40 visible chars" {
+    AGENT_UNFENCE=branch,history,remote,push,pr,issue,labels,meta run fire
+    out=$(printf '%s' "$output" | strip_ansi)
+    [ "$out" = "[U:branch,history,remote,push,pr,issue,labe]" ]
+}
+
+@test "a token cut down to meta by the length cap stays plain" {
+    AGENT_UNFENCE=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,metal run fire
+    [ "$output" = $'\033[91m[U:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,meta]\033[0m' ]
 }
 
 @test "non-meta capabilities keep the bright red badge" {
