@@ -1600,6 +1600,46 @@ origin feature/x"
     [ "$status" -eq 2 ]
 }
 
+@test "the env override block names the var it matched" {
+    run fire "XDG_CONFIG_HOME=/tmp/ai/cfg git status"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"XDG_CONFIG_HOME="* ]] || { echo "unnamed: $output"; false; }
+    run fire "env A=1 HOME=/tmp/ai/home git status"
+    [[ "$output" == *"HOME="* && "$output" != *"XDG_CONFIG_HOME"* ]] || { echo "unnamed: $output"; false; }
+}
+
+@test "a container exec's payload and env flags don't reach the git env fence" {
+    local cmd
+    for cmd in \
+        "lxc exec c --project p -- sh -c 'cd /w; setpriv --reuid 1001 env HOME=/home/u sh -c \"id\"'" \
+        "lxc exec c --env HOME=/root -- id" \
+        "incus exec c --env=XDG_CONFIG_HOME=/x -- id" \
+        "docker run --rm -e HOME=/tmp img git status" \
+        "podman exec -e GIT_DIR=/r/.git c git log -1" \
+        "incus exec c -- sh -c 'env -u HOME true; PATH=/x git status'" \
+        "true; lxc exec c -- sh -c 'HOME=/root id' < /dev/null 2>&1 | tail -1"; do
+        run fire "$cmd"
+        [ "$status" -eq 0 ] || { echo "blocked: $cmd: $output"; return 1; }
+    done
+}
+
+@test "a container exec doesn't excuse a local env override beside it" {
+    local cmd
+    for cmd in \
+        "lxc exec c -- true; HOME=/tmp/ai/h git status" \
+        "lxc exec c -- echo \"it's\"; HOME=/tmp/ai/h git status; echo 'x'" \
+        "lxc exec c -- echo it\\'s; HOME=/tmp/ai/h git status; echo \\'" \
+        "lxc exec c -- sh -c \"\$(HOME=/tmp/ai/h git status)\"" \
+        "lxc exec c -- id && env HOME=/tmp/ai/h git status" \
+        "docker run img id | XDG_CONFIG_HOME=/tmp/ai/c git status" \
+        "make -e HOME=/tmp/ai/h" \
+        "lxc exec c -- id; PATH=/tmp/ai/evil git status" \
+        "lxc exec c -- id; unset HOME; git status"; do
+        run fire "$cmd"
+        [ "$status" -eq 2 ] || { echo "allowed: $cmd"; return 1; }
+    done
+}
+
 @test "a command inside a substitution or subshell is fenced like a bare one" {
     local cmd
     for cmd in "echo \$(git reset --hard)" "(git reset --hard)" "x=\`git reset --hard\`" \

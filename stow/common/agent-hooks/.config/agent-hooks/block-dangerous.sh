@@ -92,18 +92,37 @@ fi
 # the same layers, reached through the environment: config file locations,
 # the repo location, the exec path, the ssh / proxy commands git runs, and
 # PATH itself when git or gh is on the line (a shadowing git binary).
+#
+# a container exec's single-quoted payload and its `-e` / `--env` values set
+# the container's environment, not this shell's, so they are blanked first.
+# the word walk skips double quotes and escapes, so a stray `'` can't pair
+# across a separator and blank a local override after it.
+_q="'"
+CTR_EXEC_RE="(^|[ ;|&(])((lxc|incus|kubectl) exec|(docker|podman) (exec|run)) "
+CTR_WORD_RE="([^;|&${_q}\"\\\\]|\\\\.|${_q}[^${_q}]*${_q}|\"([^\"\\\\]|\\\\.)*\")"
+CTR_PAYLOAD_RE="(${CTR_EXEC_RE}${CTR_WORD_RE}*)(${_q}[^${_q}]+${_q}|(-e|--env)[ =][A-Za-z_][A-Za-z0-9_]*=)(.*)$"
+_blank_container_payload() {
+    local s=$1 n
+    while [[ $s =~ $CTR_PAYLOAD_RE ]]; do
+        n=${#BASH_REMATCH[@]}
+        s="${s:0:${#s}-${#BASH_REMATCH[0]}}${BASH_REMATCH[1]}''${BASH_REMATCH[n-1]}"
+    done
+    printf '%s' "$s"
+}
+ENV_COMMAND=$(_blank_container_payload "$COMMAND")
 GIT_ENV_VARS="GIT_CONFIG[A-Z_]*|GIT_DIR|GIT_WORK_TREE|GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_PROXY_COMMAND|GIT_NAMESPACE|GIT_CEILING_DIRECTORIES|XDG_CONFIG_HOME|HOME"
-if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])(${GIT_ENV_VARS})="; then
-    echo "BLOCKED: command overrides git's config / repo / exec environment -- ask the user if you really need to" >&2
+if env_var=$(echo "$ENV_COMMAND" | grep -oE -- "(^|[ ;|&])(${GIT_ENV_VARS})=" | head -n 1 | grep .); then
+    env_var=${env_var#[ ;|&]}
+    echo "BLOCKED: command sets ${env_var} -- git reads its config / repo / exec environment from it. ask the user if you really need to" >&2
     exit 2
 fi
-if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])PATH=" && echo "$COMMAND" | grep -qE -- "(^|[ ;|&/])(git|gh)( |$)"; then
+if echo "$ENV_COMMAND" | grep -qE -- "(^|[ ;|&])PATH=" && echo "$ENV_COMMAND" | grep -qE -- "(^|[ ;|&/])(git|gh)( |$)"; then
     echo "BLOCKED: command rewrites PATH around a git / gh call -- ask the user if you really need to" >&2
     exit 2
 fi
 # unsetting HOME / XDG_CONFIG_HOME drops git's global config (and its
 # core.hooksPath) for a child -- the same layer the assignment check guards.
-if echo "$COMMAND" | grep -qE -- "(^|[ ;|&])(env ([^;|&]* )?(-u ?|--unset[ =])|unset ([^;|&]* )?)(HOME|XDG_CONFIG_HOME)( |$)"; then
+if echo "$ENV_COMMAND" | grep -qE -- "(^|[ ;|&])(env ([^;|&]* )?(-u ?|--unset[ =])|unset ([^;|&]* )?)(HOME|XDG_CONFIG_HOME)([ ;|&)]|$)"; then
     echo "BLOCKED: command unsets HOME / XDG_CONFIG_HOME, dropping git's global config -- ask the user if you really need to" >&2
     exit 2
 fi
